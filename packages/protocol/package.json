@@ -1,0 +1,12 @@
+{
+  "name": "@omnisync/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Wire types and the last-write-wins rule shared by the backend and every client.",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

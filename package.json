@@ -1,0 +1,19 @@
+{
+  "name": "omnisync",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "dev:backend": "pnpm --filter @omnisync/backend dev",
+    "dev:extension": "pnpm --filter @omnisync/extension dev",
+    "build:extension": "pnpm --filter @omnisync/extension build",
+    "e2e": "pnpm --filter @omnisync/extension e2e"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

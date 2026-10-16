@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.output/
+.wxt/
+.data/
+*.log
+.env
+.e2e-profiles/
+test-results/

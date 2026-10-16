@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OmniSync</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header><strong>OmniSync</strong> <span id="badge" class="badge"></span></header>
+
+    <section id="view-signed-out" hidden>
+      <form id="auth-form" autocomplete="off">
+        <label>Sync server <input id="server" type="url" required value="http://localhost:8787" /></label>
+        <label>Username <input id="username" required minlength="3" autocomplete="username" /></label>
+        <label>Master password <input id="password" type="password" required minlength="8" autocomplete="current-password" /></label>
+        <label>This device <input id="device-name" required /></label>
+        <div class="row">
+          <button id="sign-in" type="submit">Sign in</button>
+          <button id="sign-up" type="button" class="secondary">Create account</button>
+        </div>
+        <p class="hint">Your master password never leaves this device. If you forget it, your data cannot be recovered.</p>
+      </form>
+    </section>
+
+    <section id="view-locked" hidden>
+      <p>Locked. Enter your master password to resume syncing.</p>
+      <form id="unlock-form">
+        <input id="unlock-password" type="password" required autocomplete="current-password" placeholder="Master password" />
+        <div class="row">
+          <button type="submit">Unlock</button>
+          <button id="sign-out-locked" type="button" class="secondary">Sign out</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="view-ready" hidden>
+      <dl>
+        <dt>Account</dt><dd id="who"></dd>
+        <dt>Server</dt><dd id="where"></dd>
+        <dt>Last sync</dt><dd id="last-sync">never</dd>
+      </dl>
+      <p id="unsupported" class="warn" hidden>This browser has no bookmarks API (e.g. Firefox for Android). Bookmark sync is unavailable here.</p>
+      <div class="row">
+        <button id="sync-now">Sync now</button>
+        <button id="lock" class="secondary">Lock</button>
+        <button id="sign-out" class="secondary">Sign out</button>
+      </div>
+    </section>
+
+    <p id="error" class="error" role="alert" hidden></p>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

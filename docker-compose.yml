@@ -1,0 +1,12 @@
+# Optional: real Postgres for local dev. Without it the backend uses embedded PGlite.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: omnisync
+      POSTGRES_PASSWORD: omnisync
+      POSTGRES_DB: omnisync
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [omnisync-pg:/var/lib/postgresql/data]
+volumes:
+  omnisync-pg:

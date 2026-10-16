@@ -1,0 +1,30 @@
+{
+  "name": "@omnisync/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OmniSync browser extension (Chromium MV3 + Firefox) built with WXT.",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip && wxt zip -b firefox",
+    "postinstall": "wxt prepare",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "e2e": "wxt build && tsx e2e/two-profiles.ts"
+  },
+  "dependencies": {
+    "@omnisync/crypto": "workspace:*",
+    "@omnisync/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@omnisync/backend": "workspace:*",
+    "@types/node": "^22.0.0",
+    "playwright-core": "1.56.1",
+    "tsx": "^4.20.0",
+    "wxt": "^0.21.4"
+  }
+}
