@@ -42,6 +42,10 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Widget picker: see every app that provides home-screen widgets. -->
+        <intent>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        </intent>
         <!-- "Default music player" picker: find installed media apps from what they declare. -->
         <intent>
             <action android:name="android.media.browse.MediaBrowserService" />
@@ -99,6 +103,12 @@
             android:name=".WidgetCenterActivity"
             android:exported="false"
             android:label="@string/widget_center"
+            android:theme="@style/Theme.Searchlight.Settings" />
+
+        <activity
+            android:name=".widgets.WidgetPickerActivity"
+            android:exported="false"
+            android:label="@string/widget_picker_title"
             android:theme="@style/Theme.Searchlight.Settings" />
 
         <!-- Lets the Music card see media sessions. It ignores notifications entirely. -->

@@ -59,6 +59,8 @@ over the previous one and keeps your settings. It's a throwaway key for sideload
 | Start music anywhere | Music Player card jumps to the front (toggle in Widget Center) |
 | Settings → Music Player | Pick the default player (any installed media app) or Automatic |
 | Settings → Quick Actions | Assign each of the 4 slots: torch, Wi-Fi, Bluetooth, DND, brightness, rotation lock, ringer, airplane, volume |
+| Long-press empty space above the card | **Add widget** (any widget from any app), launcher settings |
+| Long-press a widget | Resize (height), Move up / down, Remove |
 | Gear | Settings: Widget Center, permissions, greeting text, web engine, favorites |
 | Back / Home | Clears the search and drops the keyboard |
 
@@ -71,7 +73,11 @@ over the previous one and keeps your settings. It's a throwaway key for sideload
   location or ZIP/city; refresh on unlock + every 30 min), Calendar & Date, Battery & Signals,
   Music Player (jumps to front when audio starts), Quick Actions (torch, volume, DND,
   brightness); idle-card picker. Search adds songs, photos & videos, and messages.
-- **Phase 3:** real Android widgets via AppWidgetHost: long-press → add, resize, remove.
+- **Phase 3 ✓ (this):** real Android widgets via AppWidgetHost, in a scrollable page above the home
+  card (results take that space while you search). Long-press empty space → Add widget → picker
+  with previews (personal + work profile) → Android's one-time "allow widgets" prompt → the
+  widget's own setup screen if it has one. Long-press a widget: resize, reorder, remove. Widgets
+  re-layout on fold/unfold; uninstalled ones are cleaned up.
 - **Phase 4:** frosted glass tinted from the wallpaper, six search-bar styles, typography,
   gestures (accessibility: double-tap to lock), icon packs.
 
@@ -95,5 +101,6 @@ app/src/main/java/io/github/iamth3doctor/searchlight/
   weather/WeatherRepository    Location, fetch, refresh schedule, cache
   cards/                       Weather, Calendar & Date, Battery & Signals, Music, Quick Actions
   WidgetCenterActivity.kt      Cards on/off + order, idle card, weather units + location
+  widgets/                     AppWidgetHost, long-pressable host view, picker, page layout (JVM-tested)
   ui/                          Results adapter, favorites popup, intents, permission shortcuts
 ```

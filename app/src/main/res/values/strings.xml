@@ -123,6 +123,22 @@
     <string name="music_no_apps">No media apps found on this phone.</string>
     <string name="settings_section_quick_actions">Quick Actions</string>
 
+    <!-- Real widgets (Phase 3) -->
+    <string name="menu_add_widget">Add widget</string>
+    <string name="widgets_empty_hint">Long-press here to add a widget</string>
+    <string name="widget_resize">Resize</string>
+    <string name="widget_height">Height: %1$d dp</string>
+    <string name="widget_move_up">Move up</string>
+    <string name="widget_move_down">Move down</string>
+    <string name="widget_remove">Remove</string>
+    <string name="widget_removed">Widget removed</string>
+    <string name="widget_picker_title">Add a widget</string>
+    <string name="widget_picker_filter">Filter by app or widget name</string>
+    <string name="widget_picker_loading">Loading widgets…</string>
+    <string name="widget_picker_none">No apps on this phone provide widgets.</string>
+    <string name="widget_picker_no_match">No widgets match.</string>
+    <string name="widget_picker_row">%1$s · %2$s</string>
+
     <!-- Widget Center -->
     <string name="widget_center">Widget Center</string>
     <string name="widget_center_summary">Cards, idle card, weather units and location</string>

@@ -5,10 +5,8 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.provider.Settings
-import android.view.GestureDetector
 import android.view.Gravity
 import android.view.KeyEvent
-import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.LinearLayout
@@ -37,6 +35,7 @@ import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
 import io.github.iamth3doctor.searchlight.ui.ResultsAdapter
+import io.github.iamth3doctor.searchlight.widgets.WidgetController
 import java.util.Calendar
 import kotlin.math.max
 
@@ -50,6 +49,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private lateinit var engine: SearchEngine
     private lateinit var adapter: ResultsAdapter
     private lateinit var favoritesPopup: FavoritesPopup
+    private lateinit var widgets: WidgetController
 
     private val app get() = searchlight
     private val prefs get() = app.prefs
@@ -75,6 +75,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         engine = SearchEngine(prefs, app.apps, app.contacts)
         adapter = ResultsAdapter(app.apps, app.contacts, app.thumbnails, this)
         favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp)
+        widgets = WidgetController(this, binding.widgetsContainer, prefs)
+        savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
+        widgets.cleanUpOrphans()
 
         binding.results.layoutManager = LinearLayoutManager(this, RecyclerView.VERTICAL, true)
         binding.results.adapter = adapter
@@ -85,7 +88,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         rebuildCardsIfChanged()
         goToIdleCard()
         setupHomeCard()
-        setupHomeLongPress()
+        setupWidgetPage()
 
         app.apps.addListener(sourcesChanged)
         app.contacts.addListener(sourcesChanged)
@@ -103,6 +106,17 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         super.onStart()
         rebuildCardsIfChanged()
         startCards()
+        widgets.start()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(KEY_PENDING_WIDGET, widgets.pendingId)
+    }
+
+    /** Widget picker → bind permission → the widget's configure screen all report back here. */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (!widgets.onActivityResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun onResume() {
@@ -124,6 +138,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     override fun onStop() {
         super.onStop()
         stopCards()
+        widgets.stop()
         dismissPopups()
         // Coming back after opening something should start fresh.
         if (launchedSomething) {
@@ -266,20 +281,19 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
     }
 
-    /** Long-press on empty space opens the home menu. Phase 3 adds "Add widget" here. */
-    private fun setupHomeLongPress() {
-        val detector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent) = true
-            override fun onLongPress(e: MotionEvent) {
-                if (binding.results.findChildViewUnder(e.x, e.y) == null) showHomeMenu(e.rawX, e.rawY)
-            }
-        })
-        binding.results.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
-            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
-                if (rv.findChildViewUnder(e.x, e.y) == null) detector.onTouchEvent(e)
-                return false
-            }
-        })
+    /** Long-press on empty space of the widget page opens the home menu (Add widget, settings). */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun setupWidgetPage() {
+        val lastTouch = FloatArray(2)
+        binding.widgetsContainer.setOnTouchListener { _, e ->
+            lastTouch[0] = e.rawX
+            lastTouch[1] = e.rawY
+            false
+        }
+        binding.widgetsContainer.setOnLongClickListener {
+            showHomeMenu(lastTouch[0], lastTouch[1])
+            true
+        }
     }
 
     private fun greeting(): String {
@@ -311,6 +325,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.clearButton.isVisible = q.isNotEmpty()
         binding.settingsButton.isVisible = q.isEmpty()
         binding.cardArea.isVisible = !searching && cards.isNotEmpty()
+        binding.widgetsScroll.isVisible = !searching
+        binding.results.isVisible = searching
         if (!searching) {
             app.background.cancel()
             local = emptyList()
@@ -475,6 +491,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.menuAnchor.x = rawX - loc[0]
         binding.menuAnchor.y = rawY - loc[1]
         menu(binding.menuAnchor) {
+            add(R.string.menu_add_widget) { widgets.beginAdd() }
             add(R.string.menu_launcher_settings) { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
             add(R.string.menu_home_settings) { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
         }
@@ -488,5 +505,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private companion object {
         const val WEATHER_MAX_AGE_MS = 30 * 60 * 1000L
+        const val KEY_PENDING_WIDGET = "pending_widget_id"
     }
 }

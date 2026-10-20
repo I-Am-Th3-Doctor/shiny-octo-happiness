@@ -7,6 +7,8 @@ import io.github.iamth3doctor.searchlight.cards.SlotConfig
 import io.github.iamth3doctor.searchlight.weather.GeoPlace
 import io.github.iamth3doctor.searchlight.weather.TempUnit
 import io.github.iamth3doctor.searchlight.weather.WeatherData
+import io.github.iamth3doctor.searchlight.widgets.WidgetLayout
+import io.github.iamth3doctor.searchlight.widgets.WidgetSpec
 
 /** All persisted state. Everything stays in this app's private storage. */
 class Prefs(context: Context) {
@@ -90,6 +92,11 @@ class Prefs(context: Context) {
     fun setQuickActionSlot(index: Int, action: QuickAction) {
         quickActionSlots = quickActionSlots.toMutableList().also { it[index] = action }
     }
+
+    /** Real Android widgets on the home page, top to bottom. */
+    var widgets: List<WidgetSpec>
+        get() = WidgetLayout.parse(sp.getString(KEY_WIDGETS, null))
+        set(value) = sp.edit().putString(KEY_WIDGETS, WidgetLayout.serialize(value)).apply()
 
     // ---- Weather ----
 
@@ -187,6 +194,7 @@ class Prefs(context: Context) {
         private const val KEY_MUSIC_FRONT = "music_auto_front"
         private const val KEY_MUSIC_PACKAGE = "music_default_package"
         private const val KEY_QA_SLOTS = "quick_action_slots"
+        private const val KEY_WIDGETS = "widgets"
         private const val KEY_TEMP_UNIT = "temp_unit"
         private const val KEY_PLACE_NAME = "place_name"
         private const val KEY_PLACE_ADMIN = "place_admin"

@@ -24,16 +24,46 @@
         android:orientation="vertical"
         app:maxWidth="@dimen/content_max_width">
 
-        <!-- reverseLayout: the best result sits right above the pill. Empty while idle. -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/results"
+        <!--
+          The space above the home card. Idle: your real Android widgets, scrollable
+          (long-press empty space to add one). Searching: results, best one nearest the card.
+        -->
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:clipToPadding="false"
-            android:overScrollMode="never"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="8dp" />
+            android:layout_weight="1">
+
+            <ScrollView
+                android:id="@+id/widgetsScroll"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:fillViewport="true"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+                <!-- fillViewport + bottom gravity: a few widgets sit just above the card, like a stack. -->
+                <LinearLayout
+                    android:id="@+id/widgetsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="bottom"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="4dp" />
+            </ScrollView>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/results"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:overScrollMode="never"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="8dp"
+                android:visibility="gone" />
+        </FrameLayout>
 
         <!--
           The home card: one frosted panel. Top: swipeable tiles with their page dots (hidden
