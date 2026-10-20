@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
-import android.provider.Settings
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -75,7 +74,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         engine = SearchEngine(prefs, app.apps, app.contacts)
         adapter = ResultsAdapter(app.apps, app.contacts, app.thumbnails, this)
         favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp)
-        widgets = WidgetController(this, binding.widgetsContainer, prefs)
+        widgets = WidgetController(this, binding.widgetGrid, prefs) { editing -> binding.editBar.isVisible = editing }
         savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
         widgets.cleanUpOrphans()
 
@@ -151,6 +150,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
+            widgets.exitEditMode()
             dismissPopups()
             resetHome()
             if (prefs.autoOpenKeyboard) showKeyboard()
@@ -166,6 +166,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     @Deprecated("Launcher: Back never leaves home; it clears the search and drops the keyboard.")
     override fun onBackPressed() {
         when {
+            widgets.editing -> widgets.exitEditMode()
             favoritesPopup.isShowing -> favoritesPopup.dismiss()
             else -> resetHome()
         }
@@ -178,6 +179,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
             v.setPadding(bars.left, bars.top, bars.right, max(bars.bottom, ime.bottom))
+            binding.widgetGrid.imeVisible = ime.bottom > 0
             WindowInsetsCompat.CONSUMED
         }
     }
@@ -281,19 +283,14 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
     }
 
-    /** Long-press on empty space of the widget page opens the home menu (Add widget, settings). */
-    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    /** Edit mode (long-press a widget or empty space) shows a small bar: add, settings, done. */
     private fun setupWidgetPage() {
-        val lastTouch = FloatArray(2)
-        binding.widgetsContainer.setOnTouchListener { _, e ->
-            lastTouch[0] = e.rawX
-            lastTouch[1] = e.rawY
-            false
+        binding.editAdd.setOnClickListener { widgets.beginAdd() }
+        binding.editSettings.setOnClickListener {
+            widgets.exitEditMode()
+            startActivity(Intent(this, SettingsActivity::class.java))
         }
-        binding.widgetsContainer.setOnLongClickListener {
-            showHomeMenu(lastTouch[0], lastTouch[1])
-            true
-        }
+        binding.editDone.setOnClickListener { widgets.exitEditMode() }
     }
 
     private fun greeting(): String {
@@ -325,7 +322,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.clearButton.isVisible = q.isNotEmpty()
         binding.settingsButton.isVisible = q.isEmpty()
         binding.cardArea.isVisible = !searching && cards.isNotEmpty()
-        binding.widgetsScroll.isVisible = !searching
+        if (searching) widgets.exitEditMode()
+        binding.widgetGrid.isVisible = !searching
         binding.results.isVisible = searching
         if (!searching) {
             app.background.cancel()
@@ -483,18 +481,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
         add(R.string.menu_open_folder) { opened { Actions.openFolder(this@MainActivity, result.index.relativeDirOf(e)) } }
         add(R.string.menu_copy_path) { Actions.copy(this@MainActivity, path) }
-    }
-
-    private fun showHomeMenu(rawX: Float, rawY: Float) {
-        val loc = IntArray(2)
-        binding.root.getLocationOnScreen(loc)
-        binding.menuAnchor.x = rawX - loc[0]
-        binding.menuAnchor.y = rawY - loc[1]
-        menu(binding.menuAnchor) {
-            add(R.string.menu_add_widget) { widgets.beginAdd() }
-            add(R.string.menu_launcher_settings) { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
-            add(R.string.menu_home_settings) { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
-        }
     }
 
     private fun dismissPopups() {

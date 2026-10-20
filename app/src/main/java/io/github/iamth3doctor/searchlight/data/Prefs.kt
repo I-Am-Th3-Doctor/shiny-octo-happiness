@@ -7,8 +7,8 @@ import io.github.iamth3doctor.searchlight.cards.SlotConfig
 import io.github.iamth3doctor.searchlight.weather.GeoPlace
 import io.github.iamth3doctor.searchlight.weather.TempUnit
 import io.github.iamth3doctor.searchlight.weather.WeatherData
-import io.github.iamth3doctor.searchlight.widgets.WidgetLayout
-import io.github.iamth3doctor.searchlight.widgets.WidgetSpec
+import io.github.iamth3doctor.searchlight.widgets.GridSpec
+import io.github.iamth3doctor.searchlight.widgets.WidgetGrid
 
 /** All persisted state. Everything stays in this app's private storage. */
 class Prefs(context: Context) {
@@ -93,10 +93,25 @@ class Prefs(context: Context) {
         quickActionSlots = quickActionSlots.toMutableList().also { it[index] = action }
     }
 
-    /** Real Android widgets on the home page, top to bottom. */
-    var widgets: List<WidgetSpec>
-        get() = WidgetLayout.parse(sp.getString(KEY_WIDGETS, null))
-        set(value) = sp.edit().putString(KEY_WIDGETS, WidgetLayout.serialize(value)).apply()
+    /** Real Android widgets on the home grid: cell position + span each, never pixels. */
+    var widgetGrid: List<GridSpec>
+        get() = WidgetGrid.parse(sp.getString(KEY_WIDGET_GRID, null))
+        set(value) = sp.edit().putString(KEY_WIDGET_GRID, WidgetGrid.serialize(value)).apply()
+
+    /**
+     * The pre-grid single-column layout ("id:heightDp,…"), returned once and then deleted.
+     * Only used to carry existing widgets over to the grid.
+     */
+    fun takeLegacyWidgetStack(): List<Pair<Int, Int>>? {
+        val raw = sp.getString(KEY_LEGACY_WIDGETS, null) ?: return null
+        sp.edit().remove(KEY_LEGACY_WIDGETS).apply()
+        return raw.split(',').mapNotNull { part ->
+            val bits = part.split(':')
+            val id = bits.getOrNull(0)?.trim()?.toIntOrNull() ?: return@mapNotNull null
+            val h = bits.getOrNull(1)?.trim()?.toIntOrNull() ?: return@mapNotNull null
+            id to h
+        }
+    }
 
     // ---- Weather ----
 
@@ -194,7 +209,8 @@ class Prefs(context: Context) {
         private const val KEY_MUSIC_FRONT = "music_auto_front"
         private const val KEY_MUSIC_PACKAGE = "music_default_package"
         private const val KEY_QA_SLOTS = "quick_action_slots"
-        private const val KEY_WIDGETS = "widgets"
+        private const val KEY_LEGACY_WIDGETS = "widgets"
+        private const val KEY_WIDGET_GRID = "widget_grid"
         private const val KEY_TEMP_UNIT = "temp_unit"
         private const val KEY_PLACE_NAME = "place_name"
         private const val KEY_PLACE_ADMIN = "place_admin"

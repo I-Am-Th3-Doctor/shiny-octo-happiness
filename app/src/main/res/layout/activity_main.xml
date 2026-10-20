@@ -10,12 +10,6 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- 1px anchor moved to the touch point so long-press menus open where you pressed. -->
-    <View
-        android:id="@+id/menuAnchor"
-        android:layout_width="1dp"
-        android:layout_height="1dp" />
-
     <io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout
         android:id="@+id/column"
         android:layout_width="match_parent"
@@ -25,34 +19,20 @@
         app:maxWidth="@dimen/content_max_width">
 
         <!--
-          The space above the home card. Idle: your real Android widgets, scrollable
-          (long-press empty space to add one). Searching: results, best one nearest the card.
+          The space above the home card. Idle: the widget grid (long-press to arrange). Searching:
+          results, best one nearest the card. The home card is outside this area, so widgets can
+          never end up underneath it.
         -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <ScrollView
-                android:id="@+id/widgetsScroll"
+            <io.github.iamth3doctor.searchlight.widgets.WidgetGridView
+                android:id="@+id/widgetGrid"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:fillViewport="true"
-                android:overScrollMode="never"
-                android:scrollbars="none">
-
-                <!-- fillViewport + bottom gravity: a few widgets sit just above the card, like a stack. -->
-                <LinearLayout
-                    android:id="@+id/widgetsContainer"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="bottom"
-                    android:orientation="vertical"
-                    android:paddingHorizontal="12dp"
-                    android:paddingTop="8dp"
-                    android:paddingBottom="4dp" />
-            </ScrollView>
+                android:layout_marginHorizontal="6dp" />
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/results"
@@ -63,6 +43,45 @@
                 android:paddingHorizontal="12dp"
                 android:paddingVertical="8dp"
                 android:visibility="gone" />
+
+            <!-- Edit mode only: add a widget, open settings, or finish arranging. -->
+            <LinearLayout
+                android:id="@+id/editBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|center_horizontal"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/bg_glance_card"
+                android:elevation="6dp"
+                android:orientation="horizontal"
+                android:padding="4dp"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/editAdd"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/menu_add_widget"
+                    android:textColor="@color/on_wallpaper" />
+
+                <Button
+                    android:id="@+id/editSettings"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/menu_launcher_settings"
+                    android:textColor="@color/on_wallpaper" />
+
+                <Button
+                    android:id="@+id/editDone"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/edit_done"
+                    android:textColor="#FF8C9EFF"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </FrameLayout>
 
         <!--

@@ -1,7 +1,6 @@
 package io.github.iamth3doctor.searchlight.widgets
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -12,31 +11,28 @@ import android.os.Bundle
 import android.os.UserHandle
 import android.util.Log
 import android.util.SizeF
-import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
-import android.widget.LinearLayout
-import android.widget.PopupMenu
-import android.widget.SeekBar
-import android.widget.TextView
 import android.widget.Toast
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.data.Prefs
 import kotlin.math.roundToInt
 
 /**
- * Real Android widgets on the home screen: one column in a scrollable page above the home card.
+ * Real Android widgets on a free-placement grid above the home card.
+ *
+ * Positions are stored as grid cells ([GridSpec]); [WidgetGridView] turns them into pixels.
+ * When the grid changes size (fold/unfold), stored positions are re-fitted for display only, so
+ * unfolding again restores the original arrangement.
  *
  * Add flow (the same one the stock launcher uses):
  *   picker → allocate id → bind (asks you once: "Allow Searchlight to create widgets") →
- *   the widget's own configure screen, if it has one → placed at the bottom of the page.
- * Long-press a widget for Resize / Move up / Move down / Remove.
+ *   the widget's own configure screen, if it has one → first free space that fits its span.
  */
 class WidgetController(
     private val activity: Activity,
-    private val container: LinearLayout,
+    private val grid: WidgetGridView,
     private val prefs: Prefs,
-) {
+    private val onEditModeChanged: (Boolean) -> Unit,
+) : WidgetGridView.Listener {
     private val manager = AppWidgetManager.getInstance(activity)
     private val host = SearchlightWidgetHost(activity.applicationContext, HOST_ID)
     private val views = HashMap<Int, AppWidgetHostView>()
@@ -46,9 +42,12 @@ class WidgetController(
     /** An id allocated for a widget that's still going through bind/configure. */
     var pendingId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
 
+    val editing get() = grid.editMode
+
     init {
-        // Fold/unfold changes the column width: tell widgets their new size so they re-layout.
-        container.addOnLayoutChangeListener { _, l, _, r, _, ol, _, or_, _ -> if (r - l != or_ - ol) reportSizes() }
+        grid.listener = this
+        grid.emptyHint = activity.getString(R.string.widgets_empty_hint)
+        migrateFromStack()
     }
 
     fun start() {
@@ -62,6 +61,7 @@ class WidgetController(
     }
 
     fun stop() {
+        exitEditMode()
         try {
             host.stopListening()
         } catch (e: Exception) {
@@ -69,70 +69,101 @@ class WidgetController(
         }
     }
 
-    /** Frees ids the system still has for us but that aren't on the page (e.g. an add that was abandoned). */
+    fun exitEditMode() = grid.setEditMode(false)
+
+    /** Frees ids the system still has for us but that aren't on the grid (e.g. an add that was abandoned). */
     fun cleanUpOrphans() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val placed = prefs.widgets.mapTo(HashSet()) { it.id }
+        val placed = prefs.widgetGrid.mapTo(HashSet()) { it.id }
         host.appWidgetIds.filter { it !in placed && it != pendingId }.forEach { host.deleteAppWidgetId(it) }
+    }
+
+    /** One time: the old single-column stack becomes full-width rows on the grid. */
+    private fun migrateFromStack() {
+        val legacy = prefs.takeLegacyWidgetStack() ?: return
+        if (prefs.widgetGrid.isNotEmpty()) return
+        prefs.widgetGrid = WidgetGrid.fromStack(legacy, grid.cols, grid.rows, cellHeightDp = 80f)
     }
 
     // ------------------------------------------------------------------ rendering
 
     fun render() {
-        val specs = prefs.widgets
-        val alive = specs.filter { manager.getAppWidgetInfo(it.id) != null }
-        if (alive.size != specs.size) {
-            // The app behind a widget was uninstalled: drop it from the page.
-            specs.filter { it !in alive }.forEach { gone ->
+        val stored = prefs.widgetGrid
+        val alive = stored.filter { manager.getAppWidgetInfo(it.id) != null }
+        if (alive.size != stored.size) {
+            // The app behind a widget was uninstalled: take it off the grid.
+            stored.filter { it !in alive }.forEach { gone ->
                 host.deleteAppWidgetId(gone.id)
                 views.remove(gone.id)
             }
-            prefs.widgets = alive
+            prefs.widgetGrid = alive
         }
-
-        container.removeAllViews()
-        for (spec in alive) {
-            val info = manager.getAppWidgetInfo(spec.id) ?: continue
-            val view = views.getOrPut(spec.id) {
-                host.createView(activity, spec.id, info).also { v ->
-                    (v as? LongPressWidgetHostView)?.onLongPress = { showWidgetMenu(spec.id, v) }
-                }
-            }
-            (view.parent as? ViewGroup)?.removeView(view)
-            container.addView(view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(spec.heightDp)).apply {
-                bottomMargin = dp(8)
-            })
-        }
-        if (alive.isEmpty()) {
-            container.addView(TextView(activity).apply {
-                setText(R.string.widgets_empty_hint)
-                setTextColor(activity.getColor(R.color.on_wallpaper_dim))
-                textSize = 13f
-                gravity = Gravity.CENTER
-                setPadding(0, dp(24), 0, dp(24))
-            })
-        }
-        container.post { reportSizes() }
+        val fit = WidgetGrid.fitToGrid(alive, grid.cols, grid.rows)
+        grid.setWidgets(fit.shown.mapNotNull { spec -> viewFor(spec.id)?.let { it to spec } })
     }
 
-    private fun reportSizes() {
-        for ((id, view) in views) {
-            if (view.parent == null || view.width == 0) continue
-            val w = (view.width / density).roundToInt()
-            val h = (view.height / density).roundToInt()
-            if (reportedSizes[id] == w to h) continue
-            reportedSizes[id] = w to h
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                view.updateAppWidgetSize(Bundle(), listOf(SizeF(w.toFloat(), h.toFloat())))
-            } else {
-                @Suppress("DEPRECATION")
-                view.updateAppWidgetSize(null, w, h, w, h)
-            }
+    private fun viewFor(id: Int): AppWidgetHostView? {
+        views[id]?.let { return it }
+        val info = manager.getAppWidgetInfo(id) ?: return null
+        return host.createView(activity, id, info).also { v ->
+            (v as? LongPressWidgetHostView)?.onLongPress = { grid.enterEditModeFromLongPress() }
+            // Tell the widget its real size whenever its cell span (or the cell size) changes.
+            v.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ -> reportSize(id, v, r - l, b - t) }
+            views[id] = v
         }
+    }
+
+    private fun reportSize(id: Int, view: AppWidgetHostView, wPx: Int, hPx: Int) {
+        if (wPx <= 0 || hPx <= 0) return
+        val w = (wPx / density).roundToInt()
+        val h = (hPx / density).roundToInt()
+        if (reportedSizes[id] == w to h) return
+        reportedSizes[id] = w to h
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            view.updateAppWidgetSize(Bundle(), listOf(SizeF(w.toFloat(), h.toFloat())))
+        } else {
+            @Suppress("DEPRECATION")
+            view.updateAppWidgetSize(null, w, h, w, h)
+        }
+    }
+
+    // ------------------------------------------------------------------ grid callbacks
+
+    override fun onEditModeChanged(editing: Boolean) = onEditModeChanged.invoke(editing)
+
+    override fun onGridSizeChanged(cols: Int, rows: Int) = render()
+
+    /** A move or resize was dropped on free cells: that's now the stored position. */
+    override fun onCommit(spec: GridSpec) {
+        prefs.widgetGrid = WidgetGrid.upsert(prefs.widgetGrid, spec)
+    }
+
+    override fun onRemove(id: Int) {
+        prefs.widgetGrid = WidgetGrid.remove(prefs.widgetGrid, id)
+        host.deleteAppWidgetId(id)
+        views.remove(id)
+        reportedSizes.remove(id)
+        render()
+        Toast.makeText(activity, R.string.widget_removed, Toast.LENGTH_SHORT).show()
+    }
+
+    override fun resizable(id: Int): Pair<Boolean, Boolean> {
+        val mode = manager.getAppWidgetInfo(id)?.resizeMode ?: return false to false
+        return (mode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0) to (mode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0)
+    }
+
+    override fun minSpan(id: Int): Pair<Int, Int> {
+        val info = manager.getAppWidgetInfo(id) ?: return 1 to 1
+        val (canH, canV) = resizable(id)
+        val wPx = if (canH && info.minResizeWidth > 0) info.minResizeWidth else info.minWidth
+        val hPx = if (canV && info.minResizeHeight > 0) info.minResizeHeight else info.minHeight
+        return WidgetGrid.spanFor(wPx / density, grid.cellWidthDp, grid.cols) to
+            WidgetGrid.spanFor(hPx / density, grid.cellHeightDp, grid.rows)
     }
 
     // ------------------------------------------------------------------ add flow
 
+    /** Opens the widget picker; the chosen widget lands in the first free space that fits it. */
     fun beginAdd() {
         @Suppress("DEPRECATION")
         activity.startActivityForResult(Intent(activity, WidgetPickerActivity::class.java), REQUEST_PICK)
@@ -194,7 +225,15 @@ class WidgetController(
     private fun place(id: Int) {
         pendingId = AppWidgetManager.INVALID_APPWIDGET_ID
         val info = manager.getAppWidgetInfo(id) ?: return
-        prefs.widgets = WidgetLayout.add(prefs.widgets, WidgetSpec(id, defaultHeightDp(info)))
+        val (w, h) = defaultSpan(info)
+        val (minW, minH) = minSpan(id)
+        val spot = WidgetGrid.place(grid.placedSpecs(), id, w, h, minW, minH, grid.cols, grid.rows)
+        if (spot == null) {
+            host.deleteAppWidgetId(id)
+            Toast.makeText(activity, R.string.widget_no_room, Toast.LENGTH_LONG).show()
+            return
+        }
+        prefs.widgetGrid = WidgetGrid.upsert(prefs.widgetGrid, spot)
         render()
     }
 
@@ -203,90 +242,14 @@ class WidgetController(
         pendingId = AppWidgetManager.INVALID_APPWIDGET_ID
     }
 
-    private fun defaultHeightDp(info: AppWidgetProviderInfo): Int {
-        val fromMin = (info.minHeight / density).roundToInt()
-        val fromCells = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.targetCellHeight > 0) info.targetCellHeight * CELL_DP else 0
-        return maxOf(fromMin, fromCells, MIN_HEIGHT_DP).coerceAtMost(MAX_HEIGHT_DP)
-    }
-
-    private fun minHeightDp(info: AppWidgetProviderInfo): Int {
-        val resizable = info.resizeMode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0
-        val px = if (resizable && info.minResizeHeight > 0) info.minResizeHeight else info.minHeight
-        return maxOf((px / density).roundToInt(), MIN_HEIGHT_DP)
-    }
-
-    // ------------------------------------------------------------------ edit
-
-    private fun showWidgetMenu(id: Int, anchor: View) {
-        val list = prefs.widgets
-        val index = list.indexOfFirst { it.id == id }
-        PopupMenu(activity, anchor, Gravity.CENTER).apply {
-            menu.add(0, 1, 0, R.string.widget_resize)
-            if (index > 0) menu.add(0, 2, 1, R.string.widget_move_up)
-            if (index in 0 until list.lastIndex) menu.add(0, 3, 2, R.string.widget_move_down)
-            menu.add(0, 4, 3, R.string.widget_remove)
-            setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    1 -> showResize(id)
-                    2 -> { prefs.widgets = WidgetLayout.move(prefs.widgets, id, -1); render() }
-                    3 -> { prefs.widgets = WidgetLayout.move(prefs.widgets, id, +1); render() }
-                    4 -> remove(id)
-                }
-                true
-            }
-            show()
+    /** The span a widget asks for: its declared target cells (Android 12+), else its minimum size. */
+    private fun defaultSpan(info: AppWidgetProviderInfo): Pair<Int, Int> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && info.targetCellWidth > 0 && info.targetCellHeight > 0) {
+            return info.targetCellWidth.coerceAtMost(grid.cols) to info.targetCellHeight.coerceAtMost(grid.rows)
         }
+        return WidgetGrid.spanFor(info.minWidth / density, grid.cellWidthDp, grid.cols) to
+            WidgetGrid.spanFor(info.minHeight / density, grid.cellHeightDp, grid.rows)
     }
-
-    private fun remove(id: Int) {
-        prefs.widgets = WidgetLayout.remove(prefs.widgets, id)
-        host.deleteAppWidgetId(id)
-        views.remove(id)
-        reportedSizes.remove(id)
-        render()
-        Toast.makeText(activity, R.string.widget_removed, Toast.LENGTH_SHORT).show()
-    }
-
-    /** Height slider with live preview; OK saves, Cancel puts it back. Width always fills the column. */
-    private fun showResize(id: Int) {
-        val spec = prefs.widgets.firstOrNull { it.id == id } ?: return
-        val info = manager.getAppWidgetInfo(id) ?: return
-        val view = views[id] ?: return
-        val minDp = minHeightDp(info)
-        val label = TextView(activity).apply { textSize = 15f }
-        fun apply(hDp: Int) {
-            view.layoutParams = view.layoutParams.apply { height = dp(hDp) }
-            label.text = activity.getString(R.string.widget_height, hDp)
-        }
-        val seek = SeekBar(activity).apply {
-            max = (MAX_HEIGHT_DP - minDp) / STEP_DP
-            progress = ((spec.heightDp - minDp) / STEP_DP).coerceIn(0, max)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(bar: SeekBar, value: Int, fromUser: Boolean) = apply(minDp + value * STEP_DP)
-                override fun onStartTrackingTouch(bar: SeekBar) = Unit
-                override fun onStopTrackingTouch(bar: SeekBar) = Unit
-            })
-        }
-        apply(spec.heightDp.coerceAtLeast(minDp))
-        val box = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), 0)
-            addView(label)
-            addView(seek)
-        }
-        AlertDialog.Builder(activity)
-            .setTitle(R.string.widget_resize)
-            .setView(box)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                prefs.widgets = WidgetLayout.resize(prefs.widgets, id, minDp + seek.progress * STEP_DP, minDp, MAX_HEIGHT_DP)
-                render()
-            }
-            .setNegativeButton(android.R.string.cancel) { _, _ -> render() }
-            .setOnCancelListener { render() }
-            .show()
-    }
-
-    private fun dp(v: Int) = (v * density).roundToInt()
 
     private inline fun <reified T : android.os.Parcelable> Intent.getParcelableExtraCompat(key: String): T? =
         if (Build.VERSION.SDK_INT >= 33) getParcelableExtra(key, T::class.java)
@@ -298,9 +261,5 @@ class WidgetController(
         const val REQUEST_PICK = 101
         const val REQUEST_BIND = 102
         const val REQUEST_CONFIGURE = 103
-        private const val CELL_DP = 80
-        private const val MIN_HEIGHT_DP = 48
-        private const val MAX_HEIGHT_DP = 720
-        private const val STEP_DP = 8
     }
 }
