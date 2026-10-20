@@ -1,8 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Needed for the uninstall shortcut in the long-press menu. -->
+    <!-- Uninstall shortcut in the long-press menu. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Contact search (asked at runtime, optional). -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Search ALL files in shared storage (granted by you in Android settings, optional).
+         Fine for a sideloaded app; Play would require a justification. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <!-- Android 10 has no All Files Access; legacy storage read covers it there. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <!-- Deliberately no INTERNET permission in Phase 1: nothing can leave the phone. -->
 
     <!-- Android 11+ package visibility: let us see every launchable app. -->
     <queries>
@@ -17,6 +30,7 @@
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
+        android:requestLegacyExternalStorage="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.Searchlight">
 
@@ -48,6 +62,17 @@
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title"
-            android:theme="@style/Theme.Searchlight.Settings" />
+            android:theme="@style/Theme.Searchlight.Settings"
+            android:windowSoftInputMode="adjustResize" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

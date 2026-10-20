@@ -3,30 +3,72 @@
     <string name="app_name">Searchlight</string>
     <string name="self_label">Searchlight settings</string>
     <string name="settings_title">Searchlight settings</string>
-    <string name="search_hint">Search</string>
     <string name="search_icon_desc">Search. Long-press for favorites</string>
     <string name="clear_desc">Clear search</string>
 
+    <string name="greeting_morning">Good morning</string>
+    <string name="greeting_afternoon">Good afternoon</string>
+    <string name="greeting_evening">Good evening</string>
+    <string name="greeting_night">Good night</string>
+
+    <string name="tips_title">Searchlight</string>
+    <string name="tips_body">Type to search apps, contacts and files.\nTry 42 x 18.\nLong-press the magnifier for your six favorites.\nSwipe for more cards.</string>
+
+    <!-- Results -->
+    <string name="calc_result">= %1$s</string>
+    <string name="calc_subtitle">%1$s · tap to copy</string>
+    <string name="web_search_for">Search %1$s for “%2$s”</string>
+    <string name="access_hint_title">Search contacts &amp; files too</string>
+    <string name="access_hint_subtitle">Tap to allow access · long-press to hide</string>
+    <string name="storage_root">Internal storage</string>
+    <string name="action_call">Call</string>
+    <string name="action_message">Message</string>
+
+    <!-- Menus -->
     <string name="menu_add_favorite">Add to favorites</string>
     <string name="menu_remove_favorite">Remove from favorites</string>
-    <string name="menu_move_left">Move left</string>
-    <string name="menu_move_right">Move right</string>
     <string name="menu_app_info">App info</string>
     <string name="menu_uninstall">Uninstall</string>
+    <string name="menu_open_with">Open with…</string>
+    <string name="menu_share">Share</string>
+    <string name="menu_open_folder">Open containing folder</string>
+    <string name="menu_copy_path">Copy path</string>
+    <string name="menu_copy_number">Copy number</string>
+    <string name="menu_hide_hint">Don\'t show again</string>
     <string name="menu_launcher_settings">Launcher settings</string>
     <string name="menu_home_settings">Change default home app</string>
 
+    <!-- Toasts -->
     <string name="favorites_full">Favorites are full (6). Remove one first.</string>
     <string name="favorite_added">Added %1$s to favorites</string>
     <string name="favorites_empty_hint">Long-press any app in search results → Add to favorites</string>
     <string name="launch_failed">Couldn\'t open that app</string>
+    <string name="no_app_for_action">No app can open this</string>
+    <string name="folder_open_failed">Couldn\'t open the folder; path copied instead</string>
+    <string name="copied">Copied %1$s</string>
 
+    <!-- Settings -->
     <string name="settings_section_home">Home</string>
     <string name="settings_set_default">Set Searchlight as default home app</string>
     <string name="settings_is_default">Searchlight is your home app ✓ (tap to change)</string>
     <string name="settings_auto_keyboard">Open keyboard when I press Home</string>
+    <string name="settings_greeting">Greeting text</string>
+    <string name="settings_greeting_auto">Automatic (Good morning / afternoon / evening)</string>
+    <string name="settings_greeting_hint">Leave empty for automatic</string>
+    <string name="settings_web_engine">Web search</string>
+    <string name="settings_section_permissions">Permissions</string>
+    <string name="settings_permissions_help">Everything is searched on this phone. Nothing is uploaded.</string>
+    <string name="perm_contacts">Contacts</string>
+    <string name="perm_contacts_desc">Find people by name or number; call or text from results</string>
+    <string name="perm_files">All files</string>
+    <string name="perm_files_desc">Search every file in storage: Downloads, Documents, PDFs, zips, photos, music</string>
+    <string name="perm_granted_tap_to_change">Granted. Tap to change in Android settings.</string>
+    <string name="index_status_none">Not indexed yet</string>
+    <string name="index_status_scanning">Indexing… %1$s files so far</string>
+    <string name="index_status_done">%1$s files indexed · %2$s</string>
+    <string name="index_rebuild">Re-index files now</string>
     <string name="settings_section_favorites">Favorites (up to 6)</string>
-    <string name="settings_favorites_help">Shown under the search bar, and in the grid you get by long-pressing the magnifier. Add one by long-pressing any app in search results.</string>
+    <string name="settings_favorites_help">Long-press the magnifier to open them. Add one by long-pressing any app in search results.</string>
     <string name="settings_no_favorites">No favorites yet.</string>
     <string name="settings_section_about">About</string>
     <string name="settings_about">Version %1$s\nNo ads, no analytics, no tracking. Nothing leaves this phone.</string>

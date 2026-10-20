@@ -4,6 +4,6 @@
     <dimen name="content_max_width">600dp</dimen>
     <dimen name="search_bar_height">56dp</dimen>
     <dimen name="result_icon">40dp</dimen>
-    <dimen name="favorite_icon">48dp</dimen>
+    <dimen name="card_height">168dp</dimen>
     <dimen name="grid_icon">56dp</dimen>
 </resources>

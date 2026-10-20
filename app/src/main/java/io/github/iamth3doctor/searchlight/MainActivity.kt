@@ -11,10 +11,8 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
-import android.widget.TextView
 import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -23,32 +21,40 @@ import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.apps.AppEntry
 import io.github.iamth3doctor.searchlight.databinding.ActivityMainBinding
 import io.github.iamth3doctor.searchlight.search.SearchEngine
+import io.github.iamth3doctor.searchlight.search.SearchResult
+import io.github.iamth3doctor.searchlight.ui.Actions
+import io.github.iamth3doctor.searchlight.ui.CardsAdapter
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
 import io.github.iamth3doctor.searchlight.ui.ResultsAdapter
+import java.util.Calendar
 import kotlin.math.max
 
-/** The home screen: one search bar, results above it, favorites below it. */
-class MainActivity : Activity() {
+/**
+ * The home screen: wallpaper, glance cards (with page dots) and the search pill. No dock.
+ * Typing swaps the cards for results; the best result sits right above the pill.
+ */
+class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var engine: SearchEngine
     private lateinit var adapter: ResultsAdapter
     private lateinit var favoritesPopup: FavoritesPopup
 
-    private val repo get() = searchlight.apps
-    private val prefs get() = searchlight.prefs
+    private val app get() = searchlight
+    private val prefs get() = app.prefs
 
     private var openMenu: PopupMenu? = null
-    private var launchedApp = false
+    private var launchedSomething = false
 
-    private val appsChanged: () -> Unit = {
-        refreshResults()
-        renderFavorites()
-    }
-    private val favoritesChanged: () -> Unit = { renderFavorites() }
+    /** Results for the current query: [local] is instant, [fileResults] arrives a moment later. */
+    private var local: List<SearchResult> = emptyList()
+    private var fileResults: List<SearchResult> = emptyList()
+
+    private val sourcesChanged: () -> Unit = { refreshResults() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,31 +62,37 @@ class MainActivity : Activity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        engine = SearchEngine(prefs)
-        adapter = ResultsAdapter(repo, ::launch, ::showAppMenu)
-        favoritesPopup = FavoritesPopup(this, repo, prefs, ::launch)
+        engine = SearchEngine(prefs, app.apps, app.contacts)
+        adapter = ResultsAdapter(app.apps, app.contacts, this)
+        favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp)
 
         binding.results.layoutManager = LinearLayoutManager(this, RecyclerView.VERTICAL, true)
         binding.results.adapter = adapter
         binding.results.itemAnimator = null
 
         applyInsets()
-        setupSearchBar()
+        setupCards()
+        setupSearchPill()
         setupHomeLongPress()
 
-        repo.addListener(appsChanged)
-        prefs.addFavoritesListener(favoritesChanged)
-        renderFavorites()
+        app.apps.addListener(sourcesChanged)
+        app.contacts.addListener(sourcesChanged)
+        app.files.addListener(sourcesChanged)
     }
 
     override fun onDestroy() {
-        repo.removeListener(appsChanged)
-        prefs.removeFavoritesListener(favoritesChanged)
+        app.apps.removeListener(sourcesChanged)
+        app.contacts.removeListener(sourcesChanged)
+        app.files.removeListener(sourcesChanged)
         super.onDestroy()
     }
 
     override fun onResume() {
         super.onResume()
+        // Permissions may have been granted in Settings since last time.
+        app.contacts.start()
+        app.files.start()
+        binding.searchInput.hint = greeting()
         if (prefs.autoOpenKeyboard) binding.searchInput.post { showKeyboard() }
     }
 
@@ -93,33 +105,35 @@ class MainActivity : Activity() {
     override fun onStop() {
         super.onStop()
         dismissPopups()
-        // Coming back after opening an app should start a fresh search.
-        if (launchedApp) {
-            launchedApp = false
-            clearQuery()
+        // Coming back after opening something should start fresh.
+        if (launchedSomething) {
+            launchedSomething = false
+            resetHome()
         }
     }
 
-    /** Pressing Home (while in another app, or on the home screen itself) lands here. */
+    /** Pressing Home (from another app, or on the home screen itself) lands here. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
             dismissPopups()
-            clearQuery()
-            binding.results.scrollToPosition(0)
+            resetHome()
             if (prefs.autoOpenKeyboard) showKeyboard()
         }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        // Fold/unfold: the layout re-measures itself; popups are anchored to old coordinates.
+        // Fold/unfold: views re-measure themselves; popups are anchored to stale coordinates.
         dismissPopups()
     }
 
-    @Deprecated("Launcher: Back never leaves home; it just clears the search.")
+    @Deprecated("Launcher: Back never leaves home; it clears the search and drops the keyboard.")
     override fun onBackPressed() {
-        if (favoritesPopup.isShowing) favoritesPopup.dismiss() else clearQuery()
+        when {
+            favoritesPopup.isShowing -> favoritesPopup.dismiss()
+            else -> resetHome()
+        }
     }
 
     // ------------------------------------------------------------------ setup
@@ -133,29 +147,50 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun setupSearchBar() {
+    private fun setupCards() {
+        val cardsAdapter = CardsAdapter()
+        binding.cards.adapter = cardsAdapter
+        binding.cards.offscreenPageLimit = 1
+        val dotSize = (6 * resources.displayMetrics.density).toInt()
+        val dotGap = (4 * resources.displayMetrics.density).toInt()
+        repeat(cardsAdapter.itemCount) {
+            binding.dots.addView(View(this).apply {
+                setBackgroundResource(R.drawable.bg_dot)
+                layoutParams = LinearLayout.LayoutParams(dotSize, dotSize).apply { marginStart = dotGap; marginEnd = dotGap }
+            })
+        }
+        binding.dots.isVisible = cardsAdapter.itemCount > 1
+        binding.cards.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                for (i in 0 until binding.dots.childCount) binding.dots.getChildAt(i).alpha = if (i == position) 1f else 0.35f
+            }
+        })
+    }
+
+    private fun setupSearchPill() {
         val input = binding.searchInput
         input.doAfterTextChanged {
             favoritesPopup.dismiss()
-            refreshResults()
+            onQueryChanged()
         }
         input.setOnEditorActionListener { _, actionId, event ->
             val enter = actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE ||
                 (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
             if (enter) {
-                adapter.first()?.let { launch(it, binding.results.findViewHolderForAdapterPosition(0)?.itemView) }
+                adapter.first()?.let { onClick(it, binding.results.findViewHolderForAdapterPosition(0)?.itemView ?: input) }
             }
             enter
         }
-        binding.clearButton.setOnClickListener { clearQuery() }
+        binding.clearButton.setOnClickListener { binding.searchInput.text = null }
+        binding.settingsButton.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         binding.searchIcon.setOnClickListener { showKeyboard() }
         binding.searchIcon.setOnLongClickListener {
-            favoritesPopup.show(binding.searchBar)
+            favoritesPopup.show(binding.searchPill)
             true
         }
     }
 
-    /** Long-press on empty space (not on a result) opens the home menu. Phase 3 adds "Add widget". */
+    /** Long-press on empty space opens the home menu. Phase 3 adds "Add widget" here. */
     private fun setupHomeLongPress() {
         val detector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent) = true
@@ -169,24 +204,77 @@ class MainActivity : Activity() {
                 return false
             }
         })
-        binding.glance.setOnLongClickListener {
-            showHomeMenu(null, null)
-            true
-        }
+    }
+
+    private fun greeting(): String {
+        prefs.greeting.takeIf { it.isNotEmpty() }?.let { return it }
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return getString(
+            when (hour) {
+                in 5..11 -> R.string.greeting_morning
+                in 12..16 -> R.string.greeting_afternoon
+                in 17..21 -> R.string.greeting_evening
+                else -> R.string.greeting_night
+            }
+        )
     }
 
     // ------------------------------------------------------------------ search
 
+    private fun query() = binding.searchInput.text?.toString().orEmpty()
+
+    private fun onQueryChanged() {
+        fileResults = emptyList()
+        refreshResults()
+    }
+
+    /** Recomputes the instant part, (re)starts the file search, and redraws. */
     private fun refreshResults() {
-        val q = binding.searchInput.text?.toString().orEmpty()
+        val q = query()
+        val searching = q.isNotBlank()
         binding.clearButton.isVisible = q.isNotEmpty()
-        adapter.submit(if (q.isBlank()) emptyList() else engine.searchApps(q, repo.apps))
+        binding.settingsButton.isVisible = q.isEmpty()
+        binding.cardArea.isVisible = !searching
+        if (!searching) {
+            app.files.cancel()
+            local = emptyList()
+            fileResults = emptyList()
+            binding.calcPreview.isVisible = false
+            adapter.submit(emptyList())
+            return
+        }
+        local = engine.local(q)
+        val calc = local.firstOrNull() as? SearchResult.Calc
+        binding.calcPreview.isVisible = calc != null
+        binding.calcPreview.text = calc?.let { getString(R.string.calc_result, it.value) }
+        render()
+        app.files.search(q, MAX_FILES) { index, hits ->
+            if (query() == q) {
+                fileResults = hits.map { SearchResult.File(index, it) }
+                render()
+            }
+        }
+    }
+
+    private fun render() {
+        val q = query().trim()
+        val list = ArrayList<SearchResult>(local.size + fileResults.size + 2)
+        list += local
+        list += fileResults
+        // Web search: first when nothing local matched (so Enter goes there), otherwise last.
+        list += SearchResult.Web(q, prefs.webEngine)
+        if (!prefs.accessHintDismissed && (!app.contacts.hasPermission() || !app.files.hasPermission())) {
+            list += SearchResult.AccessHint
+        }
+        adapter.submit(list)
         binding.results.scrollToPosition(0)
     }
 
-    private fun clearQuery() {
-        if (binding.searchInput.text.isNullOrEmpty()) return
+    private fun resetHome() {
         binding.searchInput.text = null
+        binding.searchInput.clearFocus()
+        if (!prefs.autoOpenKeyboard) hideKeyboard()
+        binding.cards.setCurrentItem(0, false)
     }
 
     private fun showKeyboard() {
@@ -195,126 +283,116 @@ class MainActivity : Activity() {
         WindowCompat.getInsetsController(window, input).show(WindowInsetsCompat.Type.ime())
     }
 
-    private fun launch(entry: AppEntry, source: View?) {
-        dismissPopups()
-        launchedApp = true
-        repo.launch(entry, source, this)
+    private fun hideKeyboard() {
+        WindowCompat.getInsetsController(window, binding.searchInput).hide(WindowInsetsCompat.Type.ime())
     }
 
-    // ------------------------------------------------------------------ favorites row
+    // ------------------------------------------------------------------ result callbacks
 
-    private fun renderFavorites() {
-        val row = binding.favoritesRow
-        row.removeAllViews()
-        val favorites = prefs.favorites.mapNotNull(repo::find)
-        if (favorites.isEmpty()) {
-            row.addView(TextView(this).apply {
-                setText(R.string.favorites_empty_hint)
-                setTextColor(getColor(R.color.on_wallpaper_dim))
-                textSize = 12f
-                gravity = Gravity.CENTER
-            })
-            return
-        }
-        val size = resources.getDimensionPixelSize(R.dimen.favorite_icon)
-        val pad = (8 * resources.displayMetrics.density).toInt()
-        for (entry in favorites) {
-            val icon = ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(0, size + pad * 2, 1f)
-                setPadding(pad, pad, pad, pad)
-                contentDescription = entry.label
-                background = getDrawable(resolveAttr(android.R.attr.selectableItemBackgroundBorderless))
-                setImageBitmap(repo.icon(entry) { bmp -> setImageBitmap(bmp) })
-                setOnClickListener { v -> launch(entry, v) }
-                setOnLongClickListener { v -> showFavoriteMenu(entry, v); true }
+    override fun onClick(result: SearchResult, view: View) {
+        when (result) {
+            is SearchResult.App -> launchApp(result.entry, view)
+            is SearchResult.Contact -> opened { Actions.openContact(this, result.entry) }
+            is SearchResult.File -> opened {
+                val e = result.entry
+                if (e.isDir) Actions.openFolder(this, result.index.relativeDirOf(e).let { if (it.isEmpty()) e.name else "$it/${e.name}" })
+                else Actions.openFile(this, result.index.pathOf(e))
             }
-            row.addView(icon)
+            is SearchResult.Calc -> Actions.copy(this, result.value.replace(",", ""))
+            is SearchResult.Web -> opened { Actions.webSearch(this, result.engine, result.query) }
+            SearchResult.AccessHint -> startActivity(Intent(this, SettingsActivity::class.java))
         }
     }
 
-    private fun resolveAttr(attr: Int): Int {
-        val out = android.util.TypedValue()
-        theme.resolveAttribute(attr, out, true)
-        return out.resourceId
+    override fun onAction(result: SearchResult, which: Int, view: View) {
+        val number = (result as? SearchResult.Contact)?.entry?.number ?: return
+        opened { if (which == 1) Actions.dial(this, number) else Actions.message(this, number) }
+    }
+
+    override fun onLongClick(result: SearchResult, view: View) {
+        when (result) {
+            is SearchResult.App -> showAppMenu(result.entry, view)
+            is SearchResult.File -> showFileMenu(result, view)
+            is SearchResult.Contact -> result.entry.number?.let { Actions.copy(this, it) }
+            is SearchResult.Calc -> Actions.copy(this, result.value.replace(",", ""))
+            SearchResult.AccessHint -> menu(view) {
+                add(R.string.menu_hide_hint) {
+                    prefs.accessHintDismissed = true
+                    render()
+                }
+            }
+            is SearchResult.Web -> Unit
+        }
+    }
+
+    private inline fun opened(block: () -> Unit) {
+        dismissPopups()
+        launchedSomething = true
+        block()
+    }
+
+    private fun launchApp(entry: AppEntry, source: View?) {
+        dismissPopups()
+        launchedSomething = true
+        app.apps.launch(entry, source, this)
     }
 
     // ------------------------------------------------------------------ menus
 
-    private fun showAppMenu(entry: AppEntry, anchor: View) {
-        val menu = PopupMenu(this, anchor, Gravity.END)
-        val fav = prefs.isFavorite(entry.key)
-        menu.menu.add(0, MENU_FAVORITE, 0, if (fav) R.string.menu_remove_favorite else R.string.menu_add_favorite)
-        menu.menu.add(0, MENU_INFO, 1, R.string.menu_app_info)
-        if (repo.canUninstall(entry)) menu.menu.add(0, MENU_UNINSTALL, 2, R.string.menu_uninstall)
-        menu.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MENU_FAVORITE -> toggleFavorite(entry)
-                MENU_INFO -> repo.openAppInfo(entry, anchor)
-                MENU_UNINSTALL -> repo.uninstall(entry, this)
-            }
-            true
+    private class MenuBuilder(val menu: PopupMenu) {
+        val actions = HashMap<Int, () -> Unit>()
+        fun add(title: Int, action: () -> Unit) {
+            val id = actions.size + 1
+            menu.menu.add(0, id, id, title)
+            actions[id] = action
         }
-        showMenu(menu)
     }
 
-    private fun showFavoriteMenu(entry: AppEntry, anchor: View) {
-        val menu = PopupMenu(this, anchor)
-        val list = prefs.favorites
-        val index = list.indexOf(entry.key)
-        menu.menu.add(0, MENU_FAVORITE, 0, R.string.menu_remove_favorite)
-        if (index > 0) menu.menu.add(0, MENU_LEFT, 1, R.string.menu_move_left)
-        if (index in 0 until list.lastIndex) menu.menu.add(0, MENU_RIGHT, 2, R.string.menu_move_right)
-        menu.menu.add(0, MENU_INFO, 3, R.string.menu_app_info)
-        menu.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MENU_FAVORITE -> prefs.removeFavorite(entry.key)
-                MENU_LEFT -> prefs.moveFavorite(entry.key, -1)
-                MENU_RIGHT -> prefs.moveFavorite(entry.key, +1)
-                MENU_INFO -> repo.openAppInfo(entry, anchor)
-            }
-            true
-        }
-        showMenu(menu)
-    }
-
-    private fun showHomeMenu(rawX: Float?, rawY: Float?) {
-        val anchor = binding.menuAnchor
-        if (rawX != null && rawY != null) {
-            val loc = IntArray(2)
-            binding.root.getLocationOnScreen(loc)
-            anchor.x = rawX - loc[0]
-            anchor.y = rawY - loc[1]
-        } else {
-            anchor.x = binding.root.width / 2f
-            anchor.y = binding.root.height / 3f
-        }
-        val menu = PopupMenu(this, anchor)
-        menu.menu.add(0, MENU_SETTINGS, 0, R.string.menu_launcher_settings)
-        menu.menu.add(0, MENU_HOME_SETTINGS, 1, R.string.menu_home_settings)
-        menu.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MENU_SETTINGS -> startActivity(Intent(this, SettingsActivity::class.java))
-                MENU_HOME_SETTINGS -> startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-            }
-            true
-        }
-        showMenu(menu)
-    }
-
-    private fun showMenu(menu: PopupMenu) {
+    private fun menu(anchor: View, build: MenuBuilder.() -> Unit) {
+        val popup = PopupMenu(this, anchor, Gravity.END)
+        val builder = MenuBuilder(popup).apply(build)
+        popup.setOnMenuItemClickListener { item -> builder.actions[item.itemId]?.invoke(); true }
         openMenu?.dismiss()
-        openMenu = menu
-        menu.setOnDismissListener { if (openMenu === menu) openMenu = null }
-        menu.show()
+        openMenu = popup
+        popup.setOnDismissListener { if (openMenu === popup) openMenu = null }
+        popup.show()
     }
 
-    private fun toggleFavorite(entry: AppEntry) {
+    private fun showAppMenu(entry: AppEntry, anchor: View) = menu(anchor) {
         if (prefs.isFavorite(entry.key)) {
-            prefs.removeFavorite(entry.key)
-        } else if (prefs.addFavorite(entry.key)) {
-            Toast.makeText(this, getString(R.string.favorite_added, entry.label), Toast.LENGTH_SHORT).show()
+            add(R.string.menu_remove_favorite) { prefs.removeFavorite(entry.key) }
         } else {
-            Toast.makeText(this, R.string.favorites_full, Toast.LENGTH_LONG).show()
+            add(R.string.menu_add_favorite) {
+                if (prefs.addFavorite(entry.key)) {
+                    Toast.makeText(this@MainActivity, getString(R.string.favorite_added, entry.label), Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, R.string.favorites_full, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        add(R.string.menu_app_info) { app.apps.openAppInfo(entry, anchor) }
+        if (app.apps.canUninstall(entry)) add(R.string.menu_uninstall) { app.apps.uninstall(entry, this@MainActivity) }
+    }
+
+    private fun showFileMenu(result: SearchResult.File, anchor: View) = menu(anchor) {
+        val e = result.entry
+        val path = result.index.pathOf(e)
+        if (!e.isDir) {
+            add(R.string.menu_open_with) { opened { Actions.openWith(this@MainActivity, path) } }
+            add(R.string.menu_share) { opened { Actions.share(this@MainActivity, path) } }
+        }
+        add(R.string.menu_open_folder) { opened { Actions.openFolder(this@MainActivity, result.index.relativeDirOf(e)) } }
+        add(R.string.menu_copy_path) { Actions.copy(this@MainActivity, path) }
+    }
+
+    private fun showHomeMenu(rawX: Float, rawY: Float) {
+        val loc = IntArray(2)
+        binding.root.getLocationOnScreen(loc)
+        binding.menuAnchor.x = rawX - loc[0]
+        binding.menuAnchor.y = rawY - loc[1]
+        menu(binding.menuAnchor) {
+            add(R.string.menu_launcher_settings) { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
+            add(R.string.menu_home_settings) { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
         }
     }
 
@@ -325,12 +403,6 @@ class MainActivity : Activity() {
     }
 
     private companion object {
-        const val MENU_FAVORITE = 1
-        const val MENU_INFO = 2
-        const val MENU_UNINSTALL = 3
-        const val MENU_LEFT = 4
-        const val MENU_RIGHT = 5
-        const val MENU_SETTINGS = 6
-        const val MENU_HOME_SETTINGS = 7
+        const val MAX_FILES = 20
     }
 }

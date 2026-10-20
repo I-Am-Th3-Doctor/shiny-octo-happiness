@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Searcho-style home: wallpaper, then (near the bottom) the glance-card pager with page dots,
+  then the search pill. No dock, no app bar. While typing, the cards give way to results.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
@@ -19,13 +23,7 @@
         android:orientation="vertical"
         app:maxWidth="@dimen/content_max_width">
 
-        <!-- Phase 2: glance (time/date/battery/weather). Phase 3: widgets. -->
-        <FrameLayout
-            android:id="@+id/glance"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-        <!-- reverseLayout: the best result sits right above the bar, nearest your thumb. -->
+        <!-- reverseLayout: the best result sits right above the pill. Empty while idle. -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/results"
             android:layout_width="match_parent"
@@ -37,10 +35,30 @@
             android:paddingVertical="8dp" />
 
         <LinearLayout
-            android:id="@+id/searchBar"
+            android:id="@+id/cardArea"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <androidx.viewpager2.widget.ViewPager2
+                android:id="@+id/cards"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/card_height" />
+
+            <LinearLayout
+                android:id="@+id/dots"
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:gravity="center"
+                android:orientation="horizontal" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/searchPill"
             android:layout_width="match_parent"
             android:layout_height="@dimen/search_bar_height"
             android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="12dp"
             android:background="@drawable/bg_search_bar"
             android:gravity="center_vertical"
             android:orientation="horizontal"
@@ -60,7 +78,6 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:background="@null"
-                android:hint="@string/search_hint"
                 android:imeOptions="actionGo|flagNoExtractUi|flagNoPersonalizedLearning"
                 android:importantForAutofill="no"
                 android:inputType="text|textNoSuggestions|textFilter"
@@ -70,6 +87,18 @@
                 android:textColorHint="@color/on_wallpaper_dim"
                 android:textSize="18sp" />
 
+            <!-- Calculator answer, right in the bar. -->
+            <TextView
+                android:id="@+id/calcPreview"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="4dp"
+                android:maxLines="1"
+                android:textColor="#FF8C9EFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
             <ImageButton
                 android:id="@+id/clearButton"
                 android:layout_width="48dp"
@@ -78,14 +107,14 @@
                 android:contentDescription="@string/clear_desc"
                 android:src="@drawable/ic_close"
                 android:visibility="gone" />
-        </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/favoritesRow"
-            android:layout_width="match_parent"
-            android:layout_height="72dp"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingHorizontal="12dp" />
+            <ImageButton
+                android:id="@+id/settingsButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/settings_title"
+                android:src="@drawable/ic_settings" />
+        </LinearLayout>
     </io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout>
 </FrameLayout>

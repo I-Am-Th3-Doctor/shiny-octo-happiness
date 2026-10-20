@@ -15,9 +15,29 @@ class Prefs(context: Context) {
 
     private val favoriteListeners = mutableListOf<() -> Unit>()
 
+    /** Off by default: the idle home screen shows the glance cards, the keyboard would cover them. */
     var autoOpenKeyboard: Boolean
-        get() = sp.getBoolean(KEY_AUTO_KEYBOARD, true)
+        get() = sp.getBoolean(KEY_AUTO_KEYBOARD, false)
         set(value) = sp.edit().putBoolean(KEY_AUTO_KEYBOARD, value).apply()
+
+    /** Custom pill text; empty means the automatic "Good morning/afternoon/evening". */
+    var greeting: String
+        get() = sp.getString(KEY_GREETING, "").orEmpty()
+        set(value) = sp.edit().putString(KEY_GREETING, value.trim()).apply()
+
+    var webEngine: WebEngine
+        get() = WebEngine.entries.firstOrNull { it.name == sp.getString(KEY_WEB_ENGINE, null) } ?: WebEngine.GOOGLE
+        set(value) = sp.edit().putString(KEY_WEB_ENGINE, value.name).apply()
+
+    /** The "grant access to search contacts & files" row in results, until dismissed. */
+    var accessHintDismissed: Boolean
+        get() = sp.getBoolean(KEY_ACCESS_HINT_DISMISSED, false)
+        set(value) = sp.edit().putBoolean(KEY_ACCESS_HINT_DISMISSED, value).apply()
+
+    /** Whether we've shown the system contacts prompt once (after a denial, Android stops showing it). */
+    var contactsPermissionAsked: Boolean
+        get() = sp.getBoolean(KEY_CONTACTS_ASKED, false)
+        set(value) = sp.edit().putBoolean(KEY_CONTACTS_ASKED, value).apply()
 
     // ---- Favorites: an ordered list of up to MAX_FAVORITES app keys ----
 
@@ -68,6 +88,19 @@ class Prefs(context: Context) {
     companion object {
         const val MAX_FAVORITES = 6
         private const val KEY_FAVORITES = "favorites"
-        private const val KEY_AUTO_KEYBOARD = "auto_keyboard"
+        private const val KEY_AUTO_KEYBOARD = "auto_keyboard_v2"
+        private const val KEY_GREETING = "greeting"
+        private const val KEY_WEB_ENGINE = "web_engine"
+        private const val KEY_ACCESS_HINT_DISMISSED = "access_hint_dismissed"
+        private const val KEY_CONTACTS_ASKED = "contacts_asked"
     }
+}
+
+enum class WebEngine(val label: String, private val template: String) {
+    GOOGLE("Google", "https://www.google.com/search?q=%s"),
+    DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com/?q=%s"),
+    BRAVE("Brave", "https://search.brave.com/search?q=%s"),
+    BING("Bing", "https://www.bing.com/search?q=%s");
+
+    fun url(query: String): String = template.format(java.net.URLEncoder.encode(query, "UTF-8"))
 }

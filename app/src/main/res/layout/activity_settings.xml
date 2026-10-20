@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/scroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
     <io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout
-        xmlns:app="http://schemas.android.com/apk/res-auto"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
@@ -27,6 +27,73 @@
             android:layout_height="wrap_content"
             android:minHeight="48dp"
             android:text="@string/settings_auto_keyboard" />
+
+        <LinearLayout
+            android:id="@+id/greetingRow"
+            style="@style/SettingsRow">
+            <TextView style="@style/SettingsRowTitle" android:text="@string/settings_greeting" />
+            <TextView android:id="@+id/greetingValue" style="@style/SettingsRowSummary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/webEngineRow"
+            style="@style/SettingsRow">
+            <TextView style="@style/SettingsRowTitle" android:text="@string/settings_web_engine" />
+            <TextView android:id="@+id/webEngineValue" style="@style/SettingsRowSummary" />
+        </LinearLayout>
+
+        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_permissions" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_permissions_help"
+            android:textAppearance="?android:attr/textAppearanceSmall" />
+
+        <Switch
+            android:id="@+id/permContacts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp"
+            android:text="@string/perm_contacts" />
+
+        <TextView
+            android:id="@+id/permContactsDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/perm_contacts_desc"
+            android:textAppearance="?android:attr/textAppearanceSmall" />
+
+        <Switch
+            android:id="@+id/permFiles"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="48dp"
+            android:text="@string/perm_files" />
+
+        <TextView
+            android:id="@+id/permFilesDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/perm_files_desc"
+            android:textAppearance="?android:attr/textAppearanceSmall" />
+
+        <TextView
+            android:id="@+id/indexStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:textStyle="italic" />
+
+        <Button
+            android:id="@+id/reindex"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/index_rebuild" />
 
         <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_favorites" />
 

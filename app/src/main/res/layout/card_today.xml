@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder card for Phase 1. Phase 2 brings the real Weather / Calendar & Date cards. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:paddingHorizontal="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_glance_card"
+        android:gravity="center_vertical"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="h:mm"
+            android:format24Hour="HH:mm"
+            android:textColor="@color/on_wallpaper"
+            android:textSize="56sp"
+            android:fontFamily="sans-serif-light" />
+
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="EEEE, MMMM d"
+            android:format24Hour="EEEE, MMMM d"
+            android:textColor="@color/on_wallpaper_dim"
+            android:textSize="16sp" />
+    </LinearLayout>
+</FrameLayout>

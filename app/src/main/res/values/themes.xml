@@ -32,4 +32,26 @@
         <item name="android:paddingTop">24dp</item>
         <item name="android:paddingBottom">8dp</item>
     </style>
+
+    <style name="SettingsRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:minHeight">56dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingVertical">8dp</item>
+        <item name="android:background">?android:attr/selectableItemBackground</item>
+    </style>
+
+    <style name="SettingsRowTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textAppearance">?android:attr/textAppearanceMedium</item>
+    </style>
+
+    <style name="SettingsRowSummary">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textAppearance">?android:attr/textAppearanceSmall</item>
+    </style>
 </resources>

@@ -15,7 +15,16 @@ object Ranking {
         key: (T) -> MatchKey,
         launchCount: (T) -> Int,
         limit: Int = 40,
-    ): List<T> {
+    ): List<T> = rankScored(rawQuery, items, key, launchCount, limit).map { it.first }
+
+    /** Like [rank], keeping each item's final score so different sources can be merged. */
+    fun <T> rankScored(
+        rawQuery: String,
+        items: List<T>,
+        key: (T) -> MatchKey,
+        launchCount: (T) -> Int,
+        limit: Int = 40,
+    ): List<Pair<T, Int>> {
         val q = FuzzyMatcher.normalize(rawQuery)
         if (q.isEmpty()) return emptyList()
         val scored = ArrayList<Scored<T>>()
@@ -29,7 +38,7 @@ object Ranking {
                 .thenBy { it.label.length }
                 .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label }
         )
-        return scored.asSequence().take(limit).map { it.item }.toList()
+        return scored.asSequence().take(limit).map { it.item to it.score }.toList()
     }
 
     private class Scored<T>(val item: T, val score: Int, val label: String)
