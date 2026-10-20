@@ -90,7 +90,10 @@ class ScreenshotTest {
             home.onActivity { it.findViewById<io.github.iamth3doctor.searchlight.widgets.WidgetGridView>(R.id.widgetGrid).setEditMode(true) }
             shot("01b-edit-mode")
             home.onActivity { it.findViewById<io.github.iamth3doctor.searchlight.widgets.WidgetGridView>(R.id.widgetGrid).setEditMode(false) }
-            for ((name, query) in listOf("02-search-grid" to "c", "03-search-mixed" to "se", "04-search-calculator" to "42 x 18")) {
+            for ((name, query) in listOf(
+                "02-search-grid" to "c", "02b-search-one-row" to "ch", "02c-search-many-s" to "s", "02d-search-many-g" to "g",
+                "03-search-mixed" to "se", "04-search-calculator" to "42 x 18",
+            )) {
                 home.onActivity { it.findViewById<EditText>(R.id.searchInput).setText(query) }
                 shot(name)
             }

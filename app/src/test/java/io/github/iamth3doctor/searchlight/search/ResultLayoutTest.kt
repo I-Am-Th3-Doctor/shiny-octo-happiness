@@ -24,15 +24,17 @@ class ResultLayoutTest {
         val shape = l.rows.map {
             when (it) {
                 is ResultLayout.Row.Header -> "#${it.section}"
-                is ResultLayout.Row.Cell -> "cell:${it.item}"
+                is ResultLayout.Row.AppGrid -> "grid:" + it.items.joinToString(",")
                 is ResultLayout.Row.Line -> "line:${it.item}"
             }
         }
         assertEquals(
-            listOf("#APPS", "cell:a1", "cell:a2", "#ANSWER", "line:=", "#CONTACTS", "line:c1", "#FILES", "line:f1", "#ACTIONS", "line:w"),
+            listOf("#APPS", "grid:a1,a2", "#ANSWER", "line:=", "#CONTACTS", "line:c1", "#FILES", "line:f1", "#ACTIONS", "line:w"),
             shape,
         )
-        assertEquals(4, l.positionOf(2)) // "=" sits after its header
+        assertEquals(1, l.positionOf(0)) // both apps live in the one grid block
+        assertEquals(1, l.positionOf(1))
+        assertEquals(3, l.positionOf(2)) // "=" sits after its header
     }
 
     @Test fun gridMovement4Columns() {

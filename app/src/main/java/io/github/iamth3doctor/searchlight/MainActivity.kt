@@ -16,7 +16,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
-import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.apps.AppEntry
 import io.github.iamth3doctor.searchlight.cards.BatteryCard
@@ -41,8 +41,8 @@ import kotlin.math.max
 
 /**
  * The home screen: wallpaper and one frosted home card (tiles with page dots + the search row).
- * No dock. Typing folds the tiles away; results appear above the card: an app grid, then
- * contacts / files / actions as rows under section headers.
+ * No dock. Typing folds the tiles away; results appear above the card: an app grid (2 rows
+ * visible, scrolls for more), then contacts / files / actions as rows under section headers.
  */
 class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
@@ -319,22 +319,17 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.editDone.setOnClickListener { widgets.exitEditMode() }
     }
 
-    private lateinit var resultsGrid: GridLayoutManager
-
-    /** Apps as a grid: 4 columns folded, 6 unfolded (recomputed whenever the width changes). */
+    /**
+     * Results: a vertical list whose first block is the app grid (4 columns folded, 6 unfolded,
+     * 2 rows visible). Columns are recomputed whenever the width changes.
+     */
     private fun setupResultsGrid() {
-        resultsGrid = GridLayoutManager(this, columnsFor(resources.displayMetrics.widthPixels))
-        resultsGrid.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-            override fun getSpanSize(position: Int) = if (adapter.isFullSpan(position)) resultsGrid.spanCount else 1
-        }
-        binding.results.layoutManager = resultsGrid
+        adapter.columns = columnsFor(resources.displayMetrics.widthPixels)
+        binding.results.layoutManager = LinearLayoutManager(this)
         binding.results.adapter = adapter
         binding.results.itemAnimator = null
         binding.results.addOnLayoutChangeListener { v, l, _, r, _, ol, _, or_, _ ->
-            if (r - l != or_ - ol) {
-                val cols = columnsFor(v.width)
-                if (cols != resultsGrid.spanCount) resultsGrid.spanCount = cols
-            }
+            if (r - l != or_ - ol) adapter.columns = columnsFor(v.width)
         }
     }
 
@@ -357,7 +352,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             KeyEvent.KEYCODE_DPAD_RIGHT -> if (hardKeyboard) ResultLayout.Move.RIGHT else return false
             else -> return false
         }
-        if (adapter.move(move, resultsGrid.spanCount)) binding.results.scrollToPosition(adapter.selectedPosition())
+        if (adapter.move(move, adapter.columns)) binding.results.scrollToPosition(adapter.selectedPosition())
         return true
     }
 

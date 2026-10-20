@@ -8,11 +8,13 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isVisible
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.apps.AppRepository
 import io.github.iamth3doctor.searchlight.contacts.ContactRepository
 import io.github.iamth3doctor.searchlight.databinding.ItemAppCellBinding
+import io.github.iamth3doctor.searchlight.databinding.ItemAppGridBinding
 import io.github.iamth3doctor.searchlight.databinding.ItemResultBinding
 import io.github.iamth3doctor.searchlight.databinding.ItemSectionHeaderBinding
 import io.github.iamth3doctor.searchlight.media.Thumbnails
@@ -22,8 +24,8 @@ import io.github.iamth3doctor.searchlight.search.Section
 import io.github.iamth3doctor.searchlight.util.Snippet
 
 /**
- * Search results: apps as an icon grid on top, then everything else as list rows under small
- * section headers (see [ResultLayout]). One selection runs through grid and rows; Enter opens it.
+ * Search results: apps as an icon grid block on top (2 rows visible, scrolls for more), then
+ * everything else as list rows under small section headers (see [ResultLayout]). One selection runs through grid and rows; Enter opens it.
  * Every list row uses one layout; what differs is the leading badge and the trailing buttons.
  */
 class ResultsAdapter(
@@ -41,6 +43,15 @@ class ResultsAdapter(
     }
 
     private var layout = ResultLayout<SearchResult>(emptyList(), ::sectionOf)
+
+    /** Grid columns: 4 folded, 6 unfolded (set by the screen from the available width). */
+    var columns = 4
+        set(value) {
+            if (field == value) return
+            field = value
+            val pos = layout.rows.indexOfFirst { it is ResultLayout.Row.AppGrid }
+            if (pos >= 0) notifyItemChanged(pos)
+        }
 
     /** Selection index (into [ResultLayout.selectable]); -1 when there are no results. */
     var selected = -1
@@ -64,19 +75,16 @@ class ResultsAdapter(
         if (next < 0 || next == selected) return false
         val old = selectedPosition()
         selected = next
-        if (old >= 0) notifyItemChanged(old)
-        notifyItemChanged(selectedPosition())
+        if (old >= 0) notifyItemChanged(old, SELECTION)
+        notifyItemChanged(selectedPosition(), SELECTION)
         return true
     }
-
-    /** Headers and list rows take the full width; app tiles take one grid column. */
-    fun isFullSpan(position: Int) = layout.rows.getOrNull(position) !is ResultLayout.Row.Cell
 
     override fun getItemCount() = layout.rows.size
 
     override fun getItemViewType(position: Int) = when (layout.rows[position]) {
         is ResultLayout.Row.Header -> TYPE_HEADER
-        is ResultLayout.Row.Cell -> TYPE_CELL
+        is ResultLayout.Row.AppGrid -> TYPE_GRID
         is ResultLayout.Row.Line -> TYPE_LINE
     }
 
@@ -84,9 +92,10 @@ class ResultsAdapter(
         val inflater = LayoutInflater.from(parent.context)
         return when (viewType) {
             TYPE_HEADER -> HeaderHolder(ItemSectionHeaderBinding.inflate(inflater, parent, false))
-            TYPE_CELL -> CellHolder(ItemAppCellBinding.inflate(inflater, parent, false)).also { h ->
-                h.b.root.setOnClickListener { v -> h.result?.let { callbacks.onClick(it, v) } }
-                h.b.root.setOnLongClickListener { v -> h.result?.let { callbacks.onLongClick(it, v) }; true }
+            TYPE_GRID -> GridHolder(ItemAppGridBinding.inflate(inflater, parent, false)).also { h ->
+                h.b.appGrid.layoutManager = GridLayoutManager(parent.context, columns)
+                h.b.appGrid.adapter = h.cells
+                h.b.appGrid.itemAnimator = null
             }
             else -> Holder(ItemResultBinding.inflate(inflater, parent, false)).also { h ->
                 h.b.root.setOnClickListener { v -> h.result?.let { callbacks.onClick(it, v) } }
@@ -100,9 +109,55 @@ class ResultsAdapter(
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val row = layout.rows[position]) {
             is ResultLayout.Row.Header -> (holder as HeaderHolder).b.header.setText(headerText(row.section))
-            is ResultLayout.Row.Cell -> bindCell(holder as CellHolder, row.item, row.index == selected)
+            is ResultLayout.Row.AppGrid -> bindGrid(holder as GridHolder, row.items)
             is ResultLayout.Row.Line -> bindLine(holder as Holder, row.item, row.index == selected)
         }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int, payloads: MutableList<Any>) {
+        // Selection moved inside the app grid: re-highlight and keep the tile in view, no rebind.
+        if (payloads.contains(SELECTION) && holder is GridHolder) {
+            holder.cells.setSelected(selected)
+            if (selected in 0 until layout.gridCount) holder.b.appGrid.scrollToPosition(selected)
+        } else {
+            super.onBindViewHolder(holder, position, payloads)
+        }
+    }
+
+    private fun bindGrid(h: GridHolder, items: List<SearchResult>) {
+        (h.b.appGrid.layoutManager as GridLayoutManager).spanCount = columns
+        h.cells.submit(items, selected)
+        h.b.appGrid.scrollToPosition(0)
+    }
+
+    /** The tiles inside the app grid block. */
+    inner class CellsAdapter : RecyclerView.Adapter<CellHolder>() {
+        private var items: List<SearchResult> = emptyList()
+        private var selectedIndex = -1
+
+        @SuppressLint("NotifyDataSetChanged")
+        fun submit(list: List<SearchResult>, selected: Int) {
+            items = list
+            selectedIndex = selected
+            notifyDataSetChanged()
+        }
+
+        fun setSelected(index: Int) {
+            val old = selectedIndex
+            selectedIndex = index
+            if (old in items.indices) notifyItemChanged(old)
+            if (index in items.indices) notifyItemChanged(index)
+        }
+
+        override fun getItemCount() = items.size
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+            CellHolder(ItemAppCellBinding.inflate(LayoutInflater.from(parent.context), parent, false)).also { h ->
+                h.b.root.setOnClickListener { v -> h.result?.let { callbacks.onClick(it, v) } }
+                h.b.root.setOnLongClickListener { v -> h.result?.let { callbacks.onLongClick(it, v) }; true }
+            }
+
+        override fun onBindViewHolder(h: CellHolder, position: Int) = bindCell(h, items[position], position == selectedIndex)
     }
 
     private fun bindCell(h: CellHolder, r: SearchResult, activated: Boolean) {
@@ -261,6 +316,10 @@ class ResultsAdapter(
         var result: SearchResult? = null
     }
 
+    inner class GridHolder(val b: ItemAppGridBinding) : RecyclerView.ViewHolder(b.root) {
+        val cells = CellsAdapter()
+    }
+
     class HeaderHolder(val b: ItemSectionHeaderBinding) : RecyclerView.ViewHolder(b.root)
 
     private fun headerText(section: Section) = when (section) {
@@ -276,8 +335,10 @@ class ResultsAdapter(
 
     private companion object {
         const val TYPE_HEADER = 0
-        const val TYPE_CELL = 1
+        const val TYPE_GRID = 1
         const val TYPE_LINE = 2
+        /** Payload for "only the highlight moved". */
+        val SELECTION = Any()
 
         fun sectionOf(r: SearchResult): Section = when (r) {
             is SearchResult.App -> Section.APPS

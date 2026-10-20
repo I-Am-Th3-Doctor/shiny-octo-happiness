@@ -17,7 +17,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * The invisible 4 × 2 widget grid above the home card. Children are widget views, each placed by a
+ * The invisible widget grid above the home card. Children are widget views, each placed by a
  * [GridSpec] in cells; the view turns cells into pixels at layout time, so nothing pixel-based
  * is ever stored.
  *
@@ -32,6 +32,7 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
         fun onEditModeChanged(editing: Boolean)
         fun onCommit(spec: GridSpec)
         fun onRemove(id: Int)
+        fun onGridSizeChanged(cols: Int, rows: Int)
         /** Horizontal and vertical resizability. */
         fun resizable(id: Int): Pair<Boolean, Boolean>
         /** Minimum (colSpan, rowSpan) the widget accepts at the current cell size. */
@@ -41,8 +42,10 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     var listener: Listener? = null
     var emptyHint: String = ""
 
-    val cols = WidgetGrid.COLUMNS
-    val rows = WidgetGrid.ROWS
+    var cols = 4
+        private set
+    var rows = 6
+        private set
 
     /**
      * While the keyboard is up the area shrinks; the grid keeps the size it had without the
@@ -116,6 +119,13 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
         val w = MeasureSpec.getSize(widthMeasureSpec)
         val h = MeasureSpec.getSize(heightMeasureSpec)
         if (!imeVisible || gridHeight == 0 || w != measuredWidth) gridHeight = h
+        val (c, r) = WidgetGrid.gridSize(w / density, gridHeight / density)
+        if (c != cols || r != rows) {
+            cols = c
+            rows = r
+            // Re-fit happens outside of measure.
+            post { listener?.onGridSizeChanged(cols, rows) }
+        }
         cellW = w.toFloat() / cols
         cellH = gridHeight.toFloat() / rows
         for (i in 0 until childCount) {

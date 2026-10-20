@@ -4,16 +4,16 @@ package io.github.iamth3doctor.searchlight.search
 enum class Section { APPS, ANSWER, CONTACTS, MUSIC, PHOTOS, MESSAGES, FILES, ACTIONS }
 
 /**
- * Turns a flat result list into what the results view shows: a grid of apps on top, then list
- * rows grouped under small section headers. Also owns keyboard/selection movement through that
+ * Turns a flat result list into what the results view shows: the apps as one grid block on top
+ * (2 rows visible, scrolls for more), then list rows grouped under small section headers. Also owns keyboard/selection movement through that
  * shape. Pure Kotlin (generic over the item type); JVM-tested.
  */
 class ResultLayout<T>(items: List<T>, sectionOf: (T) -> Section) {
 
     sealed interface Row<T> {
         data class Header<T>(val section: Section) : Row<T>
-        /** An app tile in the grid. [index] is its selection index. */
-        data class Cell<T>(val item: T, val index: Int) : Row<T>
+        /** All app results as one grid block; their selection indices are 0 until items.size. */
+        data class AppGrid<T>(val items: List<T>) : Row<T>
         /** A full-width list row (contact, file, web search…). */
         data class Line<T>(val item: T, val index: Int) : Row<T>
     }
@@ -34,9 +34,14 @@ class ResultLayout<T>(items: List<T>, sectionOf: (T) -> Section) {
         for (section in Section.entries) {
             val group = grouped[section] ?: continue
             out += Row.Header(section)
-            for (item in group) {
-                out += if (section == Section.APPS) Row.Cell(item, sel.size) else Row.Line(item, sel.size)
-                sel += item
+            if (section == Section.APPS) {
+                out += Row.AppGrid(group)
+                sel += group
+            } else {
+                for (item in group) {
+                    out += Row.Line(item, sel.size)
+                    sel += item
+                }
             }
         }
         rows = out
@@ -44,9 +49,9 @@ class ResultLayout<T>(items: List<T>, sectionOf: (T) -> Section) {
         gridCount = grouped[Section.APPS]?.size ?: 0
     }
 
-    /** Adapter position of selection [index] (headers are skipped). */
+    /** Adapter position of selection [index]: the grid block for apps, the row otherwise. */
     fun positionOf(index: Int): Int = rows.indexOfFirst {
-        (it is Row.Cell && it.index == index) || (it is Row.Line && it.index == index)
+        (it is Row.AppGrid && index < gridCount) || (it is Row.Line && it.index == index)
     }
 
     enum class Move { LEFT, RIGHT, UP, DOWN, NEXT, PREVIOUS }

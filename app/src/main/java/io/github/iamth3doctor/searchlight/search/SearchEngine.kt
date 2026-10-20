@@ -42,7 +42,8 @@ class SearchEngine(
     }
 
     private companion object {
-        const val MAX_APPS = 8
+        /** Enough for the 2-row app grid to scroll; the first 8 (folded) are visible. */
+        const val MAX_APPS = 24
         const val MAX_CONTACTS = 5
         /** Apps are what you usually want from a launcher; a contact wins only on a clearly better match. */
         const val CONTACT_PENALTY = 30
