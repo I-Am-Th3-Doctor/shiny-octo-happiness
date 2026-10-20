@@ -97,24 +97,26 @@
     <color name="avatar_8">#FF8D6E63</color>
 
     <!-- ===== Text appearances (the type scale as styles) ========================= -->
-    <style name="TextAppearance.Searchlight.Glance">
+    <!-- parent="" on purpose: they set size and weight only, never color, so applying one
+         from code can't reset a view's text color. -->
+    <style name="TextAppearance.Searchlight.Glance" parent="">
         <item name="android:textSize">@dimen/text_glance</item>
         <item name="android:textStyle">bold</item>
         <item name="android:includeFontPadding">false</item>
     </style>
 
     <!-- Semibold: weight 600 (Android 9+, below our minSdk 29). -->
-    <style name="TextAppearance.Searchlight.TileTitle">
+    <style name="TextAppearance.Searchlight.TileTitle" parent="">
         <item name="android:textSize">@dimen/text_tile_title</item>
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:textFontWeight">600</item>
     </style>
 
-    <style name="TextAppearance.Searchlight.Body">
+    <style name="TextAppearance.Searchlight.Body" parent="">
         <item name="android:textSize">@dimen/text_body</item>
     </style>
 
-    <style name="TextAppearance.Searchlight.Caption">
+    <style name="TextAppearance.Searchlight.Caption" parent="">
         <item name="android:textSize">@dimen/text_caption</item>
     </style>
 </resources>
