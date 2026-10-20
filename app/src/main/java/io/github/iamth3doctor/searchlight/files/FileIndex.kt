@@ -154,15 +154,26 @@ object FileMatcher {
             idx = folded.indexOf(q, idx + 1)
         }
         if (best > 0) return best
-        if (qc.length >= 3 && qc != q) {
-            // Only worth the allocation when the query itself had separators or spaces.
-            if (FuzzyMatcher.compact(folded).contains(qc)) return 550
-        } else if (qc.length >= 3 && q.length >= 3 && folded.length > q.length) {
-            var hasSep = false
-            for (c in folded) if (!c.isLetterOrDigit()) { hasSep = true; break }
-            if (hasSep && FuzzyMatcher.compact(folded).contains(qc)) return 550
-        }
+        if (qc.length >= 3 && containsIgnoringSeparators(folded, qc)) return 550
         return 0
+    }
+
+    /** Is [needle] (letters/digits only) a substring of [hay] once its separators are skipped? No allocation. */
+    internal fun containsIgnoringSeparators(hay: String, needle: String): Boolean {
+        val first = needle[0]
+        for (start in hay.indices) {
+            if (hay[start] != first) continue
+            var h = start + 1
+            var n = 1
+            while (n < needle.length && h < hay.length) {
+                val c = hay[h++]
+                if (!c.isLetterOrDigit()) continue
+                if (c != needle[n]) break
+                n++
+            }
+            if (n == needle.length) return true
+        }
+        return false
     }
 
     /** Recently touched files float up a little: +30 this week, +15 this month. */

@@ -14,7 +14,7 @@ class FileIndexTest {
 
     private fun touch(path: String, ageDays: Int = 100) {
         val f = File(tmp.root, path)
-        f.parentFile.mkdirs()
+        f.parentFile!!.mkdirs()
         f.writeText("x")
         f.setLastModified(now - ageDays * 86_400_000L)
     }
