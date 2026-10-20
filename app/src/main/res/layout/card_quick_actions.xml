@@ -33,10 +33,12 @@
             </FrameLayout>
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="center_horizontal"
                 android:layout_marginTop="@dimen/space_s"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:textColor="@color/on_surface"
                 android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
         </LinearLayout>
@@ -62,10 +64,12 @@
             </FrameLayout>
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="center_horizontal"
                 android:layout_marginTop="@dimen/space_s"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:textColor="@color/on_surface"
                 android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
         </LinearLayout>
@@ -91,10 +95,12 @@
             </FrameLayout>
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="center_horizontal"
                 android:layout_marginTop="@dimen/space_s"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:textColor="@color/on_surface"
                 android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
         </LinearLayout>
@@ -120,10 +126,12 @@
             </FrameLayout>
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="center_horizontal"
                 android:layout_marginTop="@dimen/space_s"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:textColor="@color/on_surface"
                 android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
         </LinearLayout>

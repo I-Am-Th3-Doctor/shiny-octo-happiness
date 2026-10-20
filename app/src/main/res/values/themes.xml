@@ -16,8 +16,27 @@
     </style>
 
     <!-- Settings, Widget Center, pickers: follow the system light/dark theme, with our accent. -->
+    <!-- No framework action bar: each screen draws its own title inside the inset-padded
+         content, so the header can never end up under the status bar (Android 15+). -->
     <style name="Theme.Searchlight.Settings" parent="android:Theme.DeviceDefault.DayNight">
         <item name="android:colorAccent">@color/accent</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+
+    <style name="PageTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textAppearance">@style/TextAppearance.Searchlight.TileTitle</item>
+        <item name="android:textColor">?android:attr/textColorPrimary</item>
+        <item name="android:paddingTop">@dimen/space_m</item>
+        <item name="android:paddingBottom">@dimen/space_s</item>
+        <item name="android:maxLines">2</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:accessibilityHeading">true</item>
     </style>
 
     <style name="OnWallpaperText">

@@ -20,6 +20,10 @@ import io.github.iamth3doctor.searchlight.cards.QuickAction
 import io.github.iamth3doctor.searchlight.data.WebEngine
 import io.github.iamth3doctor.searchlight.media.MusicApps
 import io.github.iamth3doctor.searchlight.ui.Type
+import io.github.iamth3doctor.searchlight.ui.edgeToEdge
+import io.github.iamth3doctor.searchlight.ui.isLightTheme
+import io.github.iamth3doctor.searchlight.ui.padForSystemBars
+import io.github.iamth3doctor.searchlight.ui.wrappingSingleChoice
 import io.github.iamth3doctor.searchlight.ui.primaryText
 import io.github.iamth3doctor.searchlight.ui.px
 import io.github.iamth3doctor.searchlight.ui.secondaryText
@@ -41,6 +45,8 @@ class SettingsActivity : Activity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        edgeToEdge(lightBackground = isLightTheme())
+        binding.scroll.padForSystemBars()
 
         binding.setDefault.setOnClickListener { requestDefaultHome() }
         binding.autoKeyboard.isChecked = prefs.autoOpenKeyboard
@@ -123,7 +129,7 @@ class SettingsActivity : Activity() {
         val engines = WebEngine.entries
         AlertDialog.Builder(this)
             .setTitle(R.string.settings_web_engine)
-            .setSingleChoiceItems(engines.map { it.label }.toTypedArray(), engines.indexOf(prefs.webEngine)) { d, which ->
+            .wrappingSingleChoice(engines.map { it.label }, engines.indexOf(prefs.webEngine)) { d, which ->
                 prefs.webEngine = engines[which]
                 render()
                 d.dismiss()
@@ -159,7 +165,7 @@ class SettingsActivity : Activity() {
         val checked = apps.indexOfFirst { it.packageName == prefs.defaultMusicPackage }.let { if (it < 0) 0 else it + 1 }
         AlertDialog.Builder(this)
             .setTitle(R.string.music_default_player)
-            .setSingleChoiceItems(labels.toTypedArray(), checked) { d, which ->
+            .wrappingSingleChoice(labels, checked) { d, which ->
                 prefs.defaultMusicPackage = if (which == 0) null else apps[which - 1].packageName
                 d.dismiss()
                 render()
@@ -173,7 +179,7 @@ class SettingsActivity : Activity() {
         val actions = QuickAction.entries
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.qa_slot, slot + 1))
-            .setSingleChoiceItems(actions.map { getString(it.label) }.toTypedArray(), actions.indexOf(prefs.quickActionSlots[slot])) { d, which ->
+            .wrappingSingleChoice(actions.map { getString(it.label) }, actions.indexOf(prefs.quickActionSlots[slot])) { d, which ->
                 prefs.setQuickActionSlot(slot, actions[which])
                 d.dismiss()
                 render()

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A plain dialog list row that wraps to 2 lines. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/text1"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?android:attr/selectableItemBackground"
+    android:ellipsize="end"
+    android:gravity="center_vertical"
+    android:maxLines="2"
+    android:minHeight="@dimen/size_touch"
+    android:paddingHorizontal="@dimen/space_l"
+    android:paddingVertical="@dimen/space_s"
+    android:textAppearance="@style/TextAppearance.Searchlight.Body"
+    android:textColor="?android:attr/textColorAlertDialogListItem" />

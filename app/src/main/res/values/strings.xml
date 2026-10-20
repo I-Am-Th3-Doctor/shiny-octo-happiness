@@ -13,6 +13,14 @@
 
 
     <!-- Results -->
+    <string name="section_apps">Apps</string>
+    <string name="section_answer">Answer</string>
+    <string name="section_contacts">Contacts</string>
+    <string name="section_music">Music</string>
+    <string name="section_photos">Photos &amp; videos</string>
+    <string name="section_messages">Messages</string>
+    <string name="section_files">Files</string>
+    <string name="section_actions">Actions</string>
     <string name="calc_result">= %1$s</string>
     <string name="calc_subtitle">%1$s · tap to copy</string>
     <string name="web_search_for">Search %1$s for “%2$s”</string>

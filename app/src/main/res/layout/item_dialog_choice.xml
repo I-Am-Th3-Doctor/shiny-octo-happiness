@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A single-choice dialog row that wraps to 2 lines (the platform row is 1 line and clips). -->
+<CheckedTextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/text1"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:checkMark="?android:attr/listChoiceIndicatorSingle"
+    android:ellipsize="end"
+    android:gravity="center_vertical"
+    android:maxLines="2"
+    android:minHeight="@dimen/size_touch"
+    android:paddingStart="@dimen/space_l"
+    android:paddingEnd="@dimen/space_m"
+    android:paddingVertical="@dimen/space_s"
+    android:textAppearance="@style/TextAppearance.Searchlight.Body"
+    android:textColor="?android:attr/textColorAlertDialogListItem" />

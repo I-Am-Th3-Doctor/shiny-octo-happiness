@@ -43,6 +43,7 @@
     <dimen name="size_grid_cell">96dp</dimen>         <!-- favorites grid cell width -->
     <dimen name="size_favorites_grid">288dp</dimen>   <!-- 3 cells -->
     <dimen name="size_signal_label_max">180dp</dimen>
+    <dimen name="size_calc_preview_max">160dp</dimen>   <!-- answer in the search row -->
     <dimen name="size_preview_width">120dp</dimen>    <!-- widget picker preview -->
     <dimen name="size_preview_height">88dp</dimen>
     <dimen name="stroke_hairline">1.5dp</dimen>

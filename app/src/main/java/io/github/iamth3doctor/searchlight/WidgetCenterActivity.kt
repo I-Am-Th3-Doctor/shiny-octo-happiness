@@ -21,6 +21,11 @@ import android.widget.Toast
 import io.github.iamth3doctor.searchlight.cards.CardType
 import io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout
 import io.github.iamth3doctor.searchlight.ui.Type
+import io.github.iamth3doctor.searchlight.ui.edgeToEdge
+import io.github.iamth3doctor.searchlight.ui.isLightTheme
+import io.github.iamth3doctor.searchlight.ui.padForSystemBars
+import io.github.iamth3doctor.searchlight.ui.wrappingItems
+import io.github.iamth3doctor.searchlight.ui.wrappingSingleChoice
 import io.github.iamth3doctor.searchlight.ui.primaryText
 import io.github.iamth3doctor.searchlight.ui.px
 import io.github.iamth3doctor.searchlight.ui.secondaryText
@@ -41,16 +46,18 @@ class WidgetCenterActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = getString(R.string.widget_center)
         content = MaxWidthLinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(px(R.dimen.space_m), px(R.dimen.space_m), px(R.dimen.space_m), px(R.dimen.space_l))
+            setPadding(px(R.dimen.space_m), 0, px(R.dimen.space_m), px(R.dimen.space_l))
             maxWidthPx = resources.getDimensionPixelSize(R.dimen.content_max_width)
         }
         // Centered, capped column like the rest of the app, so it reads well unfolded.
-        setContentView(ScrollView(this).apply {
+        val scroll = ScrollView(this).apply {
             addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL))
-        })
+        }
+        setContentView(scroll)
+        edgeToEdge(lightBackground = isLightTheme())
+        scroll.padForSystemBars()
         app.weather.addListener(weatherChanged)
     }
 
@@ -66,6 +73,10 @@ class WidgetCenterActivity : Activity() {
 
     private fun render() {
         content.removeAllViews()
+        content.addView(
+            TextView(this, null, 0, R.style.PageTitle).apply { setText(R.string.widget_center) },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+        )
 
         section(R.string.wc_section_cards, first = true)
         help(R.string.wc_cards_help)
@@ -139,7 +150,7 @@ class WidgetCenterActivity : Activity() {
         val choices = prefs.enabledCards.ifEmpty { return }
         AlertDialog.Builder(this)
             .setTitle(R.string.wc_idle_card)
-            .setSingleChoiceItems(choices.map { getString(it.title) }.toTypedArray(), choices.indexOf(prefs.idleCard)) { d, which ->
+            .wrappingSingleChoice(choices.map { getString(it.title) }, choices.indexOf(prefs.idleCard)) { d, which ->
                 prefs.idleCard = choices[which]
                 d.dismiss()
                 render()
@@ -173,7 +184,7 @@ class WidgetCenterActivity : Activity() {
     private fun pickLocation() {
         AlertDialog.Builder(this)
             .setTitle(R.string.wc_location)
-            .setItems(arrayOf(getString(R.string.wc_use_device_location), getString(R.string.wc_search_place))) { _, which ->
+            .wrappingItems(listOf(getString(R.string.wc_use_device_location), getString(R.string.wc_search_place))) { _, which ->
                 if (which == 0) useDeviceLocation() else searchPlace()
             }
             .show()
@@ -221,7 +232,7 @@ class WidgetCenterActivity : Activity() {
                         places.isEmpty() -> Toast.makeText(this, getString(R.string.wc_no_places, q), Toast.LENGTH_LONG).show()
                         else -> AlertDialog.Builder(this)
                             .setTitle(R.string.wc_pick_place)
-                            .setItems(places.map { it.label }.toTypedArray()) { _, which ->
+                            .wrappingItems(places.map { it.label }) { _, which ->
                                 prefs.manualPlace = places[which]
                                 app.weather.refresh()
                                 render()

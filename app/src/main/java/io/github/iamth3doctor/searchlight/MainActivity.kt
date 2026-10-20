@@ -16,8 +16,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.apps.AppEntry
 import io.github.iamth3doctor.searchlight.cards.BatteryCard
@@ -29,6 +28,7 @@ import io.github.iamth3doctor.searchlight.cards.MusicCard
 import io.github.iamth3doctor.searchlight.cards.QuickActionsCard
 import io.github.iamth3doctor.searchlight.cards.WeatherCard
 import io.github.iamth3doctor.searchlight.databinding.ActivityMainBinding
+import io.github.iamth3doctor.searchlight.search.ResultLayout
 import io.github.iamth3doctor.searchlight.search.SearchEngine
 import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.Actions
@@ -41,7 +41,8 @@ import kotlin.math.max
 
 /**
  * The home screen: wallpaper and one frosted home card (tiles with page dots + the search row).
- * No dock. Typing folds the tiles away; results appear above the card, best one nearest it.
+ * No dock. Typing folds the tiles away; results appear above the card: an app grid, then
+ * contacts / files / actions as rows under section headers.
  */
 class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
@@ -79,9 +80,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
         widgets.cleanUpOrphans()
 
-        binding.results.layoutManager = LinearLayoutManager(this, RecyclerView.VERTICAL, true)
-        binding.results.adapter = adapter
-        binding.results.itemAnimator = null
+        setupResultsGrid()
 
         applyInsets()
         setupPager()
@@ -185,7 +184,29 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
     }
 
+    private val fitTiles = Runnable { fitTileHeight() }
+
+    private fun scheduleTileFit() {
+        binding.cards.removeCallbacks(fitTiles)
+        binding.cards.post(fitTiles)
+    }
+
+    /**
+     * The pager is as tall as its tallest tile needs at the current width (never below the
+     * token height), so long text or a large font size wraps instead of being cut off.
+     */
+    private fun fitTileHeight() {
+        val width = binding.cards.width
+        if (width == 0 || cards.isEmpty()) return
+        val needed = cards.maxOf { it.measureHeight(width, binding.cards) }
+        val target = maxOf(px(R.dimen.size_tile_height), needed)
+        if (binding.cards.layoutParams.height != target) {
+            binding.cards.layoutParams = binding.cards.layoutParams.apply { height = target }
+        }
+    }
+
     private fun setupPager() {
+        binding.cards.addOnLayoutChangeListener { _, l, _, r, _, ol, _, or_, _ -> if (r - l != or_ - ol) scheduleTileFit() }
         binding.cards.offscreenPageLimit = CardType.entries.size
         binding.cards.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) = updateDots(position)
@@ -205,7 +226,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                 CardType.BATTERY -> BatteryCard(this)
                 CardType.MUSIC -> MusicCard(this).also { it.onStartedPlaying = ::onMusicStarted }
                 CardType.QUICK_ACTIONS -> QuickActionsCard(this)
-            }
+            }.also { it.onDrawn = ::scheduleTileFit }
         }
         binding.cards.adapter = CardsAdapter(cards)
         binding.dots.removeAllViews()
@@ -219,6 +240,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
         binding.dots.isVisible = cards.size > 1
         if (wasStarted) startCards()
+        scheduleTileFit()
         goToIdleCard()
         refreshResults()
     }
@@ -271,10 +293,13 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             val enter = actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE ||
                 (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
             if (enter) {
-                adapter.first()?.let { onClick(it, binding.results.findViewHolderForAdapterPosition(0)?.itemView ?: input) }
+                adapter.selectedResult()?.let {
+                    onClick(it, binding.results.findViewHolderForAdapterPosition(adapter.selectedPosition())?.itemView ?: input)
+                }
             }
             enter
         }
+        input.setOnKeyListener { _, keyCode, event -> event.action == KeyEvent.ACTION_DOWN && navigateResults(keyCode, event) }
         binding.clearButton.setOnClickListener { binding.searchInput.text = null }
         binding.settingsButton.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         binding.searchIcon.setOnClickListener { showKeyboard() }
@@ -292,6 +317,48 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
         binding.editDone.setOnClickListener { widgets.exitEditMode() }
+    }
+
+    private lateinit var resultsGrid: GridLayoutManager
+
+    /** Apps as a grid: 4 columns folded, 6 unfolded (recomputed whenever the width changes). */
+    private fun setupResultsGrid() {
+        resultsGrid = GridLayoutManager(this, columnsFor(resources.displayMetrics.widthPixels))
+        resultsGrid.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int) = if (adapter.isFullSpan(position)) resultsGrid.spanCount else 1
+        }
+        binding.results.layoutManager = resultsGrid
+        binding.results.adapter = adapter
+        binding.results.itemAnimator = null
+        binding.results.addOnLayoutChangeListener { v, l, _, r, _, ol, _, or_, _ ->
+            if (r - l != or_ - ol) {
+                val cols = columnsFor(v.width)
+                if (cols != resultsGrid.spanCount) resultsGrid.spanCount = cols
+            }
+        }
+    }
+
+    private fun columnsFor(widthPx: Int): Int =
+        if (widthPx / resources.displayMetrics.density >= UNFOLDED_MIN_WIDTH_DP) 6 else 4
+
+    /**
+     * Moves the highlight through the results: ↑/↓ by row (grid rows, then list rows), Tab /
+     * Shift+Tab one by one. ←/→ move across the grid only with a physical keyboard, so the
+     * on-screen keyboard's cursor keys still move the text cursor.
+     */
+    private fun navigateResults(keyCode: Int, event: KeyEvent): Boolean {
+        if (!binding.results.isVisible) return false
+        val hardKeyboard = resources.configuration.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
+        val move = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> ResultLayout.Move.UP
+            KeyEvent.KEYCODE_DPAD_DOWN -> ResultLayout.Move.DOWN
+            KeyEvent.KEYCODE_TAB -> if (event.isShiftPressed) ResultLayout.Move.PREVIOUS else ResultLayout.Move.NEXT
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (hardKeyboard) ResultLayout.Move.LEFT else return false
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (hardKeyboard) ResultLayout.Move.RIGHT else return false
+            else -> return false
+        }
+        if (adapter.move(move, resultsGrid.spanCount)) binding.results.scrollToPosition(adapter.selectedPosition())
+        return true
     }
 
     private fun greeting(): String {
@@ -492,6 +559,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private companion object {
         const val WEATHER_MAX_AGE_MS = 30 * 60 * 1000L
+        /** Results area at least this wide (the unfolded screen) gets 6 app columns instead of 4. */
+        const val UNFOLDED_MIN_WIDTH_DP = 560
         const val KEY_PENDING_WIDGET = "pending_widget_id"
     }
 }

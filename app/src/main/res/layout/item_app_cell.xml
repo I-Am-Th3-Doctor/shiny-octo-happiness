@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An app in the results grid: icon with its name beneath (up to 2 lines, then …). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_result"
+    android:foreground="?android:attr/selectableItemBackground"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingHorizontal="@dimen/space_xs"
+    android:paddingVertical="@dimen/space_s">
+
+    <ImageView
+        android:id="@+id/icon"
+        android:layout_width="@dimen/size_grid_icon"
+        android:layout_height="@dimen/size_grid_icon"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/label"
+        style="@style/OnWallpaperText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xs"
+        android:ellipsize="end"
+        android:gravity="center_horizontal"
+        android:maxLines="2"
+        android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
+</LinearLayout>

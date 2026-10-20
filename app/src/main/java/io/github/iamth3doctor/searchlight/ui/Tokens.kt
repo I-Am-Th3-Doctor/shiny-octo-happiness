@@ -41,3 +41,41 @@ private fun Context.themeColor(attr: Int, @ColorRes fallback: Int): android.cont
         a.recycle()
     }
 }
+
+/**
+ * Pads this view by the system bars and display cutout on top of its own padding, so nothing
+ * draws under the status bar, the navigation bar or a camera cutout. Needed on Android 15+,
+ * which lays every window out edge to edge.
+ */
+fun android.view.View.padForSystemBars() {
+    val l = paddingLeft
+    val t = paddingTop
+    val r = paddingRight
+    val b = paddingBottom
+    androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
+        val bars = insets.getInsets(
+            androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout(),
+        )
+        v.setPadding(l + bars.left, t + bars.top, r + bars.right, b + bars.bottom)
+        insets
+    }
+    androidx.core.view.ViewCompat.requestApplyInsets(this)
+}
+
+/**
+ * The same edge-to-edge setup on every Android version (11-14 opt in, 15+ enforce it), with
+ * status/navigation bar icons dark on light screens and light on dark ones.
+ */
+fun android.app.Activity.edgeToEdge(lightBackground: Boolean) {
+    // Bar colors are transparent in the theme; here we only stop the decor from fitting them.
+    androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+    androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+        isAppearanceLightStatusBars = lightBackground
+        isAppearanceLightNavigationBars = lightBackground
+    }
+}
+
+/** Whether the system-themed screens (settings, pickers) are in their light variant. */
+fun Context.isLightTheme(): Boolean =
+    (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) !=
+        android.content.res.Configuration.UI_MODE_NIGHT_YES

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Small header above each results section ("Apps", "Contacts", "Files"…). -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/header"
+    style="@style/OnWallpaperText"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:maxLines="1"
+    android:paddingHorizontal="@dimen/space_m"
+    android:paddingTop="@dimen/space_s"
+    android:paddingBottom="@dimen/space_xs"
+    android:textAllCaps="true"
+    android:textAppearance="@style/TextAppearance.Searchlight.Caption"
+    android:textColor="@color/on_surface_dim"
+    android:textStyle="bold" />

@@ -53,7 +53,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_s"
                 android:maxWidth="@dimen/size_signal_label_max"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:ellipsize="end"
                 android:textColor="@color/on_surface"
                 android:textAppearance="@style/TextAppearance.Searchlight.Body" />

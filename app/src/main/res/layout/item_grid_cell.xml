@@ -21,7 +21,7 @@
         android:layout_marginTop="@dimen/space_xs"
         android:ellipsize="end"
         android:gravity="center"
-        android:maxLines="1"
+        android:maxLines="2"
         android:textColor="@color/on_surface"
         android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
 </LinearLayout>

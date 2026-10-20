@@ -12,18 +12,26 @@ import androidx.recyclerview.widget.RecyclerView
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.apps.AppRepository
 import io.github.iamth3doctor.searchlight.contacts.ContactRepository
+import io.github.iamth3doctor.searchlight.databinding.ItemAppCellBinding
 import io.github.iamth3doctor.searchlight.databinding.ItemResultBinding
+import io.github.iamth3doctor.searchlight.databinding.ItemSectionHeaderBinding
 import io.github.iamth3doctor.searchlight.media.Thumbnails
+import io.github.iamth3doctor.searchlight.search.ResultLayout
 import io.github.iamth3doctor.searchlight.search.SearchResult
+import io.github.iamth3doctor.searchlight.search.Section
 import io.github.iamth3doctor.searchlight.util.Snippet
 
-/** One row layout for every result type; what differs is the leading badge and the trailing buttons. */
+/**
+ * Search results: apps as an icon grid on top, then everything else as list rows under small
+ * section headers (see [ResultLayout]). One selection runs through grid and rows; Enter opens it.
+ * Every list row uses one layout; what differs is the leading badge and the trailing buttons.
+ */
 class ResultsAdapter(
     private val apps: AppRepository,
     private val contacts: ContactRepository,
     private val thumbnails: Thumbnails,
     private val callbacks: Callbacks,
-) : RecyclerView.Adapter<ResultsAdapter.Holder>() {
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     interface Callbacks {
         fun onClick(result: SearchResult, view: View)
@@ -32,33 +40,85 @@ class ResultsAdapter(
         fun onAction(result: SearchResult, which: Int, view: View)
     }
 
-    private var items: List<SearchResult> = emptyList()
+    private var layout = ResultLayout<SearchResult>(emptyList(), ::sectionOf)
+
+    /** Selection index (into [ResultLayout.selectable]); -1 when there are no results. */
+    var selected = -1
+        private set
 
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<SearchResult>) {
-        items = list
+        layout = ResultLayout(list, ::sectionOf)
+        selected = if (layout.selectable.isEmpty()) -1 else 0
         notifyDataSetChanged()
     }
 
-    fun first(): SearchResult? = items.firstOrNull()
+    /** What Enter opens: the highlighted result. */
+    fun selectedResult(): SearchResult? = layout.selectable.getOrNull(selected)
 
-    override fun getItemCount() = items.size
+    fun selectedPosition(): Int = if (selected < 0) -1 else layout.positionOf(selected)
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-        val h = Holder(ItemResultBinding.inflate(LayoutInflater.from(parent.context), parent, false))
-        h.b.root.setOnClickListener { v -> h.result?.let { callbacks.onClick(it, v) } }
-        h.b.root.setOnLongClickListener { v -> h.result?.let { callbacks.onLongClick(it, v) }; true }
-        h.b.action1.setOnClickListener { v -> h.result?.let { callbacks.onAction(it, 1, v) } }
-        h.b.action2.setOnClickListener { v -> h.result?.let { callbacks.onAction(it, 2, v) } }
-        return h
+    /** Moves the highlight; returns false if it couldn't move that way. */
+    fun move(move: ResultLayout.Move, columns: Int): Boolean {
+        val next = layout.move(selected, move, columns)
+        if (next < 0 || next == selected) return false
+        val old = selectedPosition()
+        selected = next
+        if (old >= 0) notifyItemChanged(old)
+        notifyItemChanged(selectedPosition())
+        return true
     }
 
-    override fun onBindViewHolder(h: Holder, position: Int) {
-        val r = items[position]
+    /** Headers and list rows take the full width; app tiles take one grid column. */
+    fun isFullSpan(position: Int) = layout.rows.getOrNull(position) !is ResultLayout.Row.Cell
+
+    override fun getItemCount() = layout.rows.size
+
+    override fun getItemViewType(position: Int) = when (layout.rows[position]) {
+        is ResultLayout.Row.Header -> TYPE_HEADER
+        is ResultLayout.Row.Cell -> TYPE_CELL
+        is ResultLayout.Row.Line -> TYPE_LINE
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return when (viewType) {
+            TYPE_HEADER -> HeaderHolder(ItemSectionHeaderBinding.inflate(inflater, parent, false))
+            TYPE_CELL -> CellHolder(ItemAppCellBinding.inflate(inflater, parent, false)).also { h ->
+                h.b.root.setOnClickListener { v -> h.result?.let { callbacks.onClick(it, v) } }
+                h.b.root.setOnLongClickListener { v -> h.result?.let { callbacks.onLongClick(it, v) }; true }
+            }
+            else -> Holder(ItemResultBinding.inflate(inflater, parent, false)).also { h ->
+                h.b.root.setOnClickListener { v -> h.result?.let { callbacks.onClick(it, v) } }
+                h.b.root.setOnLongClickListener { v -> h.result?.let { callbacks.onLongClick(it, v) }; true }
+                h.b.action1.setOnClickListener { v -> h.result?.let { callbacks.onAction(it, 1, v) } }
+                h.b.action2.setOnClickListener { v -> h.result?.let { callbacks.onAction(it, 2, v) } }
+            }
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (val row = layout.rows[position]) {
+            is ResultLayout.Row.Header -> (holder as HeaderHolder).b.header.setText(headerText(row.section))
+            is ResultLayout.Row.Cell -> bindCell(holder as CellHolder, row.item, row.index == selected)
+            is ResultLayout.Row.Line -> bindLine(holder as Holder, row.item, row.index == selected)
+        }
+    }
+
+    private fun bindCell(h: CellHolder, r: SearchResult, activated: Boolean) {
+        h.result = r
+        h.b.root.isActivated = activated
+        val entry = (r as SearchResult.App).entry
+        h.b.label.text = entry.label
+        h.b.root.contentDescription = entry.label
+        h.b.icon.setImageBitmap(apps.icon(entry) { bmp -> if (h.result === r) h.b.icon.setImageBitmap(bmp) })
+    }
+
+    private fun bindLine(h: Holder, r: SearchResult, activated: Boolean) {
         h.result = r
         val b = h.b
         val ctx = b.root.context
-        b.root.isActivated = position == 0
+        b.root.isActivated = activated
         b.icon.setImageDrawable(null)
         b.icon.imageTintList = null
         b.icon.clipToOutline = false
@@ -68,7 +128,6 @@ class ResultsAdapter(
         b.action1.isVisible = false
         b.action2.isVisible = false
         b.title.type(Type.BODY)
-        b.subtitle.ellipsize = android.text.TextUtils.TruncateAt.START
 
         when (r) {
             is SearchResult.App -> {
@@ -131,7 +190,6 @@ class ResultsAdapter(
                 b.title.text = r.sender
                 val when_ = DateUtils.getRelativeTimeSpanString(m.date, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
                 subtitle(b, "$when_ · " + Snippet.around(m.body, r.matchIndex, 6))
-                b.subtitle.ellipsize = android.text.TextUtils.TruncateAt.END
                 showBadge(b, "💬", ctx.color(R.color.cat_message))
             }
             is SearchResult.Calc -> {
@@ -199,7 +257,39 @@ class ResultsAdapter(
         var result: SearchResult? = null
     }
 
+    class CellHolder(val b: ItemAppCellBinding) : RecyclerView.ViewHolder(b.root) {
+        var result: SearchResult? = null
+    }
+
+    class HeaderHolder(val b: ItemSectionHeaderBinding) : RecyclerView.ViewHolder(b.root)
+
+    private fun headerText(section: Section) = when (section) {
+        Section.APPS -> R.string.section_apps
+        Section.ANSWER -> R.string.section_answer
+        Section.CONTACTS -> R.string.section_contacts
+        Section.MUSIC -> R.string.section_music
+        Section.PHOTOS -> R.string.section_photos
+        Section.MESSAGES -> R.string.section_messages
+        Section.FILES -> R.string.section_files
+        Section.ACTIONS -> R.string.section_actions
+    }
+
     private companion object {
+        const val TYPE_HEADER = 0
+        const val TYPE_CELL = 1
+        const val TYPE_LINE = 2
+
+        fun sectionOf(r: SearchResult): Section = when (r) {
+            is SearchResult.App -> Section.APPS
+            is SearchResult.Calc -> Section.ANSWER
+            is SearchResult.Contact -> Section.CONTACTS
+            is SearchResult.Song -> Section.MUSIC
+            is SearchResult.Photo -> Section.PHOTOS
+            is SearchResult.Message -> Section.MESSAGES
+            is SearchResult.File -> Section.FILES
+            is SearchResult.Web, SearchResult.AccessHint -> Section.ACTIONS
+        }
+
         val AVATAR_COLORS = intArrayOf(
             R.color.avatar_1, R.color.avatar_2, R.color.avatar_3, R.color.avatar_4,
             R.color.avatar_5, R.color.avatar_6, R.color.avatar_7, R.color.avatar_8,

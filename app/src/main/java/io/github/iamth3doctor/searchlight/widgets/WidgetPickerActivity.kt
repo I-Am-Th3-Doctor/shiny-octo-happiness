@@ -22,6 +22,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.databinding.ItemWidgetProviderBinding
+import io.github.iamth3doctor.searchlight.ui.edgeToEdge
+import io.github.iamth3doctor.searchlight.ui.isLightTheme
+import io.github.iamth3doctor.searchlight.ui.padForSystemBars
 import io.github.iamth3doctor.searchlight.ui.px
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -46,7 +49,6 @@ class WidgetPickerActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setTitle(R.string.widget_picker_title)
         val pad = px(R.dimen.space_m)
         val filter = EditText(this).apply {
             setHint(R.string.widget_picker_filter)
@@ -60,13 +62,20 @@ class WidgetPickerActivity : Activity() {
             layoutManager = LinearLayoutManager(this@WidgetPickerActivity)
             adapter = this@WidgetPickerActivity.adapter
         }
-        setContentView(LinearLayout(this).apply {
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad / 2, pad, 0)
+            setPadding(pad, 0, pad, 0)
+            addView(
+                TextView(context, null, 0, R.style.PageTitle).apply { setText(R.string.widget_picker_title) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+            )
             addView(filter)
             addView(empty)
             addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        })
+        }
+        setContentView(root)
+        edgeToEdge(lightBackground = isLightTheme())
+        root.padForSystemBars()
         filter.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) = applyFilter(s?.toString().orEmpty())
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit

@@ -28,6 +28,9 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
     protected var started = false
         private set
 
+    /** Called after every redraw, so the host can re-fit the pager height to the content. */
+    var onDrawn: (() -> Unit)? = null
+
     @get:LayoutRes protected abstract val layout: Int
 
     protected abstract fun bind(root: View)
@@ -40,15 +43,30 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
      * does nothing until the view exists.
      */
     fun render() {
-        if (view != null) draw()
+        if (view != null) {
+            draw()
+            onDrawn?.invoke()
+        }
+    }
+
+    private fun ensureView(parent: ViewGroup): View = view ?: LayoutInflater.from(activity).inflate(layout, parent, false).also {
+        view = it
+        bind(it)
+        draw()
+    }
+
+    /** Height this card's content needs at [widthPx] (text wraps, large font sizes included). */
+    fun measureHeight(widthPx: Int, parent: ViewGroup): Int {
+        val v = ensureView(parent)
+        v.measure(
+            View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        return v.measuredHeight
     }
 
     fun viewFor(parent: ViewGroup): View {
-        val v = view ?: LayoutInflater.from(activity).inflate(layout, parent, false).also {
-            view = it
-            bind(it)
-            draw()
-        }
+        val v = ensureView(parent)
         (v.parent as? ViewGroup)?.removeView(v)
         return v
     }
