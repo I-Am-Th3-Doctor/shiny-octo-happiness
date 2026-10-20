@@ -36,6 +36,12 @@ class ScreenshotTest {
 
     @Test fun captureScreens() {
         shell("mkdir -p $DIR")
+        // The emulator's stock launcher can stall on a slow CI machine and throw an
+        // "isn't responding" dialog over the screenshots: make Searchlight home and stop it.
+        val pkg = instrumentation.targetContext.packageName
+        shell("cmd package set-home-activity $pkg/.MainActivity")
+        shell("am force-stop com.google.android.apps.nexuslauncher")
+        Thread.sleep(2000)
         // A deterministic, realistic state: weather for a fixed place, in °F.
         instrumentation.runOnMainSync {
             app.prefs.manualPlace = GeoPlace("Austin", "Texas", "US", 30.27, -97.74)
