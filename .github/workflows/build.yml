@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -39,7 +39,7 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk "out/searchlight-${{ github.run_number }}.apk"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: searchlight-debug-${{ github.run_number }}
           path: out/*.apk
