@@ -28,6 +28,8 @@ import androidx.core.content.ContextCompat
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.searchlight
 import io.github.iamth3doctor.searchlight.ui.Permissions
+import io.github.iamth3doctor.searchlight.ui.color
+import io.github.iamth3doctor.searchlight.ui.px
 
 /**
  * Four circular toggles, rendered from the slot config saved in Settings → Quick Actions.
@@ -111,8 +113,8 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
             slot.icon.setImageResource(st.icon)
             slot.label.text = st.label
             slot.circle.contentDescription = st.label
-            slot.circle.backgroundTintList = ColorStateList.valueOf(if (st.on) ON_COLOR else OFF_COLOR)
-            slot.icon.imageTintList = ColorStateList.valueOf(if (st.on) ON_ICON else OFF_ICON)
+            slot.circle.backgroundTintList = ColorStateList.valueOf(activity.color(if (st.on) R.color.accent else R.color.control_off))
+            slot.icon.imageTintList = ColorStateList.valueOf(activity.color(if (st.on) R.color.on_accent else R.color.on_surface))
             slot.circle.alpha = if (st.available) 1f else 0.4f
         }
     }
@@ -243,7 +245,7 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
 
     private fun showBrightness() {
         val resolver = activity.contentResolver
-        val pad = (20 * activity.resources.displayMetrics.density).toInt()
+        val pad = activity.px(R.dimen.space_l)
         val autoSwitch = Switch(activity).apply {
             setText(R.string.qa_brightness_auto)
             isChecked = system(Settings.System.SCREEN_BRIGHTNESS_MODE, 0) == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
@@ -281,10 +283,4 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
             .show()
     }
 
-    private companion object {
-        const val ON_COLOR = 0xFFE8EAF6.toInt()
-        const val OFF_COLOR = 0x33FFFFFF
-        const val ON_ICON = 0xFF1C1C1E.toInt()
-        const val OFF_ICON = 0xFFFFFFFF.toInt()
-    }
 }

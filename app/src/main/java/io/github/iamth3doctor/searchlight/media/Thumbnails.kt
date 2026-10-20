@@ -8,9 +8,9 @@ import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
 import android.util.Size
+import io.github.iamth3doctor.searchlight.R
 import java.io.File
 import java.util.concurrent.Executors
-import kotlin.math.roundToInt
 
 /** Small thumbnails for photo, video and song results, rendered off the main thread. */
 class Thumbnails(private val context: Context) {
@@ -20,7 +20,7 @@ class Thumbnails(private val context: Context) {
     private val cache = LruCache<String, Bitmap>(120)
     private val missing = HashSet<String>()
     private val pending = HashMap<String, MutableList<(Bitmap) -> Unit>>()
-    private val size = (48 * context.resources.displayMetrics.density).roundToInt().let { Size(it, it) }
+    private val size = context.resources.getDimensionPixelSize(R.dimen.size_avatar).let { Size(it, it) }
 
     fun forFile(path: String, isVideo: Boolean, onReady: (Bitmap) -> Unit): Bitmap? = get("f:$path", onReady) {
         if (isVideo) ThumbnailUtils.createVideoThumbnail(File(path), size, null)

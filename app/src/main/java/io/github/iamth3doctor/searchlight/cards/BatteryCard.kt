@@ -5,7 +5,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
@@ -20,6 +19,7 @@ import android.view.View
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import io.github.iamth3doctor.searchlight.R
+import io.github.iamth3doctor.searchlight.ui.color
 
 /** Battery %, charging state, Wi-Fi and cellular signal. Signals are polled while visible. */
 class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
@@ -138,7 +138,7 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
         sb.append(bars)
         val filled = level.coerceIn(0, 4)
         if (filled < 4) {
-            sb.setSpan(ForegroundColorSpan(Color.argb(80, 255, 255, 255)), start + filled, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.setSpan(ForegroundColorSpan(activity.color(R.color.on_surface_faint)), start + filled, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         return sb
     }

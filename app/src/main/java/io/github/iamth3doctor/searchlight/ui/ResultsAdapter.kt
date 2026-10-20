@@ -2,7 +2,6 @@ package io.github.iamth3doctor.searchlight.ui
 
 import android.annotation.SuppressLint
 import android.content.res.ColorStateList
-import android.graphics.Color
 import android.text.format.DateUtils
 import android.text.format.Formatter
 import android.view.LayoutInflater
@@ -68,7 +67,7 @@ class ResultsAdapter(
         b.subtitle.isVisible = false
         b.action1.isVisible = false
         b.action2.isVisible = false
-        b.title.textSize = 17f
+        b.title.type(Type.BODY)
         b.subtitle.ellipsize = android.text.TextUtils.TruncateAt.START
 
         when (r) {
@@ -80,7 +79,7 @@ class ResultsAdapter(
                 val c = r.entry
                 b.title.text = c.name
                 c.number?.let { subtitle(b, it) }
-                showBadge(b, c.name.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "#", colorFor(c.name))
+                showBadge(b, c.name.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "#", ctx.color(avatarColor(c.name)))
                 contacts.photo(c) { bmp -> if (h.result === r && bmp != null) showPhoto(b, bmp) }?.let { showPhoto(b, it) }
                 if (c.number != null) {
                     b.action1.setImageResource(R.drawable.ic_call)
@@ -101,10 +100,10 @@ class ResultsAdapter(
                 subtitle(b, parts.joinToString(" · "))
                 if (e.isDir) {
                     b.icon.setImageResource(R.drawable.ic_folder)
-                    b.icon.imageTintList = ColorStateList.valueOf(Color.parseColor("#FFFFCA28"))
+                    b.icon.imageTintList = ColorStateList.valueOf(ctx.color(R.color.cat_folder))
                 } else {
                     val ext = e.name.substringAfterLast('.', "").take(4).uppercase()
-                    showBadge(b, ext.ifEmpty { "FILE" }, colorForExtension(ext))
+                    showBadge(b, ext.ifEmpty { "FILE" }, ctx.color(categoryColor(ext)))
                     Thumbnails.visualKind(e.name)?.let { isVideo ->
                         thumbnails.forFile(r.index.pathOf(e), isVideo) { bmp -> if (h.result === r) showImage(b, bmp) }
                             ?.let { showImage(b, it) }
@@ -115,7 +114,7 @@ class ResultsAdapter(
                 val s = r.entry
                 b.title.text = s.title
                 subtitle(b, listOfNotNull(s.artist, s.album).joinToString(" · ").ifEmpty { ctx.getString(R.string.result_song) })
-                showBadge(b, "♪", 0xFFFB8C00.toInt())
+                showBadge(b, "♪", ctx.color(R.color.cat_audio))
                 thumbnails.forUri(s.uri) { bmp -> if (h.result === r) showImage(b, bmp) }?.let { showImage(b, it) }
             }
             is SearchResult.Photo -> {
@@ -124,7 +123,7 @@ class ResultsAdapter(
                 val kind = ctx.getString(if (p.isVideo) R.string.result_video else R.string.result_photo)
                 val date = DateUtils.getRelativeTimeSpanString(p.date, System.currentTimeMillis(), DateUtils.DAY_IN_MILLIS)
                 subtitle(b, listOfNotNull(kind, p.bucket, date.toString()).joinToString(" · "))
-                showBadge(b, if (p.isVideo) "VID" else "IMG", if (p.isVideo) 0xFF8E24AA.toInt() else 0xFF43A047.toInt())
+                showBadge(b, if (p.isVideo) "VID" else "IMG", ctx.color(if (p.isVideo) R.color.cat_video else R.color.cat_image))
                 thumbnails.forUri(p.uri) { bmp -> if (h.result === r) showImage(b, bmp) }?.let { showImage(b, it) }
             }
             is SearchResult.Message -> {
@@ -133,13 +132,13 @@ class ResultsAdapter(
                 val when_ = DateUtils.getRelativeTimeSpanString(m.date, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
                 subtitle(b, "$when_ · " + Snippet.around(m.body, r.matchIndex, 6))
                 b.subtitle.ellipsize = android.text.TextUtils.TruncateAt.END
-                showBadge(b, "💬", 0xFF1E88E5.toInt())
+                showBadge(b, "💬", ctx.color(R.color.cat_message))
             }
             is SearchResult.Calc -> {
                 b.title.text = ctx.getString(R.string.calc_result, r.value)
-                b.title.textSize = 22f
+                b.title.type(Type.TILE_TITLE)
                 subtitle(b, ctx.getString(R.string.calc_subtitle, r.expression))
-                showBadge(b, "=", Color.parseColor("#FF5C6BC0"))
+                showBadge(b, "=", ctx.color(R.color.accent))
             }
             is SearchResult.Web -> {
                 b.title.text = ctx.getString(R.string.web_search_for, r.engine.label, r.query)
@@ -160,7 +159,7 @@ class ResultsAdapter(
 
     private fun showBadge(b: ItemResultBinding, text: String, color: Int) {
         b.badge.text = text
-        b.badge.textSize = if (text.length > 2) 11f else 16f
+        b.badge.type(if (text.length > 2) Type.CAPTION else Type.BODY)
         b.badge.backgroundTintList = ColorStateList.valueOf(color)
         b.badge.isVisible = true
     }
@@ -181,19 +180,19 @@ class ResultsAdapter(
         b.icon.setImageBitmap(bmp)
     }
 
-    private fun colorFor(name: String): Int = AVATAR_COLORS[(name.hashCode() and 0x7fffffff) % AVATAR_COLORS.size]
+    private fun avatarColor(name: String): Int = AVATAR_COLORS[(name.hashCode() and 0x7fffffff) % AVATAR_COLORS.size]
 
-    private fun colorForExtension(ext: String): Int = when (ext) {
-        "PDF" -> 0xFFE53935.toInt()
-        "JPG", "JPEG", "PNG", "GIF", "WEBP", "HEIC", "HEIF", "DNG" -> 0xFF43A047.toInt()
-        "MP4", "MKV", "MOV", "WEBM", "3GP", "AVI" -> 0xFF8E24AA.toInt()
-        "MP3", "M4A", "FLAC", "WAV", "OGG", "OPUS", "AAC" -> 0xFFFB8C00.toInt()
-        "ZIP", "RAR", "7Z", "TAR", "GZ" -> 0xFF6D4C41.toInt()
-        "DOC", "DOCX", "ODT", "RTF", "TXT", "MD" -> 0xFF1E88E5.toInt()
-        "XLS", "XLSX", "CSV", "ODS" -> 0xFF2E7D32.toInt()
-        "PPT", "PPTX", "ODP", "KEY" -> 0xFFF4511E.toInt()
-        "APK", "APKS", "XAPK" -> 0xFF00897B.toInt()
-        else -> 0xFF546E7A.toInt()
+    private fun categoryColor(ext: String): Int = when (ext) {
+        "PDF" -> R.color.cat_pdf
+        "JPG", "JPEG", "PNG", "GIF", "WEBP", "HEIC", "HEIF", "DNG" -> R.color.cat_image
+        "MP4", "MKV", "MOV", "WEBM", "3GP", "AVI" -> R.color.cat_video
+        "MP3", "M4A", "FLAC", "WAV", "OGG", "OPUS", "AAC" -> R.color.cat_audio
+        "ZIP", "RAR", "7Z", "TAR", "GZ" -> R.color.cat_archive
+        "DOC", "DOCX", "ODT", "RTF", "TXT", "MD" -> R.color.cat_document
+        "XLS", "XLSX", "CSV", "ODS" -> R.color.cat_sheet
+        "PPT", "PPTX", "ODP", "KEY" -> R.color.cat_slides
+        "APK", "APKS", "XAPK" -> R.color.cat_apk
+        else -> R.color.cat_other
     }
 
     class Holder(val b: ItemResultBinding) : RecyclerView.ViewHolder(b.root) {
@@ -202,8 +201,8 @@ class ResultsAdapter(
 
     private companion object {
         val AVATAR_COLORS = intArrayOf(
-            0xFF5C6BC0.toInt(), 0xFF26A69A.toInt(), 0xFFEF5350.toInt(), 0xFFAB47BC.toInt(),
-            0xFF42A5F5.toInt(), 0xFFFFA726.toInt(), 0xFF66BB6A.toInt(), 0xFF8D6E63.toInt(),
+            R.color.avatar_1, R.color.avatar_2, R.color.avatar_3, R.color.avatar_4,
+            R.color.avatar_5, R.color.avatar_6, R.color.avatar_7, R.color.avatar_8,
         )
     }
 }

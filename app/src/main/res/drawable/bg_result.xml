@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The top result (what Enter will open) is "activated" and gets a soft highlight. -->
+<!-- The top result (what Enter will open) is "activated" and gets the accent highlight. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_activated="true">
         <shape android:shape="rectangle">
-            <solid android:color="@color/highlight" />
-            <corners android:radius="16dp" />
+            <solid android:color="@color/accent_soft" />
+            <corners android:radius="@dimen/radius_tile" />
         </shape>
     </item>
     <item android:drawable="@android:color/transparent" />

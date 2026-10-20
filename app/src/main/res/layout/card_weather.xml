@@ -10,8 +10,8 @@
         android:foreground="?android:attr/selectableItemBackground"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="22dp"
-        android:paddingVertical="16dp">
+        android:paddingHorizontal="@dimen/space_l"
+        android:paddingVertical="@dimen/space_m">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -25,25 +25,23 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="@color/on_wallpaper_dim"
-                android:textSize="14sp" />
+                android:textColor="@color/on_surface_dim"
+                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
 
             <TextView
                 android:id="@+id/weatherTemp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-light"
-                android:includeFontPadding="false"
-                android:textColor="@color/on_wallpaper"
-                android:textSize="64sp" />
+                android:textColor="@color/on_surface"
+                android:textAppearance="@style/TextAppearance.Searchlight.Glance" />
 
             <TextView
                 android:id="@+id/weatherCondition"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:maxLines="2"
-                android:textColor="@color/on_wallpaper"
-                android:textSize="16sp" />
+                android:textColor="@color/on_surface"
+                android:textAppearance="@style/TextAppearance.Searchlight.Body" />
         </LinearLayout>
 
         <LinearLayout
@@ -56,23 +54,23 @@
                 android:id="@+id/weatherEmoji"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="44sp" />
+                android:textAppearance="@style/TextAppearance.Searchlight.Glance" />
 
             <TextView
                 android:id="@+id/weatherHiLo"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textColor="@color/on_wallpaper"
-                android:textSize="16sp" />
+                android:layout_marginTop="@dimen/space_xs"
+                android:textColor="@color/on_surface"
+                android:textAppearance="@style/TextAppearance.Searchlight.Body" />
 
             <TextView
                 android:id="@+id/weatherUpdated"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="@color/on_wallpaper_dim"
-                android:textSize="12sp" />
+                android:layout_marginTop="@dimen/space_xs"
+                android:textColor="@color/on_surface_dim"
+                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

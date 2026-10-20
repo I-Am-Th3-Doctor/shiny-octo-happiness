@@ -20,6 +20,11 @@ import android.widget.TextView
 import android.widget.Toast
 import io.github.iamth3doctor.searchlight.cards.CardType
 import io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout
+import io.github.iamth3doctor.searchlight.ui.Type
+import io.github.iamth3doctor.searchlight.ui.primaryText
+import io.github.iamth3doctor.searchlight.ui.px
+import io.github.iamth3doctor.searchlight.ui.secondaryText
+import io.github.iamth3doctor.searchlight.ui.type
 import io.github.iamth3doctor.searchlight.weather.TempUnit
 import java.util.Date
 
@@ -39,7 +44,7 @@ class WidgetCenterActivity : Activity() {
         title = getString(R.string.widget_center)
         content = MaxWidthLinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(32))
+            setPadding(px(R.dimen.space_m), px(R.dimen.space_m), px(R.dimen.space_m), px(R.dimen.space_l))
             maxWidthPx = resources.getDimensionPixelSize(R.dimen.content_max_width)
         }
         // Centered, capped column like the rest of the app, so it reads well unfolded.
@@ -96,7 +101,7 @@ class WidgetCenterActivity : Activity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = dp(64)
+            minimumHeight = px(R.dimen.size_row)
         }
         val texts = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -104,7 +109,7 @@ class WidgetCenterActivity : Activity() {
         }
         val sw = Switch(this).apply {
             setText(type.title)
-            textSize = 16f
+            type(Type.BODY)
             isChecked = on
             setOnCheckedChangeListener { _, checked ->
                 prefs.disabledCards = if (checked) prefs.disabledCards - type else prefs.disabledCards + type
@@ -114,8 +119,8 @@ class WidgetCenterActivity : Activity() {
         texts.addView(sw)
         texts.addView(TextView(this).apply {
             setText(type.description)
-            textSize = 13f
-            alpha = 0.7f
+            type(Type.CAPTION)
+            setTextColor(secondaryText())
         })
         row.addView(texts)
         row.addView(arrow(R.drawable.ic_arrow_up, R.string.move_up, sw, index > 0) { move(order, index, -1) })
@@ -150,16 +155,17 @@ class WidgetCenterActivity : Activity() {
             group.addView(RadioButton(this).apply {
                 id = View.generateViewId()
                 text = unit.symbol
-                textSize = 16f
+                type(Type.BODY)
                 isChecked = prefs.tempUnit == unit
-                setPadding(dp(4), 0, dp(24), 0)
+                setPadding(px(R.dimen.space_xs), 0, px(R.dimen.space_l), 0)
                 setOnClickListener { prefs.tempUnit = unit }
             })
         }
         content.addView(TextView(this).apply {
             setText(R.string.wc_units)
-            textSize = 16f
-            setPadding(0, dp(8), 0, 0)
+            type(Type.BODY)
+            setTextColor(primaryText())
+            setPadding(0, px(R.dimen.space_s), 0, 0)
         })
         content.addView(group)
     }
@@ -199,7 +205,7 @@ class WidgetCenterActivity : Activity() {
             setSingleLine()
         }
         val box = LinearLayout(this).apply {
-            setPadding(dp(20), dp(8), dp(20), 0)
+            setPadding(px(R.dimen.space_l), px(R.dimen.space_s), px(R.dimen.space_l), 0)
             addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         AlertDialog.Builder(this)
@@ -231,42 +237,39 @@ class WidgetCenterActivity : Activity() {
     // ------------------------------------------------------------------ building blocks
 
     private fun section(text: Int, first: Boolean = false) {
-        content.addView(TextView(this).apply {
+        content.addView(TextView(this, null, 0, R.style.SettingsSection).apply {
             setText(text)
-            setTextColor(getColor(R.color.icon_bg))
-            textSize = 14f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setPadding(0, if (first) 0 else dp(24), 0, dp(8))
+            if (first) setPadding(paddingLeft, px(R.dimen.space_xs), paddingRight, paddingBottom)
         })
     }
 
     private fun help(text: Int) {
         content.addView(TextView(this).apply {
             setText(text)
-            textSize = 13f
-            alpha = 0.7f
-            setPadding(0, 0, 0, dp(4))
+            type(Type.CAPTION)
+            setTextColor(secondaryText())
+            setPadding(0, 0, 0, px(R.dimen.space_xs))
         })
     }
 
     private fun row(title: String, summary: String, onClick: () -> Unit) {
         content.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            minimumHeight = dp(56)
+            minimumHeight = px(R.dimen.size_row)
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(8), 0, dp(8))
+            setPadding(0, px(R.dimen.space_s), 0, px(R.dimen.space_s))
             background = getDrawable(resolveAttr(android.R.attr.selectableItemBackground))
             setOnClickListener { onClick() }
-            addView(TextView(context).apply { text = title; textSize = 16f })
-            addView(TextView(context).apply { text = summary; textSize = 13f; alpha = 0.7f })
+            addView(TextView(context).apply { text = title; type(Type.BODY); setTextColor(primaryText()) })
+            addView(TextView(context).apply { text = summary; type(Type.CAPTION); setTextColor(secondaryText()) })
         })
     }
 
     private fun switchRow(text: Int, checked: Boolean, onChange: (Boolean) -> Unit) {
         content.addView(Switch(this).apply {
             setText(text)
-            textSize = 16f
-            minHeight = dp(56)
+            type(Type.BODY)
+            minHeight = px(R.dimen.size_row)
             isChecked = checked
             setOnCheckedChangeListener { _, c -> onChange(c) }
         })
@@ -280,7 +283,7 @@ class WidgetCenterActivity : Activity() {
             background = null
             isEnabled = enabled
             alpha = if (enabled) 1f else 0.25f
-            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+            layoutParams = LinearLayout.LayoutParams(px(R.dimen.size_touch), px(R.dimen.size_touch))
             setOnClickListener { onClick() }
         }
 
@@ -290,7 +293,6 @@ class WidgetCenterActivity : Activity() {
         return out.resourceId
     }
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     private companion object {
         const val REQUEST_LOCATION = 1

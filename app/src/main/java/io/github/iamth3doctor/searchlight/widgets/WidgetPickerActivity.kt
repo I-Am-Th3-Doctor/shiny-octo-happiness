@@ -22,6 +22,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.databinding.ItemWidgetProviderBinding
+import io.github.iamth3doctor.searchlight.ui.px
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
@@ -46,7 +47,7 @@ class WidgetPickerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setTitle(R.string.widget_picker_title)
-        val pad = (16 * resources.displayMetrics.density).toInt()
+        val pad = px(R.dimen.space_m)
         val filter = EditText(this).apply {
             setHint(R.string.widget_picker_filter)
             setSingleLine()

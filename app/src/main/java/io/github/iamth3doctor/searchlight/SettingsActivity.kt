@@ -19,6 +19,11 @@ import android.widget.TextView
 import io.github.iamth3doctor.searchlight.cards.QuickAction
 import io.github.iamth3doctor.searchlight.data.WebEngine
 import io.github.iamth3doctor.searchlight.media.MusicApps
+import io.github.iamth3doctor.searchlight.ui.Type
+import io.github.iamth3doctor.searchlight.ui.primaryText
+import io.github.iamth3doctor.searchlight.ui.px
+import io.github.iamth3doctor.searchlight.ui.secondaryText
+import io.github.iamth3doctor.searchlight.ui.type
 import io.github.iamth3doctor.searchlight.databinding.ActivitySettingsBinding
 import io.github.iamth3doctor.searchlight.ui.Permissions
 import java.text.NumberFormat
@@ -98,9 +103,9 @@ class SettingsActivity : Activity() {
             hint = getString(R.string.settings_greeting_hint)
             setSingleLine()
         }
-        val pad = dp(20)
+        val pad = px(R.dimen.space_l)
         val container = LinearLayout(this).apply {
-            setPadding(pad, dp(8), pad, 0)
+            setPadding(pad, px(R.dimen.space_s), pad, 0)
             addView(input, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
         AlertDialog.Builder(this)
@@ -184,15 +189,15 @@ class SettingsActivity : Activity() {
 
     private fun settingsRow(title: String, summary: String, onClick: () -> Unit) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        minimumHeight = dp(56)
+        minimumHeight = px(R.dimen.size_row)
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(0, dp(8), 0, dp(8))
+        setPadding(0, px(R.dimen.space_s), 0, px(R.dimen.space_s))
         val tv = android.util.TypedValue()
         theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
         setBackgroundResource(tv.resourceId)
         setOnClickListener { onClick() }
-        addView(TextView(context).apply { text = title; textSize = 16f })
-        addView(TextView(context).apply { text = summary; textSize = 13f; alpha = 0.7f })
+        addView(TextView(context).apply { text = title; type(Type.BODY); setTextColor(primaryText()) })
+        addView(TextView(context).apply { text = summary; type(Type.CAPTION); setTextColor(secondaryText()) })
     }
 
     // ------------------------------------------------------------------ permissions hub
@@ -244,11 +249,11 @@ class SettingsActivity : Activity() {
             val granted = p.granted()
             list.addView(Switch(this).apply {
                 setText(p.title)
-                textSize = 16f
-                minHeight = dp(48)
+                type(Type.BODY)
+                minHeight = px(R.dimen.size_touch)
                 isChecked = granted
                 isEnabled = !p.comingLater
-                setPadding(0, dp(8), 0, 0)
+                setPadding(0, px(R.dimen.space_s), 0, 0)
                 setOnClickListener {
                     isChecked = p.granted() // the switch mirrors reality, not the tap
                     request(p)
@@ -256,8 +261,9 @@ class SettingsActivity : Activity() {
             })
             list.addView(TextView(this).apply {
                 setText(if (granted && !p.comingLater) R.string.perm_granted_tap_to_change else p.description)
-                textSize = 13f
-                alpha = if (p.comingLater) 0.5f else 0.75f
+                type(Type.CAPTION)
+                setTextColor(secondaryText())
+                alpha = if (p.comingLater) 0.5f else 1f
             })
         }
     }
@@ -313,7 +319,7 @@ class SettingsActivity : Activity() {
         if (keys.isEmpty()) {
             list.addView(TextView(this).apply {
                 setText(R.string.settings_no_favorites)
-                setPadding(0, dp(8), 0, dp(8))
+                setPadding(0, px(R.dimen.space_s), 0, px(R.dimen.space_s))
             })
             return
         }
@@ -322,17 +328,18 @@ class SettingsActivity : Activity() {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = dp(56)
+                minimumHeight = px(R.dimen.size_row)
             }
             val label = TextView(this).apply {
                 text = entry?.label ?: key.substringAfter('/').substringBefore('/')
-                textSize = 16f
+                type(Type.BODY)
+                setTextColor(primaryText())
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginStart = dp(16)
+                    marginStart = px(R.dimen.space_m)
                 }
             }
             val icon = ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(40), dp(40))
+                layoutParams = LinearLayout.LayoutParams(px(R.dimen.size_avatar), px(R.dimen.size_avatar))
                 if (entry != null) setImageBitmap(app.apps.icon(entry) { setImageBitmap(it) })
             }
             row.addView(icon)
@@ -358,11 +365,10 @@ class SettingsActivity : Activity() {
             background = null
             isEnabled = enabled
             alpha = if (enabled) 1f else 0.3f
-            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
+            layoutParams = LinearLayout.LayoutParams(px(R.dimen.size_touch), px(R.dimen.size_touch))
             setOnClickListener { onClick() }
         }
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     private companion object {
         const val REQUEST_HOME_ROLE = 1

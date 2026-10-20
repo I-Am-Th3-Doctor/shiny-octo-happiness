@@ -9,7 +9,7 @@
         android:layout_height="match_parent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="8dp">
+        android:paddingHorizontal="@dimen/space_s">
 
         <LinearLayout
             android:id="@+id/qaSlot0"
@@ -20,14 +20,14 @@
             android:orientation="vertical">
 
             <FrameLayout
-                android:layout_width="60dp"
-                android:layout_height="60dp"
+                android:layout_width="@dimen/size_quick_action"
+                android:layout_height="@dimen/size_quick_action"
                 android:background="@drawable/bg_circle"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless">
 
                 <ImageView
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
+                    android:layout_width="@dimen/size_icon"
+                    android:layout_height="@dimen/size_icon"
                     android:layout_gravity="center"
                     android:importantForAccessibility="no" />
             </FrameLayout>
@@ -35,10 +35,10 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="@dimen/space_s"
                 android:maxLines="1"
-                android:textColor="@color/on_wallpaper"
-                android:textSize="12sp" />
+                android:textColor="@color/on_surface"
+                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
         </LinearLayout>
         <LinearLayout
             android:id="@+id/qaSlot1"
@@ -49,14 +49,14 @@
             android:orientation="vertical">
 
             <FrameLayout
-                android:layout_width="60dp"
-                android:layout_height="60dp"
+                android:layout_width="@dimen/size_quick_action"
+                android:layout_height="@dimen/size_quick_action"
                 android:background="@drawable/bg_circle"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless">
 
                 <ImageView
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
+                    android:layout_width="@dimen/size_icon"
+                    android:layout_height="@dimen/size_icon"
                     android:layout_gravity="center"
                     android:importantForAccessibility="no" />
             </FrameLayout>
@@ -64,10 +64,10 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="@dimen/space_s"
                 android:maxLines="1"
-                android:textColor="@color/on_wallpaper"
-                android:textSize="12sp" />
+                android:textColor="@color/on_surface"
+                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
         </LinearLayout>
         <LinearLayout
             android:id="@+id/qaSlot2"
@@ -78,14 +78,14 @@
             android:orientation="vertical">
 
             <FrameLayout
-                android:layout_width="60dp"
-                android:layout_height="60dp"
+                android:layout_width="@dimen/size_quick_action"
+                android:layout_height="@dimen/size_quick_action"
                 android:background="@drawable/bg_circle"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless">
 
                 <ImageView
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
+                    android:layout_width="@dimen/size_icon"
+                    android:layout_height="@dimen/size_icon"
                     android:layout_gravity="center"
                     android:importantForAccessibility="no" />
             </FrameLayout>
@@ -93,10 +93,10 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="@dimen/space_s"
                 android:maxLines="1"
-                android:textColor="@color/on_wallpaper"
-                android:textSize="12sp" />
+                android:textColor="@color/on_surface"
+                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
         </LinearLayout>
         <LinearLayout
             android:id="@+id/qaSlot3"
@@ -107,14 +107,14 @@
             android:orientation="vertical">
 
             <FrameLayout
-                android:layout_width="60dp"
-                android:layout_height="60dp"
+                android:layout_width="@dimen/size_quick_action"
+                android:layout_height="@dimen/size_quick_action"
                 android:background="@drawable/bg_circle"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless">
 
                 <ImageView
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
+                    android:layout_width="@dimen/size_icon"
+                    android:layout_height="@dimen/size_icon"
                     android:layout_gravity="center"
                     android:importantForAccessibility="no" />
             </FrameLayout>
@@ -122,10 +122,10 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="@dimen/space_s"
                 android:maxLines="1"
-                android:textColor="@color/on_wallpaper"
-                android:textSize="12sp" />
+                android:textColor="@color/on_surface"
+                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

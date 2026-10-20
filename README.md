@@ -85,6 +85,15 @@ over the previous one and keeps your settings. It's a throwaway key for sideload
 - **Phase 4:** frosted glass tinted from the wallpaper, six search-bar styles, typography,
   gestures (accessibility: double-tap to lock), icon packs.
 
+## Design tokens
+
+All styling comes from `app/src/main/res/values/tokens.xml` (Kotlin reads it through
+`ui/Tokens.kt`): spacing 4/8/16/24 dp, radii (card 28 dp, pill 50%, tile 20 dp), type scale
+(glance 48sp bold, tile title 20sp semibold, body 15sp, caption 12sp), one rust accent
+(`#9C4A2F`) and near-black translucent surfaces. Nothing else hardcodes a size or color.
+Emulator screenshots of the main screens: commit with `[screenshots]` in the message, then see
+the `screenshots-latest` release.
+
 ## Project layout
 
 ```

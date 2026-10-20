@@ -10,8 +10,8 @@
         android:foreground="?android:attr/selectableItemBackground"
         android:gravity="center_vertical"
         android:orientation="vertical"
-        android:paddingHorizontal="22dp"
-        android:paddingVertical="16dp">
+        android:paddingHorizontal="@dimen/space_l"
+        android:paddingVertical="@dimen/space_m">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -22,22 +22,20 @@
             <TextClock
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-light"
                 android:format12Hour="h:mm"
                 android:format24Hour="HH:mm"
-                android:includeFontPadding="false"
-                android:textColor="@color/on_wallpaper"
-                android:textSize="56sp" />
+                android:textColor="@color/on_surface"
+                android:textAppearance="@style/TextAppearance.Searchlight.Glance" />
 
             <TextClock
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:layout_marginBottom="8dp"
+                android:layout_marginStart="@dimen/space_xs"
+                android:layout_marginBottom="@dimen/space_s"
                 android:format12Hour="a"
                 android:format24Hour=""
-                android:textColor="@color/on_wallpaper_dim"
-                android:textSize="18sp" />
+                android:textColor="@color/on_surface_dim"
+                android:textAppearance="@style/TextAppearance.Searchlight.TileTitle" />
         </LinearLayout>
 
         <TextClock
@@ -45,24 +43,24 @@
             android:layout_height="wrap_content"
             android:format12Hour="EEEE, MMMM d"
             android:format24Hour="EEEE, MMMM d"
-            android:textColor="@color/on_wallpaper"
-            android:textSize="17sp" />
+            android:textColor="@color/on_surface"
+            android:textAppearance="@style/TextAppearance.Searchlight.TileTitle" />
 
         <ProgressBar
             android:id="@+id/yearProgress"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="6dp"
-            android:layout_marginTop="12dp"
-            android:progressBackgroundTint="#55FFFFFF"
-            android:progressTint="#FF8C9EFF" />
+            android:layout_height="@dimen/size_progress"
+            android:layout_marginTop="@dimen/space_s"
+            android:progressBackgroundTint="@color/control_off"
+            android:progressTint="@color/accent" />
 
         <TextView
             android:id="@+id/yearProgressText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="@color/on_wallpaper_dim"
-            android:textSize="12sp" />
+            android:layout_marginTop="@dimen/space_xs"
+            android:textColor="@color/on_surface_dim"
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
     </LinearLayout>
 </FrameLayout>

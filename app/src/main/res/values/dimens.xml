@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- On the unfolded inner screen the content stays a comfortable column instead of stretching. -->
-    <dimen name="content_max_width">600dp</dimen>
-    <dimen name="search_bar_height">56dp</dimen>
-    <dimen name="result_icon">40dp</dimen>
-    <dimen name="card_height">168dp</dimen>
-    <dimen name="grid_icon">56dp</dimen>
-</resources>

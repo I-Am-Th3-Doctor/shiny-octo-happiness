@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Searchlight design tokens: the only place sizes, radii, type and colors are defined.
+  Layouts, drawables, styles and Kotlin all reference these; nothing else hardcodes a value.
+  (Vector icon artwork - the 24dp viewport paths in res/drawable/ic_*.xml - is asset data,
+  not styling, and is out of scope.)
+-->
+<resources>
+
+    <!-- ===== Spacing scale: 4 / 8 / 16 / 24 ===================================== -->
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_s">8dp</dimen>
+    <dimen name="space_m">16dp</dimen>
+    <dimen name="space_l">24dp</dimen>
+
+    <!-- ===== Corner radii ======================================================== -->
+    <dimen name="radius_card">28dp</dimen>
+    <!-- "50%": Android clamps a corner radius to half the shape's height, so any value at
+         least that large gives a true pill / circle at every size. -->
+    <dimen name="radius_pill">999dp</dimen>
+    <dimen name="radius_tile">20dp</dimen>
+
+    <!-- ===== Type scale ========================================================== -->
+    <dimen name="text_glance">48sp</dimen>      <!-- big temp / time / battery % -->
+    <dimen name="text_tile_title">20sp</dimen>  <!-- a tile's main line, the search field -->
+    <dimen name="text_body">15sp</dimen>
+    <dimen name="text_caption">12sp</dimen>
+
+    <!-- ===== Component sizes (fixed parts, not spacing) ========================== -->
+    <dimen name="size_touch">48dp</dimen>             <!-- minimum touch target -->
+    <dimen name="size_touch_wide">56dp</dimen>        <!-- primary control (play/pause) -->
+    <dimen name="size_icon">24dp</dimen>
+    <dimen name="size_avatar">40dp</dimen>            <!-- result icons, contact photos -->
+    <dimen name="size_row">56dp</dimen>               <!-- list row / search row height -->
+    <dimen name="size_row_tall">96dp</dimen>          <!-- widget-picker row -->
+    <dimen name="size_quick_action">56dp</dimen>      <!-- Quick Actions circle -->
+    <dimen name="size_badge">24dp</dimen>             <!-- edit-mode remove / resize badges -->
+    <dimen name="size_dot">8dp</dimen>                <!-- page dots -->
+    <dimen name="size_progress">4dp</dimen>           <!-- day-of-year bar -->
+    <dimen name="size_tile_height">168dp</dimen>      <!-- the tile pager -->
+    <dimen name="size_tile_art">104dp</dimen>         <!-- Music tile artwork -->
+    <dimen name="size_grid_icon">56dp</dimen>         <!-- favorites grid icon -->
+    <dimen name="size_grid_cell">96dp</dimen>         <!-- favorites grid cell width -->
+    <dimen name="size_favorites_grid">288dp</dimen>   <!-- 3 cells -->
+    <dimen name="size_signal_label_max">180dp</dimen>
+    <dimen name="size_preview_width">120dp</dimen>    <!-- widget picker preview -->
+    <dimen name="size_preview_height">88dp</dimen>
+    <dimen name="stroke_hairline">1.5dp</dimen>
+    <dimen name="stroke_dash">4dp</dimen>
+    <dimen name="elevation_raised">8dp</dimen>
+    <!-- On the unfolded inner screen content stays a comfortable column instead of stretching. -->
+    <dimen name="content_max_width">600dp</dimen>
+
+    <!-- ===== Color: one accent ==================================================== -->
+    <!-- Rust. For fills and strokes (selection, "on" states, progress, drop targets). It's too
+         dark for small text on the dark surfaces, so text stays on_surface. -->
+    <color name="accent">#FF9C4A2F</color>
+    <color name="accent_soft">#599C4A2F</color>     <!-- 35%: selected row, valid drop -->
+    <color name="on_accent">#FFFFFFFF</color>
+
+    <!-- ===== Color: neutral dark translucent surfaces (55–65% near-black) ======== -->
+    <color name="surface_card">#9E0B0B0D</color>    <!-- 62%: the home card -->
+    <color name="surface_raised">#A60B0B0D</color>  <!-- 65%: popups, edit bar, badges -->
+    <color name="surface_inset">#1FFFFFFF</color>   <!-- the search row inside the card -->
+    <color name="control_off">#33FFFFFF</color>     <!-- off toggles, empty art, tracks -->
+
+    <color name="on_surface">#FFFFFFFF</color>
+    <color name="on_surface_dim">#B3FFFFFF</color>
+    <color name="on_surface_faint">#59FFFFFF</color>
+    <color name="outline">#6EFFFFFF</color>         <!-- edit-mode grid -->
+    <color name="scrim">#99000000</color>           <!-- text shadow over wallpaper -->
+    <color name="danger">#FFFF5252</color>
+    <color name="danger_soft">#5AFF5252</color>     <!-- invalid drop -->
+
+    <!-- ===== Color: content categories (result badges; meaning, not decoration) == -->
+    <color name="cat_pdf">#FFE53935</color>
+    <color name="cat_image">#FF43A047</color>
+    <color name="cat_video">#FF8E24AA</color>
+    <color name="cat_audio">#FFFB8C00</color>
+    <color name="cat_archive">#FF6D4C41</color>
+    <color name="cat_document">#FF1E88E5</color>
+    <color name="cat_sheet">#FF2E7D32</color>
+    <color name="cat_slides">#FFF4511E</color>
+    <color name="cat_apk">#FF00897B</color>
+    <color name="cat_other">#FF546E7A</color>
+    <color name="cat_folder">#FFFFCA28</color>
+    <color name="cat_message">#FF1E88E5</color>
+
+    <!-- Contact initials when there's no photo. -->
+    <color name="avatar_1">#FF5C6BC0</color>
+    <color name="avatar_2">#FF26A69A</color>
+    <color name="avatar_3">#FFEF5350</color>
+    <color name="avatar_4">#FFAB47BC</color>
+    <color name="avatar_5">#FF42A5F5</color>
+    <color name="avatar_6">#FFFFA726</color>
+    <color name="avatar_7">#FF66BB6A</color>
+    <color name="avatar_8">#FF8D6E63</color>
+
+    <!-- ===== Text appearances (the type scale as styles) ========================= -->
+    <style name="TextAppearance.Searchlight.Glance">
+        <item name="android:textSize">@dimen/text_glance</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <!-- Semibold: weight 600 (Android 9+, below our minSdk 29). -->
+    <style name="TextAppearance.Searchlight.TileTitle">
+        <item name="android:textSize">@dimen/text_tile_title</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textFontWeight">600</item>
+    </style>
+
+    <style name="TextAppearance.Searchlight.Body">
+        <item name="android:textSize">@dimen/text_body</item>
+    </style>
+
+    <style name="TextAppearance.Searchlight.Caption">
+        <item name="android:textSize">@dimen/text_caption</item>
+    </style>
+</resources>

@@ -34,6 +34,7 @@ import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
 import io.github.iamth3doctor.searchlight.ui.ResultsAdapter
+import io.github.iamth3doctor.searchlight.ui.px
 import io.github.iamth3doctor.searchlight.widgets.WidgetController
 import java.util.Calendar
 import kotlin.math.max
@@ -208,8 +209,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
         binding.cards.adapter = CardsAdapter(cards)
         binding.dots.removeAllViews()
-        val dotSize = (6 * resources.displayMetrics.density).toInt()
-        val dotGap = (4 * resources.displayMetrics.density).toInt()
+        val dotSize = px(R.dimen.size_dot)
+        val dotGap = px(R.dimen.space_xs)
         repeat(cards.size) {
             binding.dots.addView(View(this).apply {
                 setBackgroundResource(R.drawable.bg_dot)

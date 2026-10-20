@@ -2,7 +2,6 @@ package io.github.iamth3doctor.searchlight.widgets
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
@@ -11,6 +10,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import io.github.iamth3doctor.searchlight.R
+import io.github.iamth3doctor.searchlight.ui.color
+import io.github.iamth3doctor.searchlight.ui.pxF
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -52,7 +54,11 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     var imeVisible = false
 
     private val density = resources.displayMetrics.density
-    private val gap = 6 * density
+    /**
+     * Inset of a widget inside its cells. With the grid's own space_s margin, widget edges line up
+     * with the home card (space_m from the screen edge) and neighbours sit space_m apart.
+     */
+    private val gap = context.pxF(R.dimen.space_s)
     private var gridHeight = 0
     private var cellW = 0f
     private var cellH = 0f
@@ -148,34 +154,36 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     // ------------------------------------------------------------------ drawing
 
+    private val hairline = context.pxF(R.dimen.stroke_hairline)
+    private val dash = context.pxF(R.dimen.stroke_dash)
+    private val tileRadius = context.pxF(R.dimen.radius_tile)
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 1.5f * density
-        color = Color.argb(110, 255, 255, 255)
-        pathEffect = android.graphics.DashPathEffect(floatArrayOf(6 * density, 5 * density), 0f)
+        strokeWidth = hairline
+        color = context.color(R.color.outline)
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(dash, dash), 0f)
     }
-    private val okPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 140, 158, 255) }
-    private val badPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(90, 255, 82, 82) }
-    private val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(235, 28, 28, 30) }
+    private val okPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = context.color(R.color.accent_soft) }
+    private val badPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = context.color(R.color.danger_soft) }
+    private val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = context.color(R.color.surface_raised) }
     private val badgeRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = 1.5f * density; color = Color.WHITE
+        style = Paint.Style.STROKE; strokeWidth = hairline; color = context.color(R.color.on_surface)
     }
     private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = 2f * density; color = Color.WHITE; strokeCap = Paint.Cap.ROUND
+        style = Paint.Style.STROKE; strokeWidth = hairline; color = context.color(R.color.on_surface); strokeCap = Paint.Cap.ROUND
     }
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(150, 255, 255, 255)
-        textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 13f, resources.displayMetrics)
+        color = context.color(R.color.on_surface_dim)
+        textSize = context.pxF(R.dimen.text_caption)
         textAlign = Paint.Align.CENTER
-        setShadowLayer(4 * density, 0f, density, Color.argb(120, 0, 0, 0))
+        setShadowLayer(context.pxF(R.dimen.space_xs), 0f, hairline, context.color(R.color.scrim))
     }
-    private val badgeR = 12 * density
+    private val badgeR = context.pxF(R.dimen.size_badge) / 2
 
     override fun onDraw(canvas: Canvas) {
         if (editMode) {
-            val corner = 14 * density
             for (r in 0 until rows) for (c in 0 until cols) {
-                canvas.drawRoundRect(RectF(c * cellW + gap, r * cellH + gap, (c + 1) * cellW - gap, (r + 1) * cellH - gap), corner, corner, gridPaint)
+                canvas.drawRoundRect(RectF(c * cellW + gap, r * cellH + gap, (c + 1) * cellW - gap, (r + 1) * cellH - gap), tileRadius, tileRadius, gridPaint)
             }
         } else if (childCount == 0 && emptyHint.isNotEmpty()) {
             canvas.drawText(emptyHint, width / 2f, (minOf(height, gridHeight)) / 2f, hintPaint)
@@ -183,7 +191,7 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     }
 
     override fun dispatchDraw(canvas: Canvas) {
-        preview?.let { canvas.drawRoundRect(cellRect(it), 16 * density, 16 * density, if (previewOk) okPaint else badPaint) }
+        preview?.let { canvas.drawRoundRect(cellRect(it), tileRadius, tileRadius, if (previewOk) okPaint else badPaint) }
         super.dispatchDraw(canvas)
         if (!editMode) return
         for (i in 0 until childCount) {

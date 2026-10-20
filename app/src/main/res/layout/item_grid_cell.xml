@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="96dp"
+    android:layout_width="@dimen/size_grid_cell"
     android:layout_height="wrap_content"
     android:background="?android:attr/selectableItemBackground"
     android:gravity="center_horizontal"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="@dimen/space_s">
 
     <ImageView
         android:id="@+id/icon"
-        android:layout_width="@dimen/grid_icon"
-        android:layout_height="@dimen/grid_icon"
+        android:layout_width="@dimen/size_grid_icon"
+        android:layout_height="@dimen/size_grid_icon"
         android:importantForAccessibility="no"
         android:scaleType="centerInside" />
 
@@ -18,10 +18,10 @@
         android:id="@+id/label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="@dimen/space_xs"
         android:ellipsize="end"
         android:gravity="center"
         android:maxLines="1"
-        android:textColor="@color/on_wallpaper"
-        android:textSize="12sp" />
+        android:textColor="@color/on_surface"
+        android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
 </LinearLayout>

@@ -4,21 +4,21 @@
     android:layout_height="wrap_content"
     android:background="?android:attr/selectableItemBackground"
     android:gravity="center_vertical"
-    android:minHeight="96dp"
+    android:minHeight="@dimen/size_row_tall"
     android:orientation="horizontal"
-    android:paddingVertical="8dp">
+    android:paddingVertical="@dimen/space_s">
 
     <ImageView
         android:id="@+id/preview"
-        android:layout_width="120dp"
-        android:layout_height="88dp"
+        android:layout_width="@dimen/size_preview_width"
+        android:layout_height="@dimen/size_preview_height"
         android:importantForAccessibility="no"
         android:scaleType="fitCenter" />
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
+        android:layout_marginStart="@dimen/space_m"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -26,12 +26,12 @@
             android:id="@+id/title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceMedium" />
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
 
         <TextView
             android:id="@+id/subtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceSmall" />
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
     </LinearLayout>
 </LinearLayout>

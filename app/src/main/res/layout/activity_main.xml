@@ -32,7 +32,7 @@
                 android:id="@+id/widgetGrid"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_marginHorizontal="6dp" />
+                android:layout_marginHorizontal="@dimen/space_s" />
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/results"
@@ -40,8 +40,8 @@
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
                 android:overScrollMode="never"
-                android:paddingHorizontal="12dp"
-                android:paddingVertical="8dp"
+                android:paddingHorizontal="@dimen/space_m"
+                android:paddingVertical="@dimen/space_s"
                 android:visibility="gone" />
 
             <!-- Edit mode only: add a widget, open settings, or finish arranging. -->
@@ -50,11 +50,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="top|center_horizontal"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="@dimen/space_xs"
                 android:background="@drawable/bg_glance_card"
-                android:elevation="6dp"
+                android:elevation="@dimen/elevation_raised"
                 android:orientation="horizontal"
-                android:padding="4dp"
+                android:padding="@dimen/space_xs"
                 android:visibility="gone">
 
                 <Button
@@ -63,7 +63,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/menu_add_widget"
-                    android:textColor="@color/on_wallpaper" />
+                    android:textAppearance="@style/TextAppearance.Searchlight.Body"
+                    android:textColor="@color/on_surface" />
 
                 <Button
                     android:id="@+id/editSettings"
@@ -71,7 +72,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/menu_launcher_settings"
-                    android:textColor="@color/on_wallpaper" />
+                    android:textAppearance="@style/TextAppearance.Searchlight.Body"
+                    android:textColor="@color/on_surface" />
 
                 <Button
                     android:id="@+id/editDone"
@@ -79,7 +81,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/edit_done"
-                    android:textColor="#FF8C9EFF"
+                    android:textAppearance="@style/TextAppearance.Searchlight.Body"
+                    android:textColor="@color/on_surface"
                     android:textStyle="bold" />
             </LinearLayout>
         </FrameLayout>
@@ -92,12 +95,12 @@
             android:id="@+id/homeCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="12dp"
-            android:layout_marginBottom="12dp"
+            android:layout_marginHorizontal="@dimen/space_m"
+            android:layout_marginBottom="@dimen/space_m"
             android:animateLayoutChanges="true"
             android:background="@drawable/bg_glance_card"
             android:orientation="vertical"
-            android:padding="8dp">
+            android:padding="@dimen/space_s">
 
             <LinearLayout
                 android:id="@+id/cardArea"
@@ -108,12 +111,12 @@
                 <androidx.viewpager2.widget.ViewPager2
                     android:id="@+id/cards"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/card_height" />
+                    android:layout_height="@dimen/size_tile_height" />
 
                 <LinearLayout
                     android:id="@+id/dots"
                     android:layout_width="match_parent"
-                    android:layout_height="20dp"
+                    android:layout_height="@dimen/space_l"
                     android:gravity="center"
                     android:orientation="horizontal" />
             </LinearLayout>
@@ -121,16 +124,16 @@
             <LinearLayout
                 android:id="@+id/searchPill"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/search_bar_height"
+                android:layout_height="@dimen/size_row"
                 android:background="@drawable/bg_search_row"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingHorizontal="4dp">
+                android:paddingHorizontal="@dimen/space_xs">
 
                 <ImageButton
                     android:id="@+id/searchIcon"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="@dimen/size_touch"
+                    android:layout_height="@dimen/size_touch"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/search_icon_desc"
                     android:src="@drawable/ic_search" />
@@ -145,27 +148,26 @@
                     android:importantForAutofill="no"
                     android:inputType="text|textNoSuggestions|textFilter"
                     android:maxLines="1"
-                    android:paddingHorizontal="4dp"
-                    android:textColor="@color/on_wallpaper"
-                    android:textColorHint="@color/on_wallpaper_dim"
-                    android:textSize="18sp" />
+                    android:paddingHorizontal="@dimen/space_xs"
+                    android:textColor="@color/on_surface"
+                    android:textColorHint="@color/on_surface_dim"
+                    android:textAppearance="@style/TextAppearance.Searchlight.TileTitle" />
 
                 <!-- Calculator answer, right in the bar. -->
                 <TextView
                     android:id="@+id/calcPreview"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="4dp"
+                    android:layout_marginHorizontal="@dimen/space_xs"
                     android:maxLines="1"
-                    android:textColor="#FF8C9EFF"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
+                    android:textAppearance="@style/TextAppearance.Searchlight.TileTitle"
+                    android:textColor="@color/on_surface"
                     android:visibility="gone" />
 
                 <ImageButton
                     android:id="@+id/clearButton"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="@dimen/size_touch"
+                    android:layout_height="@dimen/size_touch"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/clear_desc"
                     android:src="@drawable/ic_close"
@@ -173,8 +175,8 @@
 
                 <ImageButton
                     android:id="@+id/settingsButton"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="@dimen/size_touch"
+                    android:layout_height="@dimen/size_touch"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/settings_title"
                     android:src="@drawable/ic_settings" />

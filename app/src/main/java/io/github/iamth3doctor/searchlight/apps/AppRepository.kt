@@ -25,7 +25,6 @@ import io.github.iamth3doctor.searchlight.data.Prefs
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import kotlin.math.roundToInt
 
 /**
  * Source of truth for installed apps.
@@ -48,7 +47,8 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
     private val infos = ConcurrentHashMap<String, LauncherActivityInfo>()
     private val iconCache = LruCache<String, Bitmap>(400)
     private val pendingIcons = HashMap<String, MutableList<(Bitmap) -> Unit>>()
-    private val iconSizePx = (48 * context.resources.displayMetrics.density).roundToInt()
+    // Rendered at the largest size an app icon is shown (favorites grid); smaller uses scale down.
+    private val iconSizePx = context.resources.getDimensionPixelSize(R.dimen.size_grid_icon)
 
     private val listeners = mutableListOf<() -> Unit>()
 

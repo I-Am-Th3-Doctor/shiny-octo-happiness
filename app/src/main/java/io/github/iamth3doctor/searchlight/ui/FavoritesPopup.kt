@@ -71,7 +71,7 @@ class FavoritesPopup(
         val loc = IntArray(2)
         above.getLocationInWindow(loc)
         val rootHeight = activity.window.decorView.height
-        val gap = (8 * activity.resources.displayMetrics.density).toInt()
+        val gap = activity.px(R.dimen.space_s)
         val centerX = loc[0] + above.width / 2 - activity.window.decorView.width / 2
         popup.showAtLocation(above, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, centerX, rootHeight - loc[1] + gap)
         window = popup

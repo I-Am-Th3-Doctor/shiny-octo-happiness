@@ -3,9 +3,9 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_card"
-    android:elevation="8dp"
+    android:elevation="@dimen/elevation_raised"
     android:orientation="vertical"
-    android:padding="12dp">
+    android:padding="@dimen/space_m">
 
     <GridLayout
         android:id="@+id/grid"
@@ -15,12 +15,12 @@
 
     <TextView
         android:id="@+id/hint"
-        android:layout_width="288dp"
+        android:layout_width="@dimen/size_favorites_grid"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="@dimen/space_s"
         android:gravity="center"
         android:text="@string/favorites_empty_hint"
-        android:textColor="@color/on_wallpaper_dim"
-        android:textSize="12sp"
+        android:textColor="@color/on_surface_dim"
+        android:textAppearance="@style/TextAppearance.Searchlight.Caption"
         android:visibility="gone" />
 </LinearLayout>

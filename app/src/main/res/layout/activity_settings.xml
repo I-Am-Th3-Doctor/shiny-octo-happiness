@@ -10,10 +10,10 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
         android:orientation="vertical"
-        android:padding="16dp"
+        android:padding="@dimen/space_m"
         app:maxWidth="@dimen/content_max_width">
 
-        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="0dp" android:text="@string/settings_section_home" />
+        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="@dimen/space_xs" android:text="@string/settings_section_home" />
 
         <LinearLayout
             android:id="@+id/widgetCenterRow"
@@ -39,7 +39,7 @@
             android:id="@+id/autoKeyboard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:minHeight="48dp"
+            android:minHeight="@dimen/size_touch"
             android:text="@string/settings_auto_keyboard" />
 
         <LinearLayout
@@ -62,7 +62,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/settings_permissions_help"
-            android:textAppearance="?android:attr/textAppearanceSmall" />
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
 
         <LinearLayout
             android:id="@+id/permissionsList"
@@ -74,8 +74,8 @@
             android:id="@+id/indexStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:layout_marginTop="@dimen/space_xs"
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption"
             android:textStyle="italic" />
 
         <Button
@@ -91,13 +91,13 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/settings_favorites_help"
-            android:textAppearance="?android:attr/textAppearanceSmall" />
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
 
         <LinearLayout
             android:id="@+id/favoritesList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="@dimen/space_s"
             android:orientation="vertical" />
 
         <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_about" />
@@ -106,6 +106,6 @@
             android:id="@+id/about"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceSmall" />
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
     </io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout>
 </ScrollView>
