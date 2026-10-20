@@ -118,7 +118,7 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
         render()
     }
 
-    override fun render() {
+    override fun draw() {
         val c = controller
         val meta = c?.metadata
         if (c == null || meta == null) {

@@ -95,7 +95,7 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
         super.onStop()
     }
 
-    override fun render() {
+    override fun draw() {
         setState(torch, torchOn, activity.getString(R.string.qa_torch))
         torch.circle.alpha = if (torchId == null) 0.4f else 1f
 

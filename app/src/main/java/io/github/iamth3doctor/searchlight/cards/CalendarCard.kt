@@ -48,7 +48,7 @@ class CalendarCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
         super.onStop()
     }
 
-    override fun render() {
+    override fun draw() {
         val today = LocalDate.now()
         val p = DayProgress.of(today)
         progress.max = p.daysInYear

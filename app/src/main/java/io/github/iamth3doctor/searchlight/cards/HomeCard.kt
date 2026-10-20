@@ -32,14 +32,22 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
 
     protected abstract fun bind(root: View)
 
-    /** Refresh from current state; called after [bind], on start, and when settings change. */
-    abstract fun render()
+    /** Draw current state into the views. Only ever called once [bind] has run. */
+    protected abstract fun draw()
+
+    /**
+     * Safe to call any time (callbacks often arrive before the pager has created the page):
+     * does nothing until the view exists.
+     */
+    fun render() {
+        if (view != null) draw()
+    }
 
     fun viewFor(parent: ViewGroup): View {
         val v = view ?: LayoutInflater.from(activity).inflate(layout, parent, false).also {
             view = it
             bind(it)
-            render()
+            draw()
         }
         (v.parent as? ViewGroup)?.removeView(v)
         return v
@@ -47,7 +55,7 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
 
     open fun onStart() {
         started = true
-        if (view != null) render()
+        render()
     }
 
     open fun onStop() {

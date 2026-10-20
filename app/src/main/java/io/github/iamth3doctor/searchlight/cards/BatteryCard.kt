@@ -42,7 +42,7 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
 
     private val poll = object : Runnable {
         override fun run() {
-            renderSignals()
+            render()
             main.postDelayed(this, 10_000)
         }
     }
@@ -73,7 +73,7 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
         super.onStop()
     }
 
-    override fun render() {
+    override fun draw() {
         val i = batteryIntent
         if (i != null) {
             val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)

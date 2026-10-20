@@ -60,7 +60,7 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
         super.onStop()
     }
 
-    override fun render() {
+    override fun draw() {
         val state = repo.state
         val data = state.data
         val unit = prefs.tempUnit
