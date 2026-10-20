@@ -16,6 +16,7 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -61,4 +62,8 @@ dependencies {
     testImplementation(libs.junit)
     // Android's org.json is a stub in local unit tests; use the real one for the weather parser tests.
     testImplementation(libs.org.json)
+    // Screenshot capture on an emulator in CI (see .github/workflows/screenshots.yml).
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 }
