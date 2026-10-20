@@ -1,7 +1,8 @@
 # Searchlight
 
 A personal, search-first Android launcher modeled on Searcho. The home screen is your
-wallpaper, a swipeable glance-card area, and one search pill. No dock, no app grid, ever.
+wallpaper and ONE frosted home card: swipeable tiles (with page dots) on top, the search row
+(magnifier, greeting, gear) fixed at the bottom. No dock, no app grid, ever.
 
 Kotlin, plain Android Views, three small AndroidX libraries. No ads, no analytics, no tracking.
 The only network traffic is the weather: Open-Meteo forecast + place search, with your location
@@ -40,7 +41,7 @@ over the previous one and keeps your settings. It's a throwaway key for sideload
 
 | Do this | Get this |
 |---|---|
-| Tap the pill, type | Cards give way to results; the best one sits right above the pill |
+| Tap the card (outside a tile), type | Tiles fold away; results appear above the card, best one nearest it |
 | Enter | Opens the top (highlighted) result |
 | `42 x 18` | `= 756` right in the bar and as the top result (tap to copy) |
 | Type a name / number | Contacts, with call and message buttons |
@@ -51,7 +52,8 @@ over the previous one and keeps your settings. It's a throwaway key for sideload
 | Long-press an app result | Add to / remove from favorites, App info, Uninstall |
 | Long-press a file result | Open with…, Share, Open containing folder, Copy path |
 | **Long-press the magnifier** | 3×2 grid of your six favorites |
-| Swipe the card area | Next card (dots show where you are) |
+| Swipe the tiles | Next tile (dots show where you are) |
+| Turn tiles off in Widget Center | The card shrinks; all off = just the search row |
 | Tap the weather card | Refresh (or set a location if none) |
 | Long-press the weather card | Switch °F/°C instantly, refresh, weather settings |
 | Start music anywhere | Music Player card jumps to the front (toggle in Widget Center) |

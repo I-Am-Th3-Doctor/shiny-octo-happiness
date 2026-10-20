@@ -41,8 +41,8 @@ import java.util.Calendar
 import kotlin.math.max
 
 /**
- * The home screen: wallpaper, glance cards (with page dots) and the search pill. No dock.
- * Typing swaps the cards for results; the best result sits right above the pill.
+ * The home screen: wallpaper and one frosted home card (tiles with page dots + the search row).
+ * No dock. Typing folds the tiles away; results appear above the card, best one nearest it.
  */
 class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
@@ -84,7 +84,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         setupPager()
         rebuildCardsIfChanged()
         goToIdleCard()
-        setupSearchPill()
+        setupHomeCard()
         setupHomeLongPress()
 
         app.apps.addListener(sourcesChanged)
@@ -236,7 +236,14 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         if (index >= 0) binding.cards.setCurrentItem(index, true)
     }
 
-    private fun setupSearchPill() {
+    private fun setupHomeCard() {
+        // Tiles open their own app/view; anywhere else on the card means "I want to search".
+        binding.homeCard.clipToOutline = true
+        val focusSearch = View.OnClickListener { showKeyboard() }
+        binding.homeCard.setOnClickListener(focusSearch)
+        binding.searchPill.setOnClickListener(focusSearch)
+        binding.dots.setOnClickListener(focusSearch)
+
         val input = binding.searchInput
         input.doAfterTextChanged {
             favoritesPopup.dismiss()
@@ -254,7 +261,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.settingsButton.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         binding.searchIcon.setOnClickListener { showKeyboard() }
         binding.searchIcon.setOnLongClickListener {
-            favoritesPopup.show(binding.searchPill)
+            favoritesPopup.show(binding.homeCard)
             true
         }
     }

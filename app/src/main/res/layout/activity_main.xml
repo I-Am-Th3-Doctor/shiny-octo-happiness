@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Searcho-style home: wallpaper, then (near the bottom) the glance-card pager with page dots,
-  then the search pill. No dock, no app bar. While typing, the cards give way to results.
+  Searcho-style home: wallpaper, then near the bottom ONE frosted home card holding the tile
+  pager (with page dots) and the search row. No dock, no app bar. While typing, the tiles fold
+  away and results appear above the card.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -34,87 +35,101 @@
             android:paddingHorizontal="12dp"
             android:paddingVertical="8dp" />
 
+        <!--
+          The home card: one frosted panel. Top: swipeable tiles with their page dots (hidden
+          while searching, or when every tile is off). Bottom: the search row, always there.
+        -->
         <LinearLayout
-            android:id="@+id/cardArea"
+            android:id="@+id/homeCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <androidx.viewpager2.widget.ViewPager2
-                android:id="@+id/cards"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/card_height" />
-
-            <LinearLayout
-                android:id="@+id/dots"
-                android:layout_width="match_parent"
-                android:layout_height="24dp"
-                android:gravity="center"
-                android:orientation="horizontal" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/searchPill"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/search_bar_height"
             android:layout_marginHorizontal="12dp"
             android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_search_bar"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="4dp">
+            android:animateLayoutChanges="true"
+            android:background="@drawable/bg_glance_card"
+            android:orientation="vertical"
+            android:padding="8dp">
 
-            <ImageButton
-                android:id="@+id/searchIcon"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/search_icon_desc"
-                android:src="@drawable/ic_search" />
-
-            <EditText
-                android:id="@+id/searchInput"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="@null"
-                android:imeOptions="actionGo|flagNoExtractUi|flagNoPersonalizedLearning"
-                android:importantForAutofill="no"
-                android:inputType="text|textNoSuggestions|textFilter"
-                android:maxLines="1"
-                android:paddingHorizontal="4dp"
-                android:textColor="@color/on_wallpaper"
-                android:textColorHint="@color/on_wallpaper_dim"
-                android:textSize="18sp" />
-
-            <!-- Calculator answer, right in the bar. -->
-            <TextView
-                android:id="@+id/calcPreview"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/cardArea"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="4dp"
-                android:maxLines="1"
-                android:textColor="#FF8C9EFF"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
+                android:orientation="vertical">
 
-            <ImageButton
-                android:id="@+id/clearButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/clear_desc"
-                android:src="@drawable/ic_close"
-                android:visibility="gone" />
+                <androidx.viewpager2.widget.ViewPager2
+                    android:id="@+id/cards"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/card_height" />
 
-            <ImageButton
-                android:id="@+id/settingsButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/settings_title"
-                android:src="@drawable/ic_settings" />
+                <LinearLayout
+                    android:id="@+id/dots"
+                    android:layout_width="match_parent"
+                    android:layout_height="20dp"
+                    android:gravity="center"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/searchPill"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/search_bar_height"
+                android:background="@drawable/bg_search_row"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp">
+
+                <ImageButton
+                    android:id="@+id/searchIcon"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/search_icon_desc"
+                    android:src="@drawable/ic_search" />
+
+                <EditText
+                    android:id="@+id/searchInput"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:imeOptions="actionGo|flagNoExtractUi|flagNoPersonalizedLearning"
+                    android:importantForAutofill="no"
+                    android:inputType="text|textNoSuggestions|textFilter"
+                    android:maxLines="1"
+                    android:paddingHorizontal="4dp"
+                    android:textColor="@color/on_wallpaper"
+                    android:textColorHint="@color/on_wallpaper_dim"
+                    android:textSize="18sp" />
+
+                <!-- Calculator answer, right in the bar. -->
+                <TextView
+                    android:id="@+id/calcPreview"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:maxLines="1"
+                    android:textColor="#FF8C9EFF"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <ImageButton
+                    android:id="@+id/clearButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/clear_desc"
+                    android:src="@drawable/ic_close"
+                    android:visibility="gone" />
+
+                <ImageButton
+                    android:id="@+id/settingsButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/settings_title"
+                    android:src="@drawable/ic_settings" />
+            </LinearLayout>
         </LinearLayout>
     </io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout>
 </FrameLayout>
