@@ -50,6 +50,16 @@
     </style>
 
     <!-- A compact text button in the edit-mode pill: sizes to its label, never wraps. -->
+    <!-- A single line of text in a one-row home tile: shrinks with "…" rather than wrapping. -->
+    <style name="StripText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:textColor">@color/on_surface</item>
+    </style>
+
     <style name="EditPillButton">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">match_parent</item>

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One-row strip: battery %, charging status, then Wi-Fi and mobile signal. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -10,53 +11,35 @@
         android:foreground="?android:attr/selectableItemBackground"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="@dimen/space_l"
-        android:paddingVertical="@dimen/space_m">
+        android:paddingHorizontal="@dimen/space_m">
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/batteryPercent"
+            style="@style/StripText"
+            android:textAppearance="@style/TextAppearance.Searchlight.TileTitle" />
+
+        <TextView
+            android:id="@+id/batteryStatus"
+            style="@style/StripText"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:layout_marginStart="@dimen/space_s"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
 
-            <TextView
-                android:id="@+id/batteryPercent"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/on_surface"
-                android:textAppearance="@style/TextAppearance.Searchlight.Glance" />
+        <TextView
+            android:id="@+id/wifiSignal"
+            style="@style/StripText"
+            android:layout_marginStart="@dimen/space_s"
+            android:maxWidth="@dimen/size_strip_label_max"
+            android:textColor="@color/on_surface_dim"
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
 
-            <TextView
-                android:id="@+id/batteryStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/on_surface"
-                android:textAppearance="@style/TextAppearance.Searchlight.Body" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="end"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/wifiSignal"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/on_surface"
-                android:textAppearance="@style/TextAppearance.Searchlight.Body" />
-
-            <TextView
-                android:id="@+id/cellSignal"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_s"
-                android:maxWidth="@dimen/size_signal_label_max"
-                android:maxLines="2"
-                android:ellipsize="end"
-                android:textColor="@color/on_surface"
-                android:textAppearance="@style/TextAppearance.Searchlight.Body" />
-        </LinearLayout>
+        <TextView
+            android:id="@+id/cellSignal"
+            style="@style/StripText"
+            android:layout_marginStart="@dimen/space_s"
+            android:maxWidth="@dimen/size_strip_label_max"
+            android:textColor="@color/on_surface_dim"
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
     </LinearLayout>
 </FrameLayout>

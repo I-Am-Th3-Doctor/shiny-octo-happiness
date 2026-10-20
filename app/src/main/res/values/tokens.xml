@@ -35,14 +35,13 @@
     <dimen name="size_row_tall">96dp</dimen>          <!-- widget-picker row -->
     <dimen name="size_quick_action">56dp</dimen>      <!-- Quick Actions circle -->
     <dimen name="size_badge">24dp</dimen>             <!-- edit-mode remove / resize badges -->
-    <dimen name="size_dot">8dp</dimen>                <!-- page dots -->
+    <dimen name="size_dot">6dp</dimen>                <!-- page dots, inside the tile row -->
     <dimen name="size_progress">4dp</dimen>           <!-- day-of-year bar -->
-    <dimen name="size_tile_height">168dp</dimen>      <!-- the tile pager -->
-    <dimen name="size_tile_art">104dp</dimen>         <!-- Music tile artwork -->
+    <dimen name="size_tile_height">@dimen/size_row</dimen>  <!-- the tile pager: one row, like the search row -->
     <dimen name="size_grid_icon">56dp</dimen>         <!-- favorites grid icon -->
     <dimen name="size_grid_cell">96dp</dimen>         <!-- favorites grid cell width -->
     <dimen name="size_favorites_grid">288dp</dimen>   <!-- 3 cells -->
-    <dimen name="size_signal_label_max">180dp</dimen>
+    <dimen name="size_strip_label_max">96dp</dimen>   <!-- signal labels in the Battery tile -->
     <dimen name="size_calc_preview_max">160dp</dimen>   <!-- answer in the search row -->
     <dimen name="size_edit_bar">40dp</dimen>            <!-- edit-mode pill -->
     <!-- Space kept above the widget grid so the edit pill never covers a cell:

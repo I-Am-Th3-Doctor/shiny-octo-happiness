@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One-row strip: artwork, "title · artist", then prev / play / next. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -10,82 +11,46 @@
         android:foreground="?android:attr/selectableItemBackground"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="@dimen/space_m">
+        android:paddingHorizontal="@dimen/space_s">
 
         <ImageView
             android:id="@+id/musicArt"
-            android:layout_width="@dimen/size_tile_art"
-            android:layout_height="@dimen/size_tile_art"
+            android:layout_width="@dimen/size_avatar"
+            android:layout_height="@dimen/size_avatar"
             android:background="@drawable/bg_art"
             android:importantForAccessibility="no"
             android:scaleType="center" />
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/musicTitle"
+            style="@style/StripText"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/space_m"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:layout_marginStart="@dimen/space_s"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
 
-            <TextView
-                android:id="@+id/musicTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:textColor="@color/on_surface"
-                android:textAppearance="@style/TextAppearance.Searchlight.TileTitle" />
+        <ImageButton
+            android:id="@+id/musicPrev"
+            android:layout_width="@dimen/size_touch"
+            android:layout_height="@dimen/size_touch"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/music_prev"
+            android:src="@drawable/ic_skip_prev" />
 
-            <TextView
-                android:id="@+id/musicArtist"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:textColor="@color/on_surface_dim"
-                android:textAppearance="@style/TextAppearance.Searchlight.Body" />
+        <ImageButton
+            android:id="@+id/musicPlayPause"
+            android:layout_width="@dimen/size_touch"
+            android:layout_height="@dimen/size_touch"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/music_play_pause"
+            android:src="@drawable/ic_play" />
 
-            <TextView
-                android:id="@+id/musicSource"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:textColor="@color/on_surface_dim"
-                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_xs"
-                android:orientation="horizontal">
-
-                <ImageButton
-                    android:id="@+id/musicPrev"
-                    android:layout_width="@dimen/size_touch"
-                    android:layout_height="@dimen/size_touch"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/music_prev"
-                    android:src="@drawable/ic_skip_prev" />
-
-                <ImageButton
-                    android:id="@+id/musicPlayPause"
-                    android:layout_width="@dimen/size_touch_wide"
-                    android:layout_height="@dimen/size_touch"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/music_play_pause"
-                    android:scaleX="1.3"
-                    android:scaleY="1.3"
-                    android:src="@drawable/ic_play" />
-
-                <ImageButton
-                    android:id="@+id/musicNext"
-                    android:layout_width="@dimen/size_touch"
-                    android:layout_height="@dimen/size_touch"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/music_next"
-                    android:src="@drawable/ic_skip_next" />
-            </LinearLayout>
-        </LinearLayout>
+        <ImageButton
+            android:id="@+id/musicNext"
+            android:layout_width="@dimen/size_touch"
+            android:layout_height="@dimen/size_touch"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/music_next"
+            android:src="@drawable/ic_skip_next" />
     </LinearLayout>
 </FrameLayout>

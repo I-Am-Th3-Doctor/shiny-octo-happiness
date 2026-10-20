@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One-row strip: four action circles. Their names are spoken (content description) and
+     shown on long-press. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -7,21 +9,19 @@
         android:id="@+id/card"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="@dimen/space_s">
 
-        <LinearLayout
+        <FrameLayout
             android:id="@+id/qaSlot0"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:layout_height="match_parent"
+            android:layout_weight="1">
 
             <FrameLayout
-                android:layout_width="@dimen/size_quick_action"
-                android:layout_height="@dimen/size_quick_action"
+                android:layout_width="@dimen/size_avatar"
+                android:layout_height="@dimen/size_avatar"
+                android:layout_gravity="center"
                 android:background="@drawable/bg_circle"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless">
 
@@ -31,28 +31,17 @@
                     android:layout_gravity="center"
                     android:importantForAccessibility="no" />
             </FrameLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:gravity="center_horizontal"
-                android:layout_marginTop="@dimen/space_s"
-                android:lines="2"
-                android:textColor="@color/on_surface"
-                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
-        </LinearLayout>
-        <LinearLayout
+        </FrameLayout>
+        <FrameLayout
             android:id="@+id/qaSlot1"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:layout_height="match_parent"
+            android:layout_weight="1">
 
             <FrameLayout
-                android:layout_width="@dimen/size_quick_action"
-                android:layout_height="@dimen/size_quick_action"
+                android:layout_width="@dimen/size_avatar"
+                android:layout_height="@dimen/size_avatar"
+                android:layout_gravity="center"
                 android:background="@drawable/bg_circle"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless">
 
@@ -62,28 +51,17 @@
                     android:layout_gravity="center"
                     android:importantForAccessibility="no" />
             </FrameLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:gravity="center_horizontal"
-                android:layout_marginTop="@dimen/space_s"
-                android:lines="2"
-                android:textColor="@color/on_surface"
-                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
-        </LinearLayout>
-        <LinearLayout
+        </FrameLayout>
+        <FrameLayout
             android:id="@+id/qaSlot2"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:layout_height="match_parent"
+            android:layout_weight="1">
 
             <FrameLayout
-                android:layout_width="@dimen/size_quick_action"
-                android:layout_height="@dimen/size_quick_action"
+                android:layout_width="@dimen/size_avatar"
+                android:layout_height="@dimen/size_avatar"
+                android:layout_gravity="center"
                 android:background="@drawable/bg_circle"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless">
 
@@ -93,28 +71,17 @@
                     android:layout_gravity="center"
                     android:importantForAccessibility="no" />
             </FrameLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:gravity="center_horizontal"
-                android:layout_marginTop="@dimen/space_s"
-                android:lines="2"
-                android:textColor="@color/on_surface"
-                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
-        </LinearLayout>
-        <LinearLayout
+        </FrameLayout>
+        <FrameLayout
             android:id="@+id/qaSlot3"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:layout_height="match_parent"
+            android:layout_weight="1">
 
             <FrameLayout
-                android:layout_width="@dimen/size_quick_action"
-                android:layout_height="@dimen/size_quick_action"
+                android:layout_width="@dimen/size_avatar"
+                android:layout_height="@dimen/size_avatar"
+                android:layout_gravity="center"
                 android:background="@drawable/bg_circle"
                 android:foreground="?android:attr/selectableItemBackgroundBorderless">
 
@@ -124,16 +91,6 @@
                     android:layout_gravity="center"
                     android:importantForAccessibility="no" />
             </FrameLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:gravity="center_horizontal"
-                android:layout_marginTop="@dimen/space_s"
-                android:lines="2"
-                android:textColor="@color/on_surface"
-                android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
-        </LinearLayout>
+        </FrameLayout>
     </LinearLayout>
 </FrameLayout>

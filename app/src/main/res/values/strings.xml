@@ -66,12 +66,8 @@
     <string name="card_quick_actions">Quick Actions</string>
     <string name="card_quick_actions_desc">Four shortcuts you choose in Settings → Quick Actions</string>
 
-    <string name="weather_title">Weather</string>
-    <string name="weather_location">📍 %1$s</string>
     <string name="weather_hi_lo">↑%1$s  ↓%2$s</string>
     <string name="weather_updated">Updated %1$s</string>
-    <string name="weather_updating">Updating… (last %1$s)</string>
-    <string name="weather_stale">Offline · last %1$s</string>
     <string name="weather_loading">Loading weather…</string>
     <string name="weather_needs_location">Tap to set your location</string>
     <string name="weather_no_fix">Couldn\'t get your location · tap to retry</string>
@@ -80,7 +76,6 @@
     <string name="weather_refresh">Refresh weather</string>
     <string name="weather_settings">Weather settings</string>
 
-    <string name="calendar_progress">Day %1$d of %2$d · %3$d%% of %4$d</string>
 
     <string name="battery_full">Fully charged</string>
     <string name="battery_charging">Charging</string>

@@ -115,10 +115,9 @@ class ResultsAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int, payloads: MutableList<Any>) {
-        // Selection moved inside the app grid: re-highlight and keep the tile in view, no rebind.
+        // Selection moved inside the app grid: re-highlight, no rebind.
         if (payloads.contains(SELECTION) && holder is GridHolder) {
             holder.cells.setSelected(selected)
-            if (selected in 0 until layout.gridCount) holder.b.appGrid.scrollToPosition(selected)
         } else {
             super.onBindViewHolder(holder, position, payloads)
         }
@@ -127,7 +126,6 @@ class ResultsAdapter(
     private fun bindGrid(h: GridHolder, items: List<SearchResult>) {
         (h.b.appGrid.layoutManager as GridLayoutManager).spanCount = columns
         h.cells.submit(items, selected)
-        h.b.appGrid.scrollToPosition(0)
     }
 
     /** The tiles inside the app grid block. */

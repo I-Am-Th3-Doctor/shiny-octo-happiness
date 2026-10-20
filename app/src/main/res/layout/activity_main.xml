@@ -88,8 +88,9 @@
         </FrameLayout>
 
         <!--
-          The home card: one frosted panel. Top: swipeable tiles with their page dots (hidden
-          while searching, or when every tile is off). Bottom: the search row, always there.
+          The home card: one frosted panel, two rows tall. Top row: swipeable tiles with their
+          page dots (hidden while searching, or when every tile is off). Bottom row: the search
+          row, always there.
         -->
         <LinearLayout
             android:id="@+id/homeCard"
@@ -102,11 +103,13 @@
             android:orientation="vertical"
             android:padding="@dimen/space_s">
 
-            <LinearLayout
+            <!-- One row of tiles, the same height as the search row; the page dots sit inside
+                 it along the bottom edge. -->
+            <FrameLayout
                 android:id="@+id/cardArea"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
+                android:layout_marginBottom="@dimen/space_xs">
 
                 <androidx.viewpager2.widget.ViewPager2
                     android:id="@+id/cards"
@@ -115,11 +118,12 @@
 
                 <LinearLayout
                     android:id="@+id/dots"
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/space_l"
-                    android:gravity="center"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:layout_marginBottom="@dimen/space_xs"
                     android:orientation="horizontal" />
-            </LinearLayout>
+            </FrameLayout>
 
             <LinearLayout
                 android:id="@+id/searchPill"

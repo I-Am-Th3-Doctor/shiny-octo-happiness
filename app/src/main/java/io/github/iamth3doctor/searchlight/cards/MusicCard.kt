@@ -12,6 +12,9 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.view.KeyEvent
 import android.view.View
 import android.widget.ImageButton
@@ -23,9 +26,10 @@ import io.github.iamth3doctor.searchlight.media.MediaListenerService
 import io.github.iamth3doctor.searchlight.media.MusicApps
 import io.github.iamth3doctor.searchlight.searchlight
 import io.github.iamth3doctor.searchlight.ui.Permissions
+import io.github.iamth3doctor.searchlight.ui.color
 
 /**
- * Artwork, track, artist and controls from a media session.
+ * One line: artwork, "track · artist" and controls from a media session.
  *
  * Bound to the default music player chosen in Settings (artwork, controls and tapping all
  * target that app, even before it has a session); with no default, it follows whichever app
@@ -48,8 +52,6 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
 
     private lateinit var art: ImageView
     private lateinit var title: TextView
-    private lateinit var artist: TextView
-    private lateinit var source: TextView
     private lateinit var prev: ImageButton
     private lateinit var playPause: ImageButton
     private lateinit var next: ImageButton
@@ -63,8 +65,6 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
     override fun bind(root: View) {
         art = root.findViewById(R.id.musicArt)
         title = root.findViewById(R.id.musicTitle)
-        artist = root.findViewById(R.id.musicArtist)
-        source = root.findViewById(R.id.musicSource)
         prev = root.findViewById(R.id.musicPrev)
         playPause = root.findViewById(R.id.musicPlayPause)
         next = root.findViewById(R.id.musicNext)
@@ -149,9 +149,7 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
             // and let play start it.
             art.scaleType = ImageView.ScaleType.FIT_CENTER
             art.setImageDrawable(runCatching { activity.packageManager.getApplicationIcon(def) }.getOrNull())
-            title.text = MusicApps.label(activity, def)
-            artist.setText(if (hasAccess()) R.string.music_default_idle else R.string.music_needs_access)
-            source.text = ""
+            title.text = line(MusicApps.label(activity, def), activity.getString(if (hasAccess()) R.string.music_default_idle else R.string.music_needs_access))
             prev.visibility = View.INVISIBLE
             next.visibility = View.INVISIBLE
             playPause.visibility = View.VISIBLE
@@ -161,18 +159,16 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
         if (c == null || meta == null) {
             art.setImageResource(R.drawable.ic_music)
             art.scaleType = ImageView.ScaleType.CENTER
-            title.setText(R.string.music_nothing)
-            artist.setText(if (hasAccess()) R.string.music_nothing_hint else R.string.music_needs_access)
-            source.text = ""
+            title.text = line(activity.getString(R.string.music_nothing), activity.getString(if (hasAccess()) R.string.music_nothing_hint else R.string.music_needs_access))
             setControlsVisible(false)
             return
         }
-        title.text = meta.getString(MediaMetadata.METADATA_KEY_TITLE)
+        val track = meta.getString(MediaMetadata.METADATA_KEY_TITLE)
             ?: meta.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: ""
-        artist.text = meta.getString(MediaMetadata.METADATA_KEY_ARTIST)
+        val by = meta.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: meta.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
             ?: meta.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE) ?: ""
-        source.text = appLabel(c.packageName)
+        title.text = line(track, by)
         val bmp: Bitmap? = meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: meta.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: meta.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
@@ -194,9 +190,13 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
         next.visibility = v
     }
 
-    private fun appLabel(pkg: String): String = runCatching {
-        activity.packageManager.getApplicationLabel(activity.packageManager.getApplicationInfo(pkg, 0)).toString()
-    }.getOrDefault(pkg)
+    /** "main · sub" with the second part dimmed, so one line carries both. */
+    private fun line(main: String, sub: String): CharSequence {
+        if (sub.isEmpty()) return main
+        val s = SpannableString("$main · $sub")
+        s.setSpan(ForegroundColorSpan(activity.color(R.color.on_surface_dim)), main.length, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return s
+    }
 
     /** Wake the default player with a PLAY key; if it hasn't started a session shortly after, open it. */
     private fun startDefaultPlayer(pkg: String) {

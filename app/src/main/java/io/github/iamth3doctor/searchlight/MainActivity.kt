@@ -184,29 +184,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
     }
 
-    private val fitTiles = Runnable { fitTileHeight() }
-
-    private fun scheduleTileFit() {
-        binding.cards.removeCallbacks(fitTiles)
-        binding.cards.post(fitTiles)
-    }
-
-    /**
-     * The pager is as tall as its tallest tile needs at the current width (never below the
-     * token height), so long text or a large font size wraps instead of being cut off.
-     */
-    private fun fitTileHeight() {
-        val width = binding.cards.width
-        if (width == 0 || cards.isEmpty()) return
-        val needed = cards.maxOf { it.measureHeight(width, binding.cards) }
-        val target = maxOf(px(R.dimen.size_tile_height), needed)
-        if (binding.cards.layoutParams.height != target) {
-            binding.cards.layoutParams = binding.cards.layoutParams.apply { height = target }
-        }
-    }
-
     private fun setupPager() {
-        binding.cards.addOnLayoutChangeListener { _, l, _, r, _, ol, _, or_, _ -> if (r - l != or_ - ol) scheduleTileFit() }
         binding.cards.offscreenPageLimit = CardType.entries.size
         binding.cards.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) = updateDots(position)
@@ -226,7 +204,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                 CardType.BATTERY -> BatteryCard(this)
                 CardType.MUSIC -> MusicCard(this).also { it.onStartedPlaying = ::onMusicStarted }
                 CardType.QUICK_ACTIONS -> QuickActionsCard(this)
-            }.also { it.onDrawn = ::scheduleTileFit }
+            }
         }
         binding.cards.adapter = CardsAdapter(cards)
         binding.dots.removeAllViews()
@@ -240,7 +218,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
         binding.dots.isVisible = cards.size > 1
         if (wasStarted) startCards()
-        scheduleTileFit()
         goToIdleCard()
         refreshResults()
     }
@@ -282,7 +259,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         val focusSearch = View.OnClickListener { showKeyboard() }
         binding.homeCard.setOnClickListener(focusSearch)
         binding.searchPill.setOnClickListener(focusSearch)
-        binding.dots.setOnClickListener(focusSearch)
 
         val input = binding.searchInput
         input.doAfterTextChanged {

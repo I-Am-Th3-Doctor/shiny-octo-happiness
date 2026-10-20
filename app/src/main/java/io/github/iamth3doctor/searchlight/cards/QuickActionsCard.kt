@@ -22,7 +22,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Switch
-import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import io.github.iamth3doctor.searchlight.R
@@ -56,7 +55,7 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
     }
     private var torchOn = false
 
-    private class Slot(val circle: View, val icon: ImageView, val label: TextView)
+    private class Slot(val circle: View, val icon: ImageView)
     private lateinit var slots: List<Slot>
 
     private class State(val on: Boolean, val label: String, val icon: Int, val available: Boolean = true)
@@ -79,9 +78,8 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
 
     override fun bind(root: View) {
         slots = listOf(R.id.qaSlot0, R.id.qaSlot1, R.id.qaSlot2, R.id.qaSlot3).mapIndexed { index, id ->
-            val cell = root.findViewById<LinearLayout>(id)
-            val circle = cell.getChildAt(0) as ViewGroup
-            Slot(circle, circle.getChildAt(0) as ImageView, cell.getChildAt(1) as TextView).also { slot ->
+            val circle = root.findViewById<ViewGroup>(id).getChildAt(0) as ViewGroup
+            Slot(circle, circle.getChildAt(0) as ImageView).also { slot ->
                 // Read the config at tap time, so a change in Settings applies immediately.
                 slot.circle.setOnClickListener { perform(prefs.quickActionSlots[index]) }
             }
@@ -111,8 +109,8 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
             val slot = slots.getOrNull(i) ?: return@forEachIndexed
             val st = stateOf(action)
             slot.icon.setImageResource(st.icon)
-            slot.label.text = st.label
             slot.circle.contentDescription = st.label
+            slot.circle.tooltipText = st.label
             slot.circle.backgroundTintList = ColorStateList.valueOf(activity.color(if (st.on) R.color.accent else R.color.control_off))
             slot.icon.imageTintList = ColorStateList.valueOf(activity.color(if (st.on) R.color.on_accent else R.color.on_surface))
             slot.circle.alpha = if (st.available) 1f else 0.4f
