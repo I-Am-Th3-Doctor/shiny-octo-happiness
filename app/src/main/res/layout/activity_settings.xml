@@ -22,6 +22,13 @@
             <TextView style="@style/SettingsRowSummary" android:text="@string/widget_center_summary" />
         </LinearLayout>
 
+        <!-- Music Player + Quick Actions settings, built from data in SettingsActivity. -->
+        <LinearLayout
+            android:id="@+id/tileSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
         <Button
             android:id="@+id/setDefault"
             android:layout_width="match_parent"

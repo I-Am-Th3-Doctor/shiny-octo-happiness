@@ -57,7 +57,7 @@
     <string name="card_music">Music Player</string>
     <string name="card_music_desc">What\'s playing, with controls. Needs media access.</string>
     <string name="card_quick_actions">Quick Actions</string>
-    <string name="card_quick_actions_desc">Torch, volume, Do Not Disturb, brightness</string>
+    <string name="card_quick_actions_desc">Four shortcuts you choose in Settings → Quick Actions</string>
 
     <string name="weather_title">Weather</string>
     <string name="weather_location">📍 %1$s</string>
@@ -91,6 +91,7 @@
     <string name="music_prev">Previous</string>
     <string name="music_next">Next</string>
     <string name="music_play_pause">Play or pause</string>
+    <string name="music_default_idle">Not playing · tap play to start, or tap to open</string>
     <string name="media_listener_label">Searchlight music card</string>
 
     <string name="qa_torch">Torch</string>
@@ -102,7 +103,25 @@
     <string name="qa_brightness">Brightness</string>
     <string name="qa_brightness_auto">Auto</string>
     <string name="qa_brightness_pct">%1$d%%</string>
-    <string name="qa_brightness_needs_access">Allow Searchlight to modify system settings, then tap again</string>
+    <string name="qa_needs_write_settings">Allow Searchlight to modify system settings, then tap again</string>
+    <string name="qa_wifi">Wi-Fi</string>
+    <string name="qa_bluetooth">Bluetooth</string>
+    <string name="qa_rotation">Rotation lock</string>
+    <string name="qa_rotation_auto">Auto-rotate</string>
+    <string name="qa_rotation_locked">Rotation locked</string>
+    <string name="qa_ringer">Ringer mode</string>
+    <string name="qa_ringer_normal">Ring</string>
+    <string name="qa_ringer_vibrate">Vibrate</string>
+    <string name="qa_ringer_silent">Silent</string>
+    <string name="qa_airplane">Airplane mode</string>
+    <string name="qa_slot">Slot %1$d</string>
+
+    <string name="settings_section_music">Music Player</string>
+    <string name="music_default_player">Default music player</string>
+    <string name="music_default_auto">Automatic (whatever is playing)</string>
+    <string name="music_default_missing">%1$s (not installed): using automatic</string>
+    <string name="music_no_apps">No media apps found on this phone.</string>
+    <string name="settings_section_quick_actions">Quick Actions</string>
 
     <!-- Widget Center -->
     <string name="widget_center">Widget Center</string>
@@ -155,9 +174,9 @@
     <string name="perm_media_controls">Media controls</string>
     <string name="perm_media_controls_desc">Music Player card: see and control what\'s playing. Notifications are never read.</string>
     <string name="perm_dnd">Do Not Disturb</string>
-    <string name="perm_dnd_desc">Quick Actions: toggle Do Not Disturb</string>
+    <string name="perm_dnd_desc">Quick Actions: Do Not Disturb, and silent ringer mode</string>
     <string name="perm_brightness">Modify system settings</string>
-    <string name="perm_brightness_desc">Quick Actions: change screen brightness</string>
+    <string name="perm_brightness_desc">Quick Actions: brightness and rotation lock</string>
     <string name="perm_accessibility">Accessibility (gestures, double-tap to lock)</string>
     <string name="perm_accessibility_desc">Coming in Phase 4</string>
     <string name="perm_granted_tap_to_change">Granted. Tap to change in Android settings.</string>

@@ -57,6 +57,8 @@ over the previous one and keeps your settings. It's a throwaway key for sideload
 | Tap the weather card | Refresh (or set a location if none) |
 | Long-press the weather card | Switch °F/°C instantly, refresh, weather settings |
 | Start music anywhere | Music Player card jumps to the front (toggle in Widget Center) |
+| Settings → Music Player | Pick the default player (any installed media app) or Automatic |
+| Settings → Quick Actions | Assign each of the 4 slots: torch, Wi-Fi, Bluetooth, DND, brightness, rotation lock, ringer, airplane, volume |
 | Gear | Settings: Widget Center, permissions, greeting text, web engine, favorites |
 | Back / Home | Clears the search and drops the keyboard |
 

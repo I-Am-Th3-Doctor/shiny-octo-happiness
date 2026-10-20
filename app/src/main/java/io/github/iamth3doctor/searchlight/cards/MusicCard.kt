@@ -12,6 +12,7 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.view.KeyEvent
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -19,11 +20,16 @@ import android.widget.TextView
 import androidx.core.app.NotificationManagerCompat
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.media.MediaListenerService
+import io.github.iamth3doctor.searchlight.media.MusicApps
+import io.github.iamth3doctor.searchlight.searchlight
 import io.github.iamth3doctor.searchlight.ui.Permissions
 
 /**
- * Whatever is playing (any app with a media session): artwork, track, artist, controls.
- * [onStartedPlaying] fires when audio starts, so the home screen can bring this card to the front.
+ * Artwork, track, artist and controls from a media session.
+ *
+ * Bound to the default music player chosen in Settings (artwork, controls and tapping all
+ * target that app, even before it has a session); with no default, it follows whichever app
+ * is playing. [onStartedPlaying] fires when audio starts, so home can bring this card forward.
  */
 class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
 
@@ -32,8 +38,13 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
     private val main = Handler(Looper.getMainLooper())
     private val sessions = activity.getSystemService(MediaSessionManager::class.java)
     private val listenerComponent = ComponentName(activity, MediaListenerService::class.java)
+    private val prefs = activity.searchlight.prefs
     private var controller: MediaController? = null
     private var wasPlaying = false
+
+    /** The chosen default player, if one is set and still installed. */
+    private fun defaultPackage(): String? =
+        prefs.defaultMusicPackage?.takeIf { MusicApps.isInstalled(activity, it) }
 
     private lateinit var art: ImageView
     private lateinit var title: TextView
@@ -61,13 +72,19 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
         prev.setOnClickListener { controller?.transportControls?.skipToPrevious() }
         next.setOnClickListener { controller?.transportControls?.skipToNext() }
         playPause.setOnClickListener {
-            val c = controller ?: return@setOnClickListener
-            if (isPlaying) c.transportControls.pause() else c.transportControls.play()
+            val c = controller
+            when {
+                c != null -> if (isPlaying) c.transportControls.pause() else c.transportControls.play()
+                defaultPackage() != null -> startDefaultPlayer(defaultPackage()!!)
+            }
         }
         root.findViewById<View>(R.id.card).setOnClickListener { openPlayer() }
     }
 
     override fun onStart() {
+        // Re-read the default each time home becomes visible: it may have changed in Settings.
+        controller?.unregisterCallback(callback)
+        controller = null
         if (hasAccess()) {
             try {
                 sessions.addOnActiveSessionsChangedListener(sessionsListener, listenerComponent, main)
@@ -100,9 +117,14 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
         }
     }
 
-    /** Prefer the session that's actually playing; otherwise the most recent one. */
+    /**
+     * With a default player: only its session. Without: prefer the session that's actually
+     * playing, otherwise the most recent one.
+     */
     private fun pick(list: List<MediaController>) {
-        val best = list.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list.firstOrNull()
+        val def = defaultPackage()
+        val candidates = if (def != null) list.filter { it.packageName == def } else list
+        val best = candidates.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: candidates.firstOrNull()
         if (best?.sessionToken != controller?.sessionToken) {
             controller?.unregisterCallback(callback)
             controller = best
@@ -121,6 +143,21 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
     override fun draw() {
         val c = controller
         val meta = c?.metadata
+        val def = defaultPackage()
+        if ((c == null || meta == null) && def != null) {
+            // Default player chosen but not playing (or no media access yet): still show it,
+            // and let play start it.
+            art.scaleType = ImageView.ScaleType.FIT_CENTER
+            art.setImageDrawable(runCatching { activity.packageManager.getApplicationIcon(def) }.getOrNull())
+            title.text = MusicApps.label(activity, def)
+            artist.setText(if (hasAccess()) R.string.music_default_idle else R.string.music_needs_access)
+            source.text = ""
+            prev.visibility = View.INVISIBLE
+            next.visibility = View.INVISIBLE
+            playPause.visibility = View.VISIBLE
+            playPause.setImageResource(R.drawable.ic_play)
+            return
+        }
         if (c == null || meta == null) {
             art.setImageResource(R.drawable.ic_music)
             art.scaleType = ImageView.ScaleType.CENTER
@@ -161,10 +198,28 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
         activity.packageManager.getApplicationLabel(activity.packageManager.getApplicationInfo(pkg, 0)).toString()
     }.getOrDefault(pkg)
 
+    /** Wake the default player with a PLAY key; if it hasn't started a session shortly after, open it. */
+    private fun startDefaultPlayer(pkg: String) {
+        MusicApps.sendMediaKey(activity, pkg, KeyEvent.KEYCODE_MEDIA_PLAY)
+        main.postDelayed({
+            if (started && controller == null) launchApp(pkg)
+        }, 2500)
+    }
+
+    private fun launchApp(pkg: String) {
+        activity.packageManager.getLaunchIntentForPackage(pkg)?.let {
+            activity.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
     private fun openPlayer() {
         val c = controller
         if (c == null) {
-            if (!hasAccess()) Permissions.openNotificationListenerSettings(activity)
+            val def = defaultPackage()
+            when {
+                def != null -> launchApp(def)
+                !hasAccess() -> Permissions.openNotificationListenerSettings(activity)
+            }
             return
         }
         val pi = c.sessionActivity
@@ -180,8 +235,6 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
                 return
             }
         } catch (e: Exception) { /* fall through to launching the app */ }
-        activity.packageManager.getLaunchIntentForPackage(c.packageName)?.let {
-            activity.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
+        launchApp(c.packageName)
     }
 }

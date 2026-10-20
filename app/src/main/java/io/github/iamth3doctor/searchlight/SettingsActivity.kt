@@ -16,7 +16,9 @@ import android.widget.ImageView
 import android.widget.Switch
 import android.widget.LinearLayout
 import android.widget.TextView
+import io.github.iamth3doctor.searchlight.cards.QuickAction
 import io.github.iamth3doctor.searchlight.data.WebEngine
+import io.github.iamth3doctor.searchlight.media.MusicApps
 import io.github.iamth3doctor.searchlight.databinding.ActivitySettingsBinding
 import io.github.iamth3doctor.searchlight.ui.Permissions
 import java.text.NumberFormat
@@ -67,6 +69,7 @@ class SettingsActivity : Activity() {
         binding.greetingValue.text = prefs.greeting.ifEmpty { getString(R.string.settings_greeting_auto) }
         binding.webEngineValue.text = prefs.webEngine.label
 
+        renderTileSettings()
         renderPermissions()
         renderIndexStatus()
         renderFavorites()
@@ -121,6 +124,75 @@ class SettingsActivity : Activity() {
                 d.dismiss()
             }
             .show()
+    }
+
+    // ------------------------------------------------------------------ Music Player + Quick Actions
+
+    private fun renderTileSettings() {
+        val box = binding.tileSettings
+        box.removeAllViews()
+
+        box.addView(sectionHeader(R.string.settings_section_music))
+        val pkg = prefs.defaultMusicPackage
+        val current = when {
+            pkg == null -> getString(R.string.music_default_auto)
+            MusicApps.isInstalled(this, pkg) -> MusicApps.label(this, pkg)
+            else -> getString(R.string.music_default_missing, pkg)
+        }
+        box.addView(settingsRow(getString(R.string.music_default_player), current) { pickMusicPlayer() })
+
+        box.addView(sectionHeader(R.string.settings_section_quick_actions))
+        prefs.quickActionSlots.forEachIndexed { i, action ->
+            box.addView(settingsRow(getString(R.string.qa_slot, i + 1), getString(action.label)) { pickQuickAction(i) })
+        }
+    }
+
+    /** "Automatic" + every installed media app found on the device. */
+    private fun pickMusicPlayer() {
+        val apps = MusicApps.installed(this)
+        val labels = listOf(getString(R.string.music_default_auto)) + apps.map { it.label }
+        val checked = apps.indexOfFirst { it.packageName == prefs.defaultMusicPackage }.let { if (it < 0) 0 else it + 1 }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.music_default_player)
+            .setSingleChoiceItems(labels.toTypedArray(), checked) { d, which ->
+                prefs.defaultMusicPackage = if (which == 0) null else apps[which - 1].packageName
+                d.dismiss()
+                render()
+            }
+            .apply { if (apps.isEmpty()) setMessage(R.string.music_no_apps) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun pickQuickAction(slot: Int) {
+        val actions = QuickAction.entries
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.qa_slot, slot + 1))
+            .setSingleChoiceItems(actions.map { getString(it.label) }.toTypedArray(), actions.indexOf(prefs.quickActionSlots[slot])) { d, which ->
+                prefs.setQuickActionSlot(slot, actions[which])
+                d.dismiss()
+                render()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun sectionHeader(text: Int) = TextView(this, null, 0, R.style.SettingsSection).apply {
+        setText(text)
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    }
+
+    private fun settingsRow(title: String, summary: String, onClick: () -> Unit) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        minimumHeight = dp(56)
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(8), 0, dp(8))
+        val tv = android.util.TypedValue()
+        theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+        setBackgroundResource(tv.resourceId)
+        setOnClickListener { onClick() }
+        addView(TextView(context).apply { text = title; textSize = 16f })
+        addView(TextView(context).apply { text = summary; textSize = 13f; alpha = 0.7f })
     }
 
     // ------------------------------------------------------------------ permissions hub

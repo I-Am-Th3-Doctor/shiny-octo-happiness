@@ -2,6 +2,8 @@ package io.github.iamth3doctor.searchlight.data
 
 import android.content.Context
 import io.github.iamth3doctor.searchlight.cards.CardType
+import io.github.iamth3doctor.searchlight.cards.QuickAction
+import io.github.iamth3doctor.searchlight.cards.SlotConfig
 import io.github.iamth3doctor.searchlight.weather.GeoPlace
 import io.github.iamth3doctor.searchlight.weather.TempUnit
 import io.github.iamth3doctor.searchlight.weather.WeatherData
@@ -70,6 +72,24 @@ class Prefs(context: Context) {
     var musicAutoFront: Boolean
         get() = sp.getBoolean(KEY_MUSIC_FRONT, true)
         set(value) = sp.edit().putBoolean(KEY_MUSIC_FRONT, value).apply()
+
+    /** Package name of the music app the Music tile binds to; null = whatever is playing. */
+    var defaultMusicPackage: String?
+        get() = sp.getString(KEY_MUSIC_PACKAGE, null)
+        set(value) = sp.edit().putString(KEY_MUSIC_PACKAGE, value).apply()
+
+    /** The four Quick Actions slots, in order. Unknown/missing entries fall back per slot. */
+    var quickActionSlots: List<QuickAction>
+        get() = SlotConfig.parse(
+            sp.getString(KEY_QA_SLOTS, null),
+            QuickAction.entries.mapTo(HashSet()) { it.name },
+            QuickAction.DEFAULTS.map { it.name },
+        ).map { QuickAction.valueOf(it) }
+        set(value) = sp.edit().putString(KEY_QA_SLOTS, SlotConfig.serialize(value.map { it.name })).apply()
+
+    fun setQuickActionSlot(index: Int, action: QuickAction) {
+        quickActionSlots = quickActionSlots.toMutableList().also { it[index] = action }
+    }
 
     // ---- Weather ----
 
@@ -165,6 +185,8 @@ class Prefs(context: Context) {
         private const val KEY_DISABLED_CARDS = "cards_disabled"
         private const val KEY_IDLE_CARD = "idle_card"
         private const val KEY_MUSIC_FRONT = "music_auto_front"
+        private const val KEY_MUSIC_PACKAGE = "music_default_package"
+        private const val KEY_QA_SLOTS = "quick_action_slots"
         private const val KEY_TEMP_UNIT = "temp_unit"
         private const val KEY_PLACE_NAME = "place_name"
         private const val KEY_PLACE_ADMIN = "place_admin"
