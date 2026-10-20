@@ -49,11 +49,13 @@
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:textAppearance">@style/TextAppearance.Searchlight.Body</item>
+        <item name="android:textColor">?android:attr/textColorPrimary</item>
     </style>
 
     <style name="SettingsRowSummary">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:textAppearance">@style/TextAppearance.Searchlight.Caption</item>
+        <item name="android:textColor">?android:attr/textColorSecondary</item>
     </style>
 </resources>

@@ -62,7 +62,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/settings_permissions_help"
-            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption"
+            android:textColor="?android:attr/textColorSecondary" />
 
         <LinearLayout
             android:id="@+id/permissionsList"
@@ -76,6 +77,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/space_xs"
             android:textAppearance="@style/TextAppearance.Searchlight.Caption"
+            android:textColor="?android:attr/textColorSecondary"
             android:textStyle="italic" />
 
         <Button
@@ -91,7 +93,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/settings_favorites_help"
-            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption"
+            android:textColor="?android:attr/textColorSecondary" />
 
         <LinearLayout
             android:id="@+id/favoritesList"
@@ -106,6 +109,7 @@
             android:id="@+id/about"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption"
+            android:textColor="?android:attr/textColorSecondary" />
     </io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout>
 </ScrollView>
