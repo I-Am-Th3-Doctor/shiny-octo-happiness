@@ -11,18 +11,19 @@
     <string name="greeting_evening">Good evening</string>
     <string name="greeting_night">Good night</string>
 
-    <string name="tips_title">Searchlight</string>
-    <string name="tips_body">Type to search apps, contacts and files.\nTry 42 x 18.\nLong-press the magnifier for your six favorites.\nSwipe for more cards.</string>
 
     <!-- Results -->
     <string name="calc_result">= %1$s</string>
     <string name="calc_subtitle">%1$s · tap to copy</string>
     <string name="web_search_for">Search %1$s for “%2$s”</string>
-    <string name="access_hint_title">Search contacts &amp; files too</string>
+    <string name="access_hint_title">Search contacts, files &amp; more</string>
     <string name="access_hint_subtitle">Tap to allow access · long-press to hide</string>
     <string name="storage_root">Internal storage</string>
     <string name="action_call">Call</string>
     <string name="action_message">Message</string>
+    <string name="result_song">Song</string>
+    <string name="result_photo">Photo</string>
+    <string name="result_video">Video</string>
 
     <!-- Menus -->
     <string name="menu_add_favorite">Add to favorites</string>
@@ -33,7 +34,6 @@
     <string name="menu_share">Share</string>
     <string name="menu_open_folder">Open containing folder</string>
     <string name="menu_copy_path">Copy path</string>
-    <string name="menu_copy_number">Copy number</string>
     <string name="menu_hide_hint">Don\'t show again</string>
     <string name="menu_launcher_settings">Launcher settings</string>
     <string name="menu_home_settings">Change default home app</string>
@@ -46,6 +46,88 @@
     <string name="no_app_for_action">No app can open this</string>
     <string name="folder_open_failed">Couldn\'t open the folder; path copied instead</string>
     <string name="copied">Copied %1$s</string>
+
+    <!-- Cards -->
+    <string name="card_weather">Weather</string>
+    <string name="card_weather_desc">Current conditions and today\'s high/low from Open-Meteo</string>
+    <string name="card_calendar">Calendar &amp; Date</string>
+    <string name="card_calendar_desc">Date, clock and how far through the year you are</string>
+    <string name="card_battery">Battery &amp; Signals</string>
+    <string name="card_battery_desc">Battery level, charging, Wi-Fi and cell signal</string>
+    <string name="card_music">Music Player</string>
+    <string name="card_music_desc">What\'s playing, with controls. Needs media access.</string>
+    <string name="card_quick_actions">Quick Actions</string>
+    <string name="card_quick_actions_desc">Torch, volume, Do Not Disturb, brightness</string>
+
+    <string name="weather_title">Weather</string>
+    <string name="weather_location">📍 %1$s</string>
+    <string name="weather_hi_lo">↑%1$s  ↓%2$s</string>
+    <string name="weather_updated">Updated %1$s</string>
+    <string name="weather_updating">Updating… (last %1$s)</string>
+    <string name="weather_stale">Offline · last %1$s</string>
+    <string name="weather_loading">Loading weather…</string>
+    <string name="weather_needs_location">Tap to set your location</string>
+    <string name="weather_no_fix">Couldn\'t get your location · tap to retry</string>
+    <string name="weather_failed">Couldn\'t load weather · tap to retry</string>
+    <string name="weather_switch_unit">Show in %1$s</string>
+    <string name="weather_refresh">Refresh weather</string>
+    <string name="weather_settings">Weather settings</string>
+
+    <string name="calendar_progress">Day %1$d of %2$d · %3$d%% of %4$d</string>
+
+    <string name="battery_full">Fully charged</string>
+    <string name="battery_charging">Charging</string>
+    <string name="battery_charging_eta">Charging · full in %1$s</string>
+    <string name="battery_discharging">On battery</string>
+    <string name="signal_wifi">Wi-Fi</string>
+    <string name="signal_wifi_off">Wi-Fi off</string>
+    <string name="signal_wifi_disconnected">Wi-Fi not connected</string>
+    <string name="signal_cell">Mobile</string>
+    <string name="signal_no_sim">No SIM</string>
+
+    <string name="music_nothing">Nothing playing</string>
+    <string name="music_nothing_hint">Start music in any app and it shows up here</string>
+    <string name="music_needs_access">Tap to allow media access</string>
+    <string name="music_prev">Previous</string>
+    <string name="music_next">Next</string>
+    <string name="music_play_pause">Play or pause</string>
+    <string name="media_listener_label">Searchlight music card</string>
+
+    <string name="qa_torch">Torch</string>
+    <string name="qa_torch_busy">Torch unavailable (camera in use?)</string>
+    <string name="qa_volume">Volume</string>
+    <string name="qa_volume_pct">Volume %1$d%%</string>
+    <string name="qa_dnd">Do Not Disturb</string>
+    <string name="qa_dnd_needs_access">Allow Searchlight to change Do Not Disturb, then tap again</string>
+    <string name="qa_brightness">Brightness</string>
+    <string name="qa_brightness_auto">Auto</string>
+    <string name="qa_brightness_pct">%1$d%%</string>
+    <string name="qa_brightness_needs_access">Allow Searchlight to modify system settings, then tap again</string>
+
+    <!-- Widget Center -->
+    <string name="widget_center">Widget Center</string>
+    <string name="widget_center_summary">Cards, idle card, weather units and location</string>
+    <string name="wc_section_cards">Cards</string>
+    <string name="wc_cards_help">Swipe between enabled cards on the home screen. Arrows change the order.</string>
+    <string name="wc_section_idle">Idle card</string>
+    <string name="wc_idle_card">Shows when you press Home</string>
+    <string name="wc_music_front">Bring Music Player to the front when audio starts</string>
+    <string name="wc_no_cards">All cards are off: the home screen shows just the search pill.</string>
+    <string name="wc_section_weather">Weather</string>
+    <string name="wc_units">Temperature unit</string>
+    <string name="wc_location">Location</string>
+    <string name="wc_location_device">Device location</string>
+    <string name="wc_location_device_needs_permission">Device location (not allowed yet: tap to set)</string>
+    <string name="wc_use_device_location">Use device location</string>
+    <string name="wc_search_place">Enter ZIP code or city…</string>
+    <string name="wc_search_place_hint">e.g. 78701 or Austin</string>
+    <string name="wc_search">Search</string>
+    <string name="wc_pick_place">Pick your location</string>
+    <string name="wc_search_failed">Couldn\'t reach Open-Meteo. Check your connection.</string>
+    <string name="wc_no_places">No places found for “%1$s”</string>
+    <string name="wc_location_denied">Location not allowed. Use ZIP/city instead, or allow it in the permissions hub.</string>
+    <string name="wc_never_updated">Not updated yet · tap to refresh</string>
+    <string name="wc_weather_privacy">Weather comes straight from Open-Meteo (free, no account). Only your approximate location (~1 km) is sent. Refreshes on unlock and every 30 minutes.</string>
 
     <!-- Settings -->
     <string name="settings_section_home">Home</string>
@@ -62,6 +144,22 @@
     <string name="perm_contacts_desc">Find people by name or number; call or text from results</string>
     <string name="perm_files">All files</string>
     <string name="perm_files_desc">Search every file in storage: Downloads, Documents, PDFs, zips, photos, music</string>
+    <string name="perm_messages">Messages</string>
+    <string name="perm_messages_desc">Search the text of your SMS (read-only)</string>
+    <string name="perm_music">Music</string>
+    <string name="perm_music_desc">Find songs by title, artist or album</string>
+    <string name="perm_photos">Photos &amp; videos</string>
+    <string name="perm_photos_desc">Find photos and videos by name or album. With All files on, they come from the file index.</string>
+    <string name="perm_location">Location</string>
+    <string name="perm_location_desc">Weather for where you are (approximate). Or set a ZIP/city in the Widget Center.</string>
+    <string name="perm_media_controls">Media controls</string>
+    <string name="perm_media_controls_desc">Music Player card: see and control what\'s playing. Notifications are never read.</string>
+    <string name="perm_dnd">Do Not Disturb</string>
+    <string name="perm_dnd_desc">Quick Actions: toggle Do Not Disturb</string>
+    <string name="perm_brightness">Modify system settings</string>
+    <string name="perm_brightness_desc">Quick Actions: change screen brightness</string>
+    <string name="perm_accessibility">Accessibility (gestures, double-tap to lock)</string>
+    <string name="perm_accessibility_desc">Coming in Phase 4</string>
     <string name="perm_granted_tap_to_change">Granted. Tap to change in Android settings.</string>
     <string name="index_status_none">Not indexed yet</string>
     <string name="index_status_scanning">Indexing… %1$s files so far</string>

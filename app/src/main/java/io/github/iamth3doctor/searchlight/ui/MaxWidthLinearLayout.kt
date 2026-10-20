@@ -16,7 +16,11 @@ class MaxWidthLinearLayout @JvmOverloads constructor(
     attrs: AttributeSet? = null,
 ) : LinearLayout(context, attrs) {
 
-    private val maxWidthPx: Int
+    var maxWidthPx: Int = Int.MAX_VALUE
+        set(value) {
+            field = value
+            requestLayout()
+        }
 
     init {
         val a = context.obtainStyledAttributes(attrs, R.styleable.MaxWidthLinearLayout)

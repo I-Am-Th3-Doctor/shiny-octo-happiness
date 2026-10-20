@@ -5,7 +5,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.role.RoleManager
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -14,13 +13,15 @@ import android.view.Gravity
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.Switch
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.iamth3doctor.searchlight.data.WebEngine
 import io.github.iamth3doctor.searchlight.databinding.ActivitySettingsBinding
+import io.github.iamth3doctor.searchlight.ui.Permissions
 import java.text.NumberFormat
 
-/** Settings + the permissions hub. Phase 2 adds the Widget Center; Phase 4 adds looks and gestures. */
+/** Settings + the permissions hub. Phase 4 adds looks and gestures. */
 class SettingsActivity : Activity() {
 
     private lateinit var binding: ActivitySettingsBinding
@@ -39,9 +40,7 @@ class SettingsActivity : Activity() {
         binding.autoKeyboard.setOnCheckedChangeListener { _, checked -> prefs.autoOpenKeyboard = checked }
         binding.greetingRow.setOnClickListener { editGreeting() }
         binding.webEngineRow.setOnClickListener { pickWebEngine() }
-        // Switches reflect real permission state; tapping one starts the grant/revoke flow.
-        binding.permContacts.setOnClickListener { toggleContacts() }
-        binding.permFiles.setOnClickListener { toggleFiles() }
+        binding.widgetCenterRow.setOnClickListener { startActivity(Intent(this, WidgetCenterActivity::class.java)) }
         binding.reindex.setOnClickListener { app.files.rescan() }
         binding.about.text = getString(R.string.settings_about, BuildConfig.VERSION_NAME)
 
@@ -59,8 +58,7 @@ class SettingsActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        app.contacts.start()
-        app.files.start()
+        app.startSources()
         render()
     }
 
@@ -69,13 +67,7 @@ class SettingsActivity : Activity() {
         binding.greetingValue.text = prefs.greeting.ifEmpty { getString(R.string.settings_greeting_auto) }
         binding.webEngineValue.text = prefs.webEngine.label
 
-        val contacts = app.contacts.hasPermission()
-        binding.permContacts.isChecked = contacts
-        binding.permContactsDesc.text = getString(if (contacts) R.string.perm_granted_tap_to_change else R.string.perm_contacts_desc)
-
-        val files = app.files.hasPermission()
-        binding.permFiles.isChecked = files
-        binding.permFilesDesc.text = getString(if (files) R.string.perm_granted_tap_to_change else R.string.perm_files_desc)
+        renderPermissions()
         renderIndexStatus()
         renderFavorites()
     }
@@ -133,46 +125,90 @@ class SettingsActivity : Activity() {
 
     // ------------------------------------------------------------------ permissions hub
 
-    private fun openAppDetails() =
-        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+    /**
+     * One row per thing Searchlight can be allowed to do. The switch always shows the real
+     * state; tapping it starts the grant flow (or opens Android's page to revoke it).
+     */
+    private inner class Perm(
+        val title: Int,
+        val description: Int,
+        val granted: () -> Boolean,
+        val runtime: Array<String>? = null,
+        val openSpecial: (() -> Unit)? = null,
+        val comingLater: Boolean = false,
+    )
 
-    private fun toggleContacts() {
-        binding.permContacts.isChecked = app.contacts.hasPermission()
-        if (app.contacts.hasPermission()) {
-            // Apps can't revoke their own permissions; send you to the place where you can.
-            openAppDetails()
-            return
-        }
-        val permanentlyDenied = prefs.contactsPermissionAsked &&
-            !shouldShowRequestPermissionRationale(Manifest.permission.READ_CONTACTS)
-        if (permanentlyDenied) {
-            openAppDetails()
-        } else {
-            prefs.contactsPermissionAsked = true
-            requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), REQUEST_CONTACTS)
+    private fun permissions(): List<Perm> {
+        val t33 = Build.VERSION.SDK_INT >= 33
+        return listOf(
+            Perm(R.string.perm_contacts, R.string.perm_contacts_desc, app.contacts::hasPermission,
+                runtime = arrayOf(Manifest.permission.READ_CONTACTS)),
+            Perm(R.string.perm_messages, R.string.perm_messages_desc, app.messages::hasPermission,
+                runtime = arrayOf(Manifest.permission.READ_SMS)),
+            Perm(R.string.perm_music, R.string.perm_music_desc, app.media::hasMusicPermission,
+                runtime = arrayOf(if (t33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE)),
+            Perm(R.string.perm_photos, R.string.perm_photos_desc, app.media::hasPhotosPermission,
+                runtime = if (t33) arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+                else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)),
+            Perm(R.string.perm_files, R.string.perm_files_desc, app.files::hasPermission,
+                runtime = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE) else null,
+                openSpecial = { Permissions.openAllFilesSettings(this) }),
+            Perm(R.string.perm_location, R.string.perm_location_desc, app.weather::hasLocationPermission,
+                runtime = arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)),
+            Perm(R.string.perm_media_controls, R.string.perm_media_controls_desc, { Permissions.hasMediaAccess(this) },
+                openSpecial = { Permissions.openNotificationListenerSettings(this) }),
+            Perm(R.string.perm_dnd, R.string.perm_dnd_desc, { Permissions.hasDndAccess(this) },
+                openSpecial = { Permissions.openDndAccessSettings(this) }),
+            Perm(R.string.perm_brightness, R.string.perm_brightness_desc, { Permissions.hasWriteSettings(this) },
+                openSpecial = { Permissions.openWriteSettings(this) }),
+            Perm(R.string.perm_accessibility, R.string.perm_accessibility_desc, { false }, comingLater = true),
+        )
+    }
+
+    private fun renderPermissions() {
+        val list = binding.permissionsList
+        list.removeAllViews()
+        for (p in permissions()) {
+            val granted = p.granted()
+            list.addView(Switch(this).apply {
+                setText(p.title)
+                textSize = 16f
+                minHeight = dp(48)
+                isChecked = granted
+                isEnabled = !p.comingLater
+                setPadding(0, dp(8), 0, 0)
+                setOnClickListener {
+                    isChecked = p.granted() // the switch mirrors reality, not the tap
+                    request(p)
+                }
+            })
+            list.addView(TextView(this).apply {
+                setText(if (granted && !p.comingLater) R.string.perm_granted_tap_to_change else p.description)
+                textSize = 13f
+                alpha = if (p.comingLater) 0.5f else 0.75f
+            })
         }
     }
 
-    private fun toggleFiles() {
-        binding.permFiles.isChecked = app.files.hasPermission()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.fromParts("package", packageName, null))
-            try {
-                startActivity(intent)
-            } catch (e: Exception) {
-                startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+    private fun request(p: Perm) {
+        val runtime = p.runtime
+        when {
+            p.openSpecial != null && runtime == null -> p.openSpecial.invoke()
+            runtime == null -> Unit
+            p.granted() -> Permissions.openAppDetails(this) // apps can't revoke their own permissions
+            runtime.any { prefs.wasAsked(it) } && runtime.none { shouldShowRequestPermissionRationale(it) } ->
+                // Denied before: Android won't show the prompt again, so go to the app's page.
+                Permissions.openAppDetails(this)
+            else -> {
+                prefs.markAsked(runtime)
+                requestPermissions(runtime, REQUEST_RUNTIME)
             }
-        } else if (app.files.hasPermission()) {
-            openAppDetails()
-        } else {
-            requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), REQUEST_FILES)
         }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        app.contacts.start()
-        app.files.start()
+        app.startSources()
         render()
     }
 
@@ -258,7 +294,6 @@ class SettingsActivity : Activity() {
 
     private companion object {
         const val REQUEST_HOME_ROLE = 1
-        const val REQUEST_CONTACTS = 2
-        const val REQUEST_FILES = 3
+        const val REQUEST_RUNTIME = 2
     }
 }

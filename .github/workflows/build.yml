@@ -30,6 +30,14 @@ jobs:
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      # Calls the real Open-Meteo API with the app's own URLs and parsers. Informational: an
+      # outage on their side shouldn't block a build, but a format change shows up here.
+      - name: Open-Meteo contract check (live, non-blocking)
+        continue-on-error: true
+        env:
+          OPEN_METEO_LIVE: "1"
+        run: ./gradlew testDebugUnitTest --tests '*OpenMeteoLiveTest' --rerun -i | grep -E "ZIP|Chicago|PASSED|FAILED|SKIPPED|BUILD"
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 

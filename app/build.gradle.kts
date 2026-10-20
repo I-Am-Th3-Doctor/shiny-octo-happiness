@@ -59,4 +59,6 @@ dependencies {
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.viewpager2)
     testImplementation(libs.junit)
+    // Android's org.json is a stub in local unit tests; use the real one for the weather parser tests.
+    testImplementation(libs.org.json)
 }

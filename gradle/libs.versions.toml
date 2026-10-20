@@ -5,11 +5,13 @@ coreKtx = "1.15.0"
 recyclerview = "1.4.0"
 viewpager2 = "1.1.0"
 junit = "4.13.2"
+orgJson = "20240303"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
 androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

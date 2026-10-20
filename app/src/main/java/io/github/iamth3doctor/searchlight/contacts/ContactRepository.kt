@@ -47,6 +47,16 @@ class ContactRepository(private val context: Context) {
     var contacts: List<ContactEntry> = emptyList()
         private set
 
+    /** Last 7 digits of every number we know -> contact name. Used to label message senders. */
+    @Volatile var namesByNumber: Map<String, String> = emptyMap()
+        private set
+
+    fun nameForNumber(address: String): String? {
+        val d = address.filter { it.isDigit() }
+        if (d.length < 5) return null
+        return namesByNumber[d.takeLast(7)]
+    }
+
     fun hasPermission() =
         context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
@@ -77,13 +87,16 @@ class ContactRepository(private val context: Context) {
 
     private fun reload() {
         loader.execute {
-            val list = try {
+            val (list, names) = try {
                 query()
             } catch (e: Exception) {
                 Log.w(TAG, "Contacts query failed", e)
                 return@execute
             }
-            main.post { setContacts(list) }
+            main.post {
+                namesByNumber = names
+                setContacts(list)
+            }
         }
     }
 
@@ -92,11 +105,12 @@ class ContactRepository(private val context: Context) {
         listeners.toList().forEach { it() }
     }
 
-    private fun query(): List<ContactEntry> {
+    private fun query(): Pair<List<ContactEntry>, Map<String, String>> {
         val resolver = context.contentResolver
 
         // Best number per contact: the primary one if set, else the first.
         val numbers = HashMap<Long, String>()
+        val allNumbers = HashMap<Long, MutableList<String>>()
         resolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
             arrayOf(
@@ -110,6 +124,7 @@ class ContactRepository(private val context: Context) {
                 val id = c.getLong(0)
                 val number = c.getString(1) ?: continue
                 if (c.getInt(2) != 0 || id !in numbers) numbers[id] = number
+                allNumbers.getOrPut(id) { mutableListOf() } += number
             }
         }
 
@@ -133,7 +148,14 @@ class ContactRepository(private val context: Context) {
                 result += ContactEntry(id, lookup, name, numbers[id], c.getString(3), c.getInt(4) != 0)
             }
         }
-        return result
+        val names = HashMap<String, String>()
+        for (c in result) {
+            allNumbers[c.id]?.forEach { n ->
+                val d = n.filter { it.isDigit() }
+                if (d.length >= 5) names[d.takeLast(7)] = c.name
+            }
+        }
+        return result to names
     }
 
     /** Same contract as AppRepository.icon: cached bitmap now, or null + callback later. */

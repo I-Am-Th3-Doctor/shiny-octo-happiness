@@ -23,11 +23,18 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.apps.AppEntry
+import io.github.iamth3doctor.searchlight.cards.BatteryCard
+import io.github.iamth3doctor.searchlight.cards.CalendarCard
+import io.github.iamth3doctor.searchlight.cards.CardType
+import io.github.iamth3doctor.searchlight.cards.CardsAdapter
+import io.github.iamth3doctor.searchlight.cards.HomeCard
+import io.github.iamth3doctor.searchlight.cards.MusicCard
+import io.github.iamth3doctor.searchlight.cards.QuickActionsCard
+import io.github.iamth3doctor.searchlight.cards.WeatherCard
 import io.github.iamth3doctor.searchlight.databinding.ActivityMainBinding
 import io.github.iamth3doctor.searchlight.search.SearchEngine
 import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.Actions
-import io.github.iamth3doctor.searchlight.ui.CardsAdapter
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
 import io.github.iamth3doctor.searchlight.ui.ResultsAdapter
 import java.util.Calendar
@@ -50,9 +57,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private var openMenu: PopupMenu? = null
     private var launchedSomething = false
 
-    /** Results for the current query: [local] is instant, [fileResults] arrives a moment later. */
+    /** Results for the current query: [local] is instant, [slowResults] arrives a moment later. */
     private var local: List<SearchResult> = emptyList()
-    private var fileResults: List<SearchResult> = emptyList()
+    private var slowResults: List<SearchResult> = emptyList()
+
+    private var cards: List<HomeCard> = emptyList()
+    private var cardsStarted = false
 
     private val sourcesChanged: () -> Unit = { refreshResults() }
 
@@ -63,7 +73,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         setContentView(binding.root)
 
         engine = SearchEngine(prefs, app.apps, app.contacts)
-        adapter = ResultsAdapter(app.apps, app.contacts, this)
+        adapter = ResultsAdapter(app.apps, app.contacts, app.thumbnails, this)
         favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp)
 
         binding.results.layoutManager = LinearLayoutManager(this, RecyclerView.VERTICAL, true)
@@ -71,7 +81,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.results.itemAnimator = null
 
         applyInsets()
-        setupCards()
+        setupPager()
+        rebuildCardsIfChanged()
+        goToIdleCard()
         setupSearchPill()
         setupHomeLongPress()
 
@@ -87,11 +99,18 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         super.onDestroy()
     }
 
+    override fun onStart() {
+        super.onStart()
+        rebuildCardsIfChanged()
+        startCards()
+    }
+
     override fun onResume() {
         super.onResume()
         // Permissions may have been granted in Settings since last time.
-        app.contacts.start()
-        app.files.start()
+        app.startSources()
+        app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
+        cards.forEach { it.render() } // e.g. °F/°C changed in the Widget Center
         binding.searchInput.hint = greeting()
         if (prefs.autoOpenKeyboard) binding.searchInput.post { showKeyboard() }
     }
@@ -104,6 +123,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     override fun onStop() {
         super.onStop()
+        stopCards()
         dismissPopups()
         // Coming back after opening something should start fresh.
         if (launchedSomething) {
@@ -147,24 +167,73 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
     }
 
-    private fun setupCards() {
-        val cardsAdapter = CardsAdapter()
-        binding.cards.adapter = cardsAdapter
-        binding.cards.offscreenPageLimit = 1
+    private fun setupPager() {
+        binding.cards.offscreenPageLimit = CardType.entries.size
+        binding.cards.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) = updateDots(position)
+        })
+    }
+
+    /** Builds the card pages from the Widget Center settings; no-op if nothing changed. */
+    private fun rebuildCardsIfChanged() {
+        val types = prefs.enabledCards
+        if (types == cards.map { it.type }) return
+        val wasStarted = cardsStarted
+        stopCards()
+        cards = types.map { type ->
+            when (type) {
+                CardType.WEATHER -> WeatherCard(this)
+                CardType.CALENDAR -> CalendarCard(this)
+                CardType.BATTERY -> BatteryCard(this)
+                CardType.MUSIC -> MusicCard(this).also { it.onStartedPlaying = ::onMusicStarted }
+                CardType.QUICK_ACTIONS -> QuickActionsCard(this)
+            }
+        }
+        binding.cards.adapter = CardsAdapter(cards)
+        binding.dots.removeAllViews()
         val dotSize = (6 * resources.displayMetrics.density).toInt()
         val dotGap = (4 * resources.displayMetrics.density).toInt()
-        repeat(cardsAdapter.itemCount) {
+        repeat(cards.size) {
             binding.dots.addView(View(this).apply {
                 setBackgroundResource(R.drawable.bg_dot)
                 layoutParams = LinearLayout.LayoutParams(dotSize, dotSize).apply { marginStart = dotGap; marginEnd = dotGap }
             })
         }
-        binding.dots.isVisible = cardsAdapter.itemCount > 1
-        binding.cards.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            override fun onPageSelected(position: Int) {
-                for (i in 0 until binding.dots.childCount) binding.dots.getChildAt(i).alpha = if (i == position) 1f else 0.35f
-            }
-        })
+        binding.dots.isVisible = cards.size > 1
+        if (wasStarted) startCards()
+        goToIdleCard()
+        refreshResults()
+    }
+
+    private fun startCards() {
+        if (cardsStarted) return
+        cardsStarted = true
+        cards.forEach { it.onStart() }
+    }
+
+    private fun stopCards() {
+        if (!cardsStarted) return
+        cardsStarted = false
+        cards.forEach { it.onStop() }
+    }
+
+    private fun updateDots(position: Int) {
+        for (i in 0 until binding.dots.childCount) binding.dots.getChildAt(i).alpha = if (i == position) 1f else 0.35f
+    }
+
+    /** Idle card from the Widget Center, unless music is playing and should be in front. */
+    private fun goToIdleCard() {
+        val music = cards.firstOrNull { it is MusicCard } as MusicCard?
+        val target = if (prefs.musicAutoFront && music?.isPlaying == true) CardType.MUSIC else prefs.idleCard
+        val index = cards.indexOfFirst { it.type == target }.coerceAtLeast(0)
+        if (cards.isNotEmpty()) binding.cards.setCurrentItem(index, false)
+        updateDots(index)
+    }
+
+    private fun onMusicStarted() {
+        if (!prefs.musicAutoFront || query().isNotBlank()) return
+        val index = cards.indexOfFirst { it.type == CardType.MUSIC }
+        if (index >= 0) binding.cards.setCurrentItem(index, true)
     }
 
     private fun setupSearchPill() {
@@ -224,7 +293,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun query() = binding.searchInput.text?.toString().orEmpty()
 
     private fun onQueryChanged() {
-        fileResults = emptyList()
+        slowResults = emptyList()
         refreshResults()
     }
 
@@ -234,11 +303,11 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         val searching = q.isNotBlank()
         binding.clearButton.isVisible = q.isNotEmpty()
         binding.settingsButton.isVisible = q.isEmpty()
-        binding.cardArea.isVisible = !searching
+        binding.cardArea.isVisible = !searching && cards.isNotEmpty()
         if (!searching) {
-            app.files.cancel()
+            app.background.cancel()
             local = emptyList()
-            fileResults = emptyList()
+            slowResults = emptyList()
             binding.calcPreview.isVisible = false
             adapter.submit(emptyList())
             return
@@ -248,9 +317,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.calcPreview.isVisible = calc != null
         binding.calcPreview.text = calc?.let { getString(R.string.calc_result, it.value) }
         render()
-        app.files.search(q, MAX_FILES) { index, hits ->
+        app.background.search(q) { results ->
             if (query() == q) {
-                fileResults = hits.map { SearchResult.File(index, it) }
+                slowResults = results
                 render()
             }
         }
@@ -258,9 +327,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private fun render() {
         val q = query().trim()
-        val list = ArrayList<SearchResult>(local.size + fileResults.size + 2)
+        val list = ArrayList<SearchResult>(local.size + slowResults.size + 2)
         list += local
-        list += fileResults
+        list += slowResults
         // Web search: first when nothing local matched (so Enter goes there), otherwise last.
         list += SearchResult.Web(q, prefs.webEngine)
         if (!prefs.accessHintDismissed && (!app.contacts.hasPermission() || !app.files.hasPermission())) {
@@ -274,7 +343,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.searchInput.text = null
         binding.searchInput.clearFocus()
         if (!prefs.autoOpenKeyboard) hideKeyboard()
-        binding.cards.setCurrentItem(0, false)
+        goToIdleCard()
     }
 
     private fun showKeyboard() {
@@ -298,6 +367,11 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                 if (e.isDir) Actions.openFolder(this, result.index.relativeDirOf(e).let { if (it.isEmpty()) e.name else "$it/${e.name}" })
                 else Actions.openFile(this, result.index.pathOf(e))
             }
+            is SearchResult.Song -> opened { Actions.openMedia(this, result.entry.uri, "audio/*") }
+            is SearchResult.Photo -> opened {
+                Actions.openMedia(this, result.entry.uri, result.entry.mime ?: if (result.entry.isVideo) "video/*" else "image/*")
+            }
+            is SearchResult.Message -> opened { Actions.message(this, result.entry.address) }
             is SearchResult.Calc -> Actions.copy(this, result.value.replace(",", ""))
             is SearchResult.Web -> opened { Actions.webSearch(this, result.engine, result.query) }
             SearchResult.AccessHint -> startActivity(Intent(this, SettingsActivity::class.java))
@@ -314,6 +388,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             is SearchResult.App -> showAppMenu(result.entry, view)
             is SearchResult.File -> showFileMenu(result, view)
             is SearchResult.Contact -> result.entry.number?.let { Actions.copy(this, it) }
+            is SearchResult.Song -> Actions.shareMedia(this, result.entry.uri, "audio/*")
+            is SearchResult.Photo -> Actions.shareMedia(this, result.entry.uri, result.entry.mime ?: "image/*")
+            is SearchResult.Message -> Actions.copy(this, result.entry.body)
             is SearchResult.Calc -> Actions.copy(this, result.value.replace(",", ""))
             SearchResult.AccessHint -> menu(view) {
                 add(R.string.menu_hide_hint) {
@@ -403,6 +480,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     }
 
     private companion object {
-        const val MAX_FILES = 20
+        const val WEATHER_MAX_AGE_MS = 30 * 60 * 1000L
     }
 }

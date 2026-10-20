@@ -12,7 +12,6 @@ import android.provider.MediaStore
 import android.util.Log
 import java.io.File
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Background index of every file in shared storage (needs All Files Access).
@@ -20,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * - The last index is loaded from disk at startup, so file results work right after a cold start.
  * - A fresh scan runs at startup, when it's more than [STALE_MS] old on resume, and (debounced)
  *   whenever MediaStore reports changes.
- * - Searches run on their own thread; a newer query cancels an older one mid-scan.
+ * - Searching happens in BackgroundSearch, on an immutable snapshot of [index].
  *
  * Public methods: main thread only.
  */
@@ -28,8 +27,6 @@ class FileSearch(private val context: Context) {
 
     private val main = Handler(Looper.getMainLooper())
     private val indexer = Executors.newSingleThreadExecutor()
-    private val searcher = Executors.newSingleThreadExecutor()
-    private val generation = AtomicInteger()
     private val cacheFile = File(context.filesDir, "files.index")
     private val listeners = mutableListOf<() -> Unit>()
 
@@ -118,23 +115,6 @@ class FileSearch(private val context: Context) {
                 notifyListeners()
             }
         }
-    }
-
-    /** Runs [rawQuery] off the main thread; [onResult] is called on the main thread unless superseded. */
-    fun search(rawQuery: String, limit: Int, onResult: (FileIndex, List<FileEntry>) -> Unit) {
-        val gen = generation.incrementAndGet()
-        val snapshot = index
-        if (snapshot.entries.isEmpty()) return
-        searcher.execute {
-            if (generation.get() != gen) return@execute
-            val hits = snapshot.search(rawQuery, limit, System.currentTimeMillis()) { generation.get() != gen }
-            main.post { if (generation.get() == gen) onResult(snapshot, hits) }
-        }
-    }
-
-    /** Drops any in-flight search (e.g. the query was cleared). */
-    fun cancel() {
-        generation.incrementAndGet()
     }
 
     private companion object {

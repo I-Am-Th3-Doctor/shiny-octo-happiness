@@ -1,6 +1,10 @@
 package io.github.iamth3doctor.searchlight.data
 
 import android.content.Context
+import io.github.iamth3doctor.searchlight.cards.CardType
+import io.github.iamth3doctor.searchlight.weather.GeoPlace
+import io.github.iamth3doctor.searchlight.weather.TempUnit
+import io.github.iamth3doctor.searchlight.weather.WeatherData
 
 /** All persisted state. Everything stays in this app's private storage. */
 class Prefs(context: Context) {
@@ -34,10 +38,74 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_ACCESS_HINT_DISMISSED, false)
         set(value) = sp.edit().putBoolean(KEY_ACCESS_HINT_DISMISSED, value).apply()
 
-    /** Whether we've shown the system contacts prompt once (after a denial, Android stops showing it). */
-    var contactsPermissionAsked: Boolean
-        get() = sp.getBoolean(KEY_CONTACTS_ASKED, false)
-        set(value) = sp.edit().putBoolean(KEY_CONTACTS_ASKED, value).apply()
+    /** Runtime permissions we've asked for at least once (Android stops showing the prompt after a denial). */
+    fun wasAsked(permission: String) = permission in sp.getStringSet(KEY_ASKED, emptySet()).orEmpty()
+    fun markAsked(permissions: Array<String>) =
+        sp.edit().putStringSet(KEY_ASKED, sp.getStringSet(KEY_ASKED, emptySet()).orEmpty() + permissions).apply()
+
+    // ---- Widget Center ----
+
+    /** All built-in cards in display order (new card types get appended). */
+    var cardOrder: List<CardType>
+        get() {
+            val saved = sp.getString(KEY_CARDS, null).orEmpty().split(',')
+                .mapNotNull { n -> CardType.entries.firstOrNull { it.name == n } }.distinct()
+            return saved + CardType.entries.filter { it !in saved }
+        }
+        set(value) = sp.edit().putString(KEY_CARDS, value.joinToString(",") { it.name }).apply()
+
+    var disabledCards: Set<CardType>
+        get() = sp.getStringSet(KEY_DISABLED_CARDS, emptySet()).orEmpty()
+            .mapNotNullTo(HashSet()) { n -> CardType.entries.firstOrNull { it.name == n } }
+        set(value) = sp.edit().putStringSet(KEY_DISABLED_CARDS, value.mapTo(HashSet()) { it.name }).apply()
+
+    /** What the pager shows, in order. */
+    val enabledCards: List<CardType> get() = disabledCards.let { off -> cardOrder.filter { it !in off } }
+
+    /** The card the home screen returns to. Weather by default. */
+    var idleCard: CardType
+        get() = CardType.entries.firstOrNull { it.name == sp.getString(KEY_IDLE_CARD, null) } ?: CardType.WEATHER
+        set(value) = sp.edit().putString(KEY_IDLE_CARD, value.name).apply()
+
+    var musicAutoFront: Boolean
+        get() = sp.getBoolean(KEY_MUSIC_FRONT, true)
+        set(value) = sp.edit().putBoolean(KEY_MUSIC_FRONT, value).apply()
+
+    // ---- Weather ----
+
+    /** Default °F. Stored as a name so it survives app updates. */
+    var tempUnit: TempUnit
+        get() = TempUnit.entries.firstOrNull { it.name == sp.getString(KEY_TEMP_UNIT, null) } ?: TempUnit.FAHRENHEIT
+        set(value) = sp.edit().putString(KEY_TEMP_UNIT, value.name).apply()
+
+    /** null = use device location; otherwise the place picked by ZIP/city search. */
+    var manualPlace: GeoPlace?
+        get() {
+            val name = sp.getString(KEY_PLACE_NAME, null) ?: return null
+            return GeoPlace(
+                name,
+                sp.getString(KEY_PLACE_ADMIN, null),
+                sp.getString(KEY_PLACE_COUNTRY, null),
+                java.lang.Double.longBitsToDouble(sp.getLong(KEY_PLACE_LAT, 0)),
+                java.lang.Double.longBitsToDouble(sp.getLong(KEY_PLACE_LON, 0)),
+            )
+        }
+        set(value) {
+            val e = sp.edit()
+            if (value == null) {
+                e.remove(KEY_PLACE_NAME).remove(KEY_PLACE_ADMIN).remove(KEY_PLACE_COUNTRY).remove(KEY_PLACE_LAT).remove(KEY_PLACE_LON)
+            } else {
+                e.putString(KEY_PLACE_NAME, value.name).putString(KEY_PLACE_ADMIN, value.admin)
+                    .putString(KEY_PLACE_COUNTRY, value.countryCode)
+                    .putLong(KEY_PLACE_LAT, java.lang.Double.doubleToRawLongBits(value.latitude))
+                    .putLong(KEY_PLACE_LON, java.lang.Double.doubleToRawLongBits(value.longitude))
+            }
+            e.apply()
+        }
+
+    var lastWeather: WeatherData?
+        get() = sp.getString(KEY_WEATHER, null)?.let(WeatherData::fromJson)
+        set(value) = sp.edit().putString(KEY_WEATHER, value?.toJson()).apply()
 
     // ---- Favorites: an ordered list of up to MAX_FAVORITES app keys ----
 
@@ -92,7 +160,18 @@ class Prefs(context: Context) {
         private const val KEY_GREETING = "greeting"
         private const val KEY_WEB_ENGINE = "web_engine"
         private const val KEY_ACCESS_HINT_DISMISSED = "access_hint_dismissed"
-        private const val KEY_CONTACTS_ASKED = "contacts_asked"
+        private const val KEY_ASKED = "permissions_asked"
+        private const val KEY_CARDS = "cards"
+        private const val KEY_DISABLED_CARDS = "cards_disabled"
+        private const val KEY_IDLE_CARD = "idle_card"
+        private const val KEY_MUSIC_FRONT = "music_auto_front"
+        private const val KEY_TEMP_UNIT = "temp_unit"
+        private const val KEY_PLACE_NAME = "place_name"
+        private const val KEY_PLACE_ADMIN = "place_admin"
+        private const val KEY_PLACE_COUNTRY = "place_country"
+        private const val KEY_PLACE_LAT = "place_lat"
+        private const val KEY_PLACE_LON = "place_lon"
+        private const val KEY_WEATHER = "last_weather"
     }
 }
 

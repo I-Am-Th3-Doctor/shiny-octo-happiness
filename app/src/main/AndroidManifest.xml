@@ -11,11 +11,30 @@
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
-    <!-- Android 10 has no All Files Access; legacy storage read covers it there. -->
+    <!-- Android 10-12: storage read for music/photos (and files on 10, which has no All Files Access). -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
-    <!-- Deliberately no INTERNET permission in Phase 1: nothing can leave the phone. -->
+        android:maxSdkVersion="32" />
+    <!-- Android 13+: music and photos & videos search (each optional, asked from the permissions hub). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- Message search (read-only, optional). -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+
+    <!-- Weather. The ONLY network traffic: Open-Meteo forecast + place search. No analytics. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Battery & Signals card. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- Quick Actions: Do Not Disturb toggle and brightness (both granted by you in Settings). -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission
+        android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- Android 11+ package visibility: let us see every launchable app. -->
     <queries>
@@ -64,6 +83,23 @@
             android:label="@string/settings_title"
             android:theme="@style/Theme.Searchlight.Settings"
             android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".WidgetCenterActivity"
+            android:exported="false"
+            android:label="@string/widget_center"
+            android:theme="@style/Theme.Searchlight.Settings" />
+
+        <!-- Lets the Music card see media sessions. It ignores notifications entirely. -->
+        <service
+            android:name=".media.MediaListenerService"
+            android:exported="true"
+            android:label="@string/media_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -15,6 +15,13 @@
 
         <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="0dp" android:text="@string/settings_section_home" />
 
+        <LinearLayout
+            android:id="@+id/widgetCenterRow"
+            style="@style/SettingsRow">
+            <TextView style="@style/SettingsRowTitle" android:text="@string/widget_center" />
+            <TextView style="@style/SettingsRowSummary" android:text="@string/widget_center_summary" />
+        </LinearLayout>
+
         <Button
             android:id="@+id/setDefault"
             android:layout_width="match_parent"
@@ -50,35 +57,11 @@
             android:text="@string/settings_permissions_help"
             android:textAppearance="?android:attr/textAppearanceSmall" />
 
-        <Switch
-            android:id="@+id/permContacts"
+        <LinearLayout
+            android:id="@+id/permissionsList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="48dp"
-            android:text="@string/perm_contacts" />
-
-        <TextView
-            android:id="@+id/permContactsDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/perm_contacts_desc"
-            android:textAppearance="?android:attr/textAppearanceSmall" />
-
-        <Switch
-            android:id="@+id/permFiles"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:minHeight="48dp"
-            android:text="@string/perm_files" />
-
-        <TextView
-            android:id="@+id/permFilesDesc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/perm_files_desc"
-            android:textAppearance="?android:attr/textAppearanceSmall" />
+            android:orientation="vertical" />
 
         <TextView
             android:id="@+id/indexStatus"

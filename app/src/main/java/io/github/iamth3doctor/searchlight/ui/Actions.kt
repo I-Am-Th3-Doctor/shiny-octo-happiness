@@ -63,6 +63,22 @@ object Actions {
         }
     }
 
+    /** Songs, photos and videos from MediaStore: open in whatever app handles the type. */
+    fun openMedia(context: Context, uri: Uri, mime: String) {
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, mime)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        start(context, intent)
+    }
+
+    fun shareMedia(context: Context, uri: Uri, mime: String) {
+        val intent = Intent(Intent.ACTION_SEND)
+            .setType(mime)
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        start(context, Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     fun openContact(context: Context, c: ContactEntry) =
         start(context, Intent(Intent.ACTION_VIEW, c.lookupUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
