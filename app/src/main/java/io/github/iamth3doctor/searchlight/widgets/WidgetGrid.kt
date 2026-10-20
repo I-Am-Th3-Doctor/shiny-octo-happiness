@@ -44,15 +44,17 @@ object WidgetGrid {
 
     // ------------------------------------------------------------------ geometry
 
+    /** The home widget grid: 4 columns × 2 rows filling the area above the home card. */
+    const val COLUMNS = 4
+    const val ROWS = 2
+
     /**
-     * Grid dimensions for the area above the home card. A typical phone gives 4 × 6; wider screens
-     * (unfolded) get more columns so cells stay roughly the same physical size.
+     * What to store after a re-fit: widgets that are shown get their shown cells (so stored
+     * positions are always real cells of the current grid); widgets that don't fit at all keep
+     * their old entry untouched. Nothing is ever dropped.
      */
-    fun gridSize(widthDp: Float, heightDp: Float): Pair<Int, Int> {
-        val cols = (widthDp / 96f).toInt().coerceIn(4, 8)
-        val rows = (heightDp / 80f).toInt().coerceIn(3, 8)
-        return cols to rows
-    }
+    fun settle(stored: List<GridSpec>, fit: Fit): List<GridSpec> =
+        stored.map { s -> fit.shown.firstOrNull { it.id == s.id } ?: s }
 
     /** How many cells a widget of [sizeDp] needs when cells are [cellDp] big. */
     fun spanFor(sizeDp: Float, cellDp: Float, max: Int): Int =

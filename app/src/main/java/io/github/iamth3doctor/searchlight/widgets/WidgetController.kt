@@ -19,9 +19,8 @@ import kotlin.math.roundToInt
 /**
  * Real Android widgets on a free-placement grid above the home card.
  *
- * Positions are stored as grid cells ([GridSpec]); [WidgetGridView] turns them into pixels.
- * When the grid changes size (fold/unfold), stored positions are re-fitted for display only, so
- * unfolding again restores the original arrangement.
+ * Positions are stored as cells of the 4 × 2 grid ([GridSpec]); [WidgetGridView] turns them into
+ * pixels, so they survive screen-size changes. Widgets that don't fit are kept, never deleted.
  *
  * Add flow (the same one the stock launcher uses):
  *   picker → allocate id → bind (asks you once: "Allow Searchlight to create widgets") →
@@ -99,6 +98,10 @@ class WidgetController(
             prefs.widgetGrid = alive
         }
         val fit = WidgetGrid.fitToGrid(alive, grid.cols, grid.rows)
+        // Widgets that had to move (e.g. from the old taller grid) keep their new cells; ones
+        // that don't fit at all stay stored as they were and appear once space frees up.
+        val settled = WidgetGrid.settle(alive, fit)
+        if (settled != alive) prefs.widgetGrid = settled
         grid.setWidgets(fit.shown.mapNotNull { spec -> viewFor(spec.id)?.let { it to spec } })
     }
 
@@ -130,8 +133,6 @@ class WidgetController(
     // ------------------------------------------------------------------ grid callbacks
 
     override fun onEditModeChanged(editing: Boolean) = onEditModeChanged.invoke(editing)
-
-    override fun onGridSizeChanged(cols: Int, rows: Int) = render()
 
     /** A move or resize was dropped on free cells: that's now the stored position. */
     override fun onCommit(spec: GridSpec) {

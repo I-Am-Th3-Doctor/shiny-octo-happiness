@@ -44,6 +44,10 @@
     <dimen name="size_favorites_grid">288dp</dimen>   <!-- 3 cells -->
     <dimen name="size_signal_label_max">180dp</dimen>
     <dimen name="size_calc_preview_max">160dp</dimen>   <!-- answer in the search row -->
+    <dimen name="size_edit_bar">40dp</dimen>            <!-- edit-mode pill -->
+    <!-- Space kept above the widget grid so the edit pill never covers a cell:
+         space_s + size_edit_bar + space_s. -->
+    <dimen name="size_edit_bar_reserve">56dp</dimen>
     <dimen name="size_preview_width">120dp</dimen>    <!-- widget picker preview -->
     <dimen name="size_preview_height">88dp</dimen>
     <dimen name="stroke_hairline">1.5dp</dimen>
@@ -97,11 +101,16 @@
     <color name="avatar_7">#FF66BB6A</color>
     <color name="avatar_8">#FF8D6E63</color>
 
+    <!-- ===== Typeface ============================================================ -->
+    <!-- Lexend everywhere (bundled in res/font). Set as the theme default in themes.xml, so
+         every TextView, Button, Switch, EditText, dialog and popup menu picks it up. -->
+
     <!-- ===== Text appearances (the type scale as styles) ========================= -->
     <!-- parent="" on purpose: they set size and weight only, never color, so applying one
          from code can't reset a view's text color. -->
     <style name="TextAppearance.Searchlight.Glance" parent="">
         <item name="android:textSize">@dimen/text_glance</item>
+        <item name="android:fontFamily">@font/lexend</item>
         <item name="android:textStyle">bold</item>
         <item name="android:includeFontPadding">false</item>
     </style>
@@ -109,15 +118,17 @@
     <!-- Semibold: weight 600 (Android 9+, below our minSdk 29). -->
     <style name="TextAppearance.Searchlight.TileTitle" parent="">
         <item name="android:textSize">@dimen/text_tile_title</item>
-        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:fontFamily">@font/lexend</item>
         <item name="android:textFontWeight">600</item>
     </style>
 
     <style name="TextAppearance.Searchlight.Body" parent="">
         <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:fontFamily">@font/lexend</item>
     </style>
 
     <style name="TextAppearance.Searchlight.Caption" parent="">
         <item name="android:textSize">@dimen/text_caption</item>
+        <item name="android:fontFamily">@font/lexend</item>
     </style>
 </resources>

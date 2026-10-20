@@ -28,11 +28,14 @@
             android:layout_height="0dp"
             android:layout_weight="1">
 
+            <!-- Top margin = the edit pill's lane, kept in both modes so widgets never shift
+                 and the pill never covers the first row of cells. -->
             <io.github.iamth3doctor.searchlight.widgets.WidgetGridView
                 android:id="@+id/widgetGrid"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_marginHorizontal="@dimen/space_s" />
+                android:layout_marginHorizontal="@dimen/space_s"
+                android:layout_marginTop="@dimen/size_edit_bar_reserve" />
 
             <!-- Results read top-down (apps grid, then sections) and sit just above the card;
                  when there are more than fit, the list scrolls. -->
@@ -47,46 +50,39 @@
                 android:paddingVertical="@dimen/space_s"
                 android:visibility="gone" />
 
-            <!-- Edit mode only: add a widget, open settings, or finish arranging. -->
+            <!-- Edit mode only: a slim floating pill, top-center, in the lane above the grid. -->
             <LinearLayout
                 android:id="@+id/editBar"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="@dimen/size_edit_bar"
                 android:layout_gravity="top|center_horizontal"
-                android:layout_marginHorizontal="@dimen/space_m"
-                android:layout_marginTop="@dimen/space_xs"
-                android:background="@drawable/bg_glance_card"
+                android:layout_marginTop="@dimen/space_s"
+                android:background="@drawable/bg_pill_raised"
                 android:elevation="@dimen/elevation_raised"
+                android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/space_xs"
+                android:paddingHorizontal="@dimen/space_xs"
                 android:visibility="gone">
 
-                <Button
+                <TextView
                     android:id="@+id/editAdd"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/menu_add_widget"
-                    android:textAppearance="@style/TextAppearance.Searchlight.Body"
-                    android:textColor="@color/on_surface" />
+                    style="@style/EditPillButton"
+                    android:text="@string/edit_add_widget" />
 
-                <Button
+                <ImageButton
                     android:id="@+id/editSettings"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/menu_launcher_settings"
-                    android:textAppearance="@style/TextAppearance.Searchlight.Body"
-                    android:textColor="@color/on_surface" />
+                    android:layout_width="@dimen/size_edit_bar"
+                    android:layout_height="@dimen/size_edit_bar"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/menu_launcher_settings"
+                    android:padding="@dimen/space_s"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_settings" />
 
-                <Button
+                <TextView
                     android:id="@+id/editDone"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    style="@style/EditPillButton"
                     android:text="@string/edit_done"
-                    android:textAppearance="@style/TextAppearance.Searchlight.Body"
-                    android:textColor="@color/on_surface"
                     android:textStyle="bold" />
             </LinearLayout>
         </FrameLayout>

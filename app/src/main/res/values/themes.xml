@@ -13,6 +13,8 @@
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         <item name="android:colorAccent">@color/accent</item>
         <item name="android:textColorHighlight">@color/accent_soft</item>
+        <item name="android:fontFamily">@font/lexend</item>
+        <item name="android:alertDialogTheme">@style/Theme.Searchlight.Dialog</item>
     </style>
 
     <!-- Settings, Widget Center, pickers: follow the system light/dark theme, with our accent. -->
@@ -20,6 +22,8 @@
          content, so the header can never end up under the status bar (Android 15+). -->
     <style name="Theme.Searchlight.Settings" parent="android:Theme.DeviceDefault.DayNight">
         <item name="android:colorAccent">@color/accent</item>
+        <item name="android:fontFamily">@font/lexend</item>
+        <item name="android:alertDialogTheme">@style/Theme.Searchlight.Dialog</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
@@ -37,6 +41,25 @@
         <item name="android:maxLines">2</item>
         <item name="android:ellipsize">end</item>
         <item name="android:accessibilityHeading">true</item>
+    </style>
+
+    <!-- Dialogs (pickers, brightness, greeting): Lexend + accent, light/dark per system. -->
+    <style name="Theme.Searchlight.Dialog" parent="android:Theme.DeviceDefault.Light.Dialog.Alert">
+        <item name="android:fontFamily">@font/lexend</item>
+        <item name="android:colorAccent">@color/accent</item>
+    </style>
+
+    <!-- A compact text button in the edit-mode pill: sizes to its label, never wraps. -->
+    <style name="EditPillButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:background">?android:attr/selectableItemBackgroundBorderless</item>
+        <item name="android:gravity">center</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:paddingHorizontal">@dimen/space_m</item>
+        <item name="android:textAppearance">@style/TextAppearance.Searchlight.Body</item>
+        <item name="android:textColor">@color/on_surface</item>
     </style>
 
     <style name="OnWallpaperText">

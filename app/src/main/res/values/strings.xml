@@ -131,9 +131,9 @@
     <string name="settings_section_quick_actions">Quick Actions</string>
 
     <!-- Real widgets (Phase 3) -->
-    <string name="menu_add_widget">Add widget</string>
     <string name="widgets_empty_hint">Long-press here to add and arrange widgets</string>
-    <string name="edit_done">Done</string>
+    <string name="edit_done">✓ Done</string>
+    <string name="edit_add_widget">+ Widget</string>
     <string name="widget_no_room">No free space for that widget. Remove or shrink one first.</string>
     <string name="widget_removed">Widget removed</string>
     <string name="widget_picker_title">Add a widget</string>

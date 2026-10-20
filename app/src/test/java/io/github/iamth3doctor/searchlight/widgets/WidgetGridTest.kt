@@ -17,10 +17,26 @@ class WidgetGridTest {
         assertTrue(WidgetGrid.parse(null).isEmpty())
     }
 
-    @Test fun startsAtFourBySixOnAPhone() {
-        assertEquals(4 to 6, WidgetGrid.gridSize(411f, 520f))
-        assertEquals(6 to 6, WidgetGrid.gridSize(600f, 520f)) // unfolded, column capped at 600dp
-        assertEquals(4 to 3, WidgetGrid.gridSize(300f, 100f)) // never fewer than 4 × 3
+    @Test fun oldTallLayoutMovesIntoFourByTwoWithoutLosingAnything() {
+        // Laid out on the old 4 × 6 grid: one fits as-is, two sat in rows that no longer exist.
+        val stored = listOf(g(1, 0, 0, 2, 1), g(2, 0, 3, 2, 2), g(3, 0, 5, 4, 1))
+        val fit = WidgetGrid.fitToGrid(stored, WidgetGrid.COLUMNS, WidgetGrid.ROWS)
+        assertEquals(g(1, 0, 0, 2, 1), fit.shown[0])          // untouched
+        assertEquals(g(2, 2, 0, 2, 2), fit.shown[1])          // first free cells that fit its span
+        assertEquals(g(3, 0, 1, 2, 1), fit.shown[2])          // shrunk to the space left
+        val settled = WidgetGrid.settle(stored, fit)
+        assertEquals(listOf(1, 2, 3), settled.map { it.id })  // nothing deleted
+        assertTrue(settled.all { it.inBounds(WidgetGrid.COLUMNS, WidgetGrid.ROWS) })
+    }
+
+    @Test fun moreWidgetsThanCellsAreKeptNotDeleted() {
+        val stored = (1..10).map { g(it, 0, it, 1, 1) }       // ten 1×1 widgets, eight cells
+        val fit = WidgetGrid.fitToGrid(stored, WidgetGrid.COLUMNS, WidgetGrid.ROWS)
+        assertEquals(8, fit.shown.size)
+        assertEquals(listOf(9, 10), fit.hidden)
+        val settled = WidgetGrid.settle(stored, fit)
+        assertEquals(10, settled.size)                         // the two extras stay stored
+        assertEquals(g(9, 0, 9, 1, 1), settled[8])             // with their old entry, untouched
     }
 
     @Test fun overlapAndBounds() {
