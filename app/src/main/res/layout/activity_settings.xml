@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scroll"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="16dp"
+        app:maxWidth="@dimen/content_max_width">
+
+        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="0dp" android:text="@string/settings_section_home" />
+
+        <Button
+            android:id="@+id/setDefault"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_set_default" />
+
+        <Switch
+            android:id="@+id/autoKeyboard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="@string/settings_auto_keyboard" />
+
+        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_favorites" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_favorites_help"
+            android:textAppearance="?android:attr/textAppearanceSmall" />
+
+        <LinearLayout
+            android:id="@+id/favoritesList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical" />
+
+        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_about" />
+
+        <TextView
+            android:id="@+id/about"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall" />
+    </io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout>
+</ScrollView>

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- 1px anchor moved to the touch point so long-press menus open where you pressed. -->
+    <View
+        android:id="@+id/menuAnchor"
+        android:layout_width="1dp"
+        android:layout_height="1dp" />
+
+    <io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout
+        android:id="@+id/column"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_horizontal"
+        android:orientation="vertical"
+        app:maxWidth="@dimen/content_max_width">
+
+        <!-- Phase 2: glance (time/date/battery/weather). Phase 3: widgets. -->
+        <FrameLayout
+            android:id="@+id/glance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <!-- reverseLayout: the best result sits right above the bar, nearest your thumb. -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/results"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp" />
+
+        <LinearLayout
+            android:id="@+id/searchBar"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/search_bar_height"
+            android:layout_marginHorizontal="12dp"
+            android:background="@drawable/bg_search_bar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="4dp">
+
+            <ImageButton
+                android:id="@+id/searchIcon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/search_icon_desc"
+                android:src="@drawable/ic_search" />
+
+            <EditText
+                android:id="@+id/searchInput"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@null"
+                android:hint="@string/search_hint"
+                android:imeOptions="actionGo|flagNoExtractUi|flagNoPersonalizedLearning"
+                android:importantForAutofill="no"
+                android:inputType="text|textNoSuggestions|textFilter"
+                android:maxLines="1"
+                android:paddingHorizontal="4dp"
+                android:textColor="@color/on_wallpaper"
+                android:textColorHint="@color/on_wallpaper_dim"
+                android:textSize="18sp" />
+
+            <ImageButton
+                android:id="@+id/clearButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/clear_desc"
+                android:src="@drawable/ic_close"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/favoritesRow"
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp" />
+    </io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout>
+</FrameLayout>

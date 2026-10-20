@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home screen: transparent over the wallpaper, edge to edge. -->
+    <style name="Theme.Searchlight" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:colorAccent">#FF8C9EFF</item>
+        <item name="android:textColorHighlight">#668C9EFF</item>
+    </style>
+
+    <style name="Theme.Searchlight.Settings" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:colorAccent">#FF3D5AFE</item>
+    </style>
+
+    <style name="OnWallpaperText">
+        <item name="android:textColor">@color/on_wallpaper</item>
+        <item name="android:shadowColor">@color/text_shadow</item>
+        <item name="android:shadowRadius">6</item>
+        <item name="android:shadowDy">1</item>
+    </style>
+
+    <style name="SettingsSection">
+        <item name="android:textAppearance">?android:attr/textAppearanceSmall</item>
+        <item name="android:textColor">?android:attr/colorAccent</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingTop">24dp</item>
+        <item name="android:paddingBottom">8dp</item>
+    </style>
+</resources>
