@@ -8,3 +8,6 @@ CI screenshots (Screenshots #58/#59). "Unfolded" is the emulator display resized
 - `unfolded-screens.png`: the 7-column widget grid (edit mode), results capped and centered,
   the app table in 7 columns.
 - `folded-unchanged.png`: folded home, edit mode, search and app table, as before.
+- `rail-and-all-apps.png` (Screenshots #63): the right rail (search, favorites, all apps) with
+  the tile row; the two-column all-apps panel; search opened from the rail; a search; the
+  rail with favorites set. `folded-unchanged-rail.png`: folded home, search and favorites popup.
