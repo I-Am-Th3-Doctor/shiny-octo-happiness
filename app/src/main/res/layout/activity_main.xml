@@ -150,7 +150,7 @@
             android:orientation="vertical"
             android:padding="@dimen/space_s">
 
-            <!-- One row of tiles, the same height as the search row; the page dots sit inside
+            <!-- One row of tiles (size_tile_height); the page dots sit inside
                  it along the bottom edge. -->
             <FrameLayout
                 android:id="@+id/cardArea"

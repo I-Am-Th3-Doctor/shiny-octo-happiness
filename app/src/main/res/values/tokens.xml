@@ -35,14 +35,14 @@
     <dimen name="size_touch_wide">56dp</dimen>        <!-- primary control (play/pause) -->
     <dimen name="size_icon">24dp</dimen>
     <dimen name="size_avatar">40dp</dimen>            <!-- result icons, contact photos -->
-    <dimen name="size_row">56dp</dimen>
-    <dimen name="size_search_row">60dp</dimen>        <!-- the search pill in the home card -->               <!-- list row / search row height -->
+    <dimen name="size_row">56dp</dimen>               <!-- list row height -->
+    <dimen name="size_search_row">56dp</dimen>        <!-- the search pill in the home card -->
     <dimen name="size_row_tall">96dp</dimen>          <!-- widget-picker row -->
     <dimen name="size_quick_action">56dp</dimen>      <!-- Quick Actions circle -->
     <dimen name="size_badge">24dp</dimen>             <!-- edit-mode remove / resize badges -->
     <dimen name="size_dot">6dp</dimen>                <!-- page dots, inside the tile row -->
     <dimen name="size_progress">4dp</dimen>           <!-- day-of-year bar -->
-    <dimen name="size_tile_height">@dimen/size_row</dimen>  <!-- the tile pager: one row, like the search row -->
+    <dimen name="size_tile_height">60dp</dimen>      <!-- the tile pager: one row of tiles -->
     <dimen name="size_grid_icon">56dp</dimen>         <!-- favorites grid icon -->
     <dimen name="size_result_icon">48dp</dimen>       <!-- search results app icon -->
     <dimen name="marquee_speed">32dp</dimen>           <!-- tile text scroll, per second -->
