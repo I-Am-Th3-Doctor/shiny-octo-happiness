@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One-row strip: battery %, charging status, then Wi-Fi and mobile signal. -->
+<!-- One-row strip: battery %, charging status, then Wi-Fi and mobile signal (a long name
+     loses its start, never the bars). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -30,6 +31,7 @@
             android:id="@+id/wifiSignal"
             style="@style/StripText"
             android:layout_marginStart="@dimen/space_s"
+            android:ellipsize="start"
             android:maxWidth="@dimen/size_strip_label_max"
             android:textColor="@color/on_surface_dim"
             android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
@@ -38,6 +40,7 @@
             android:id="@+id/cellSignal"
             style="@style/StripText"
             android:layout_marginStart="@dimen/space_s"
+            android:ellipsize="start"
             android:maxWidth="@dimen/size_strip_label_max"
             android:textColor="@color/on_surface_dim"
             android:textAppearance="@style/TextAppearance.Searchlight.Caption" />

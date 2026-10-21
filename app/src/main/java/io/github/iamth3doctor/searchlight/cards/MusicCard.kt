@@ -150,8 +150,8 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
             art.scaleType = ImageView.ScaleType.FIT_CENTER
             art.setImageDrawable(runCatching { activity.packageManager.getApplicationIcon(def) }.getOrNull())
             title.text = line(MusicApps.label(activity, def), activity.getString(if (hasAccess()) R.string.music_default_idle else R.string.music_needs_access))
-            prev.visibility = View.INVISIBLE
-            next.visibility = View.INVISIBLE
+            prev.visibility = View.GONE
+            next.visibility = View.GONE
             playPause.visibility = View.VISIBLE
             playPause.setImageResource(R.drawable.ic_play)
             return
@@ -184,7 +184,8 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
     }
 
     private fun setControlsVisible(visible: Boolean) {
-        val v = if (visible) View.VISIBLE else View.INVISIBLE
+        // Gone, not invisible: in the one-row tile the text gets the room back.
+        val v = if (visible) View.VISIBLE else View.GONE
         prev.visibility = v
         playPause.visibility = v
         next.visibility = v
