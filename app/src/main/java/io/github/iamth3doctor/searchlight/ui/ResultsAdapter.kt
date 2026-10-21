@@ -24,7 +24,7 @@ import io.github.iamth3doctor.searchlight.search.Section
 import io.github.iamth3doctor.searchlight.util.Snippet
 
 /**
- * Search results: apps as an icon grid block on top (2 rows visible, scrolls for more), then
+ * Search results: every matching app as an icon grid block on top, then
  * everything else as list rows under small section headers (see [ResultLayout]). One selection runs through grid and rows; Enter opens it.
  * Every list row uses one layout; what differs is the leading badge and the trailing buttons.
  */

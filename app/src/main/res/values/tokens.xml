@@ -39,6 +39,7 @@
     <dimen name="size_progress">4dp</dimen>           <!-- day-of-year bar -->
     <dimen name="size_tile_height">@dimen/size_row</dimen>  <!-- the tile pager: one row, like the search row -->
     <dimen name="size_grid_icon">56dp</dimen>         <!-- favorites grid icon -->
+    <dimen name="size_result_icon">48dp</dimen>       <!-- search results app icon -->
     <dimen name="marquee_speed">32dp</dimen>           <!-- tile text scroll, per second -->
     <dimen name="size_calc_preview_max">160dp</dimen>   <!-- answer in the search row -->
     <dimen name="size_edit_bar">40dp</dimen>            <!-- edit-mode pill -->

@@ -37,6 +37,13 @@ class SearchEditingTest {
             home.onActivity { focused = it.hasWindowFocus() }
             if (!focused) Thread.sleep(100)
         }
+        // ...and until the on-screen keyboard has finished opening, so it doesn't eat a key.
+        var ime = false
+        while (!ime && SystemClock.uptimeMillis() < deadline + 3_000) {
+            home.onActivity { ime = it.window.decorView.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true }
+            if (!ime) Thread.sleep(100)
+        }
+        Thread.sleep(500)
         // One key at a time: the first character hides the tiles and shows the results, and
         // that relayout must not take focus (and with it every later key) away from the field.
         for ((i, c) in "chrome".withIndex()) {

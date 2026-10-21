@@ -42,8 +42,9 @@ import kotlin.math.max
 
 /**
  * The home screen: wallpaper and one frosted home card (tiles with page dots + the search row).
- * No dock. Typing folds the tiles away; results appear above the card: an app grid (2 rows
- * visible, scrolls for more), then contacts / files / actions as rows under section headers.
+ * No dock. Typing folds the tiles away; results appear above the card: a grid of every matching
+ * app, then contacts / files / actions as rows under section headers. The list scrolls only
+ * when it's taller than the space above the card.
  */
 class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
@@ -298,7 +299,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     /**
      * Results: a vertical list whose first block is the app grid (4 columns folded, 6 unfolded,
-     * 2 rows visible). Columns are recomputed whenever the width changes.
+     * every matching app). Columns are recomputed whenever the width changes.
      */
     private fun setupResultsGrid() {
         adapter.columns = columnsFor(resources.displayMetrics.widthPixels)

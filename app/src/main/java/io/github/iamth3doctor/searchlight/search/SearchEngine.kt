@@ -20,7 +20,7 @@ class SearchEngine(
         Calculator.evaluate(query)?.let { out += SearchResult.Calc(query.trim(), it) }
 
         val scored = ArrayList<Pair<SearchResult, Int>>()
-        Ranking.rankScored(query, apps.apps, { it.matchKey }, { prefs.launchCount(it.key) }, MAX_APPS)
+        Ranking.rankScored(query, apps.apps, { it.matchKey }, { prefs.launchCount(it.key) }, limit = Int.MAX_VALUE)
             .forEach { (app, score) -> scored += SearchResult.App(app) to score }
         if (searchesContacts(query)) {
             searchContacts(query).forEach { (c, score) -> scored += SearchResult.Contact(c) to score - CONTACT_PENALTY }
@@ -44,11 +44,10 @@ class SearchEngine(
     }
 
     companion object {
-        /** Contacts join in from the second character; one letter matches too many of them. Apps start at one. */
+        /** Contacts join in from the second character; one letter matches too many of them. Apps start at one, and every matching app is shown. */
         fun searchesContacts(query: String) = query.trim().length >= MIN_CONTACT_QUERY
 
         private const val MIN_CONTACT_QUERY = 2
-        private const val MAX_APPS = 8
         private const val MAX_CONTACTS = 5
         /** Apps are what you usually want from a launcher; a contact wins only on a clearly better match. */
         private const val CONTACT_PENALTY = 30

@@ -5,7 +5,7 @@ enum class Section { APPS, ANSWER, CONTACTS, MUSIC, PHOTOS, MESSAGES, FILES, ACT
 
 /**
  * Turns a flat result list into what the results view shows: the apps as one grid block on top
- * (2 rows visible, scrolls for more), then list rows grouped under small section headers. Also owns keyboard/selection movement through that
+ * (all of them), then list rows grouped under small section headers. Also owns keyboard/selection movement through that
  * shape. Pure Kotlin (generic over the item type); JVM-tested.
  */
 class ResultLayout<T>(items: List<T>, sectionOf: (T) -> Section) {
