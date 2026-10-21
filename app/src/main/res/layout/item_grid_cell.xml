@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One favorite: icon with its name beneath. Width is a sixth of the row (set in code). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="@dimen/size_grid_cell"
+    android:layout_width="0dp"
     android:layout_height="wrap_content"
+    android:layout_weight="1"
     android:background="?android:attr/selectableItemBackground"
     android:gravity="center_horizontal"
     android:orientation="vertical"
-    android:padding="@dimen/space_s">
+    android:paddingHorizontal="@dimen/space_xs"
+    android:paddingVertical="@dimen/space_s">
 
     <ImageView
         android:id="@+id/icon"

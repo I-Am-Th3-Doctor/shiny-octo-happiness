@@ -29,7 +29,14 @@ class SearchEditingTest {
         home.onActivity {
             it.findViewById<android.view.View>(R.id.searchPill).performClick()
         }
-        instrumentation.waitForIdleSync()
+        // Injected keys go to the focused window: wait until ours has focus.
+        val deadline = SystemClock.uptimeMillis() + 5_000
+        var focused = false
+        while (!focused && SystemClock.uptimeMillis() < deadline) {
+            instrumentation.waitForIdleSync()
+            home.onActivity { focused = it.hasWindowFocus() }
+            if (!focused) Thread.sleep(100)
+        }
         // One key at a time: the first character hides the tiles and shows the results, and
         // that relayout must not take focus (and with it every later key) away from the field.
         for ((i, c) in "chrome".withIndex()) {

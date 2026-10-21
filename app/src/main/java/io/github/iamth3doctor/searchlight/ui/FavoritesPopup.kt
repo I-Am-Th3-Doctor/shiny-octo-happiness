@@ -16,7 +16,8 @@ import io.github.iamth3doctor.searchlight.databinding.ItemGridCellBinding
 import io.github.iamth3doctor.searchlight.databinding.PopupFavoritesBinding
 
 /**
- * The 3x2 grid of favorites shown when you long-press the magnifier.
+ * The favorites shown when you long-press the magnifier: one row of six, as wide as the home
+ * card, with icons sized so all six fit (folded or unfolded).
  *
  * Not focusable on purpose: the keyboard stays up, so dismissing the grid (tap outside, or just
  * start typing) drops you straight back into search.
@@ -36,9 +37,11 @@ class FavoritesPopup(
         val b = PopupFavoritesBinding.inflate(LayoutInflater.from(activity))
         val favorites = prefs.favorites.mapNotNull(repo::find)
         val inflater = LayoutInflater.from(activity)
+        val iconPx = iconSize(above.width - b.root.paddingLeft - b.root.paddingRight)
 
         for (i in 0 until Prefs.MAX_FAVORITES) {
-            val cell = ItemGridCellBinding.inflate(inflater, b.grid, false)
+            val cell = ItemGridCellBinding.inflate(inflater, b.row, false)
+            cell.icon.layoutParams = cell.icon.layoutParams.apply { width = iconPx; height = iconPx }
             val entry = favorites.getOrNull(i)
             if (entry != null) {
                 cell.label.text = entry.label
@@ -57,17 +60,17 @@ class FavoritesPopup(
                     Toast.makeText(activity, R.string.favorites_empty_hint, Toast.LENGTH_SHORT).show()
                 }
             }
-            b.grid.addView(cell.root)
+            b.row.addView(cell.root)
         }
         b.hint.visibility = if (favorites.isEmpty()) View.VISIBLE else View.GONE
 
-        val popup = PopupWindow(b.root, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, false)
+        val popup = PopupWindow(b.root, above.width, ViewGroup.LayoutParams.WRAP_CONTENT, false)
         popup.setBackgroundDrawable(ColorDrawable(0))
         popup.isOutsideTouchable = true
         popup.elevation = 12f
         popup.animationStyle = android.R.style.Animation_Dialog
 
-        // Position the grid just above the anchor (the search bar), centered on it.
+        // Position the row just above the anchor (the home card), centered on it.
         val loc = IntArray(2)
         above.getLocationInWindow(loc)
         val rootHeight = activity.window.decorView.height
@@ -75,6 +78,12 @@ class FavoritesPopup(
         val centerX = loc[0] + above.width / 2 - activity.window.decorView.width / 2
         popup.showAtLocation(above, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, centerX, rootHeight - loc[1] + gap)
         window = popup
+    }
+
+    /** Largest icon (up to the usual size) that lets six cells fit across [rowWidthPx]. */
+    private fun iconSize(rowWidthPx: Int): Int {
+        val cellPadding = 2 * activity.px(R.dimen.space_xs)
+        return minOf(activity.px(R.dimen.size_grid_icon), rowWidthPx / Prefs.MAX_FAVORITES - cellPadding)
     }
 
     fun dismiss() {

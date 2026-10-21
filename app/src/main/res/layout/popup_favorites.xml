@@ -1,21 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Favorites: one row of six, as wide as the home card (icon size is set in code to fit). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="wrap_content"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_card"
     android:elevation="@dimen/elevation_raised"
     android:orientation="vertical"
-    android:padding="@dimen/space_m">
+    android:paddingHorizontal="@dimen/space_s"
+    android:paddingVertical="@dimen/space_m">
 
-    <GridLayout
-        android:id="@+id/grid"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:id="@+id/row"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:columnCount="3" />
+        android:orientation="horizontal" />
 
     <TextView
         android:id="@+id/hint"
-        android:layout_width="@dimen/size_favorites_grid"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/space_s"
         android:gravity="center"
