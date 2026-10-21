@@ -36,14 +36,16 @@
             android:id="@+id/setDefault"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/settings_set_default" />
+            android:text="@string/settings_set_default"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
 
         <Switch
             android:id="@+id/autoKeyboard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="@dimen/size_touch"
-            android:text="@string/settings_auto_keyboard" />
+            android:text="@string/settings_auto_keyboard"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
 
         <LinearLayout
             android:id="@+id/greetingRow"
@@ -88,7 +90,8 @@
             style="?android:attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/index_rebuild" />
+            android:text="@string/index_rebuild"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
 
         <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_favorites" />
 

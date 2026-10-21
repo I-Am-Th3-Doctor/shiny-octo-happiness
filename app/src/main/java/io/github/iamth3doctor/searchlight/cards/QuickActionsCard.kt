@@ -27,8 +27,10 @@ import androidx.core.content.ContextCompat
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.searchlight
 import io.github.iamth3doctor.searchlight.ui.Permissions
+import io.github.iamth3doctor.searchlight.ui.Type
 import io.github.iamth3doctor.searchlight.ui.color
 import io.github.iamth3doctor.searchlight.ui.px
+import io.github.iamth3doctor.searchlight.ui.type
 
 /**
  * Four circular toggles, rendered from the slot config saved in Settings → Quick Actions.
@@ -246,6 +248,7 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
         val pad = activity.px(R.dimen.space_l)
         val autoSwitch = Switch(activity).apply {
             setText(R.string.qa_brightness_auto)
+            type(Type.BODY)
             isChecked = system(Settings.System.SCREEN_BRIGHTNESS_MODE, 0) == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
         }
         val seek = SeekBar(activity).apply {
