@@ -65,6 +65,7 @@
     <!-- ===== Color: neutral dark translucent surfaces (55–65% near-black) ======== -->
     <color name="surface_card">#9E0B0B0D</color>    <!-- 62%: the home card -->
     <color name="surface_raised">#A60B0B0D</color>  <!-- 65%: popups, edit bar, badges -->
+    <color name="surface_frost">#730B0B0D</color>   <!-- 45%: over the blurred wallpaper (results panel, web pill) -->
     <color name="surface_sheet">#E00B0B0D</color>   <!-- 88%: full-screen app table -->
     <color name="surface_inset">#1FFFFFFF</color>   <!-- the search row inside the card -->
     <color name="control_off">#33FFFFFF</color>     <!-- off toggles, empty art, tracks -->

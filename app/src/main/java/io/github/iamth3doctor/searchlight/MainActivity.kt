@@ -1,6 +1,7 @@
 package io.github.iamth3doctor.searchlight
 
 import android.app.Activity
+import android.app.WallpaperManager
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
@@ -38,8 +39,11 @@ import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.AppTableAdapter
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
+import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
 import io.github.iamth3doctor.searchlight.ui.ResultsAdapter
 import io.github.iamth3doctor.searchlight.ui.Swipe
+import io.github.iamth3doctor.searchlight.ui.WallpaperBlur
+import io.github.iamth3doctor.searchlight.ui.color
 import io.github.iamth3doctor.searchlight.ui.px
 import io.github.iamth3doctor.searchlight.ui.pxF
 import io.github.iamth3doctor.searchlight.widgets.WidgetController
@@ -106,12 +110,14 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.apps.addListener(sourcesChanged)
         app.contacts.addListener(sourcesChanged)
         app.files.addListener(sourcesChanged)
+        WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperChanged, android.os.Handler(mainLooper))
     }
 
     override fun onDestroy() {
         app.apps.removeListener(sourcesChanged)
         app.contacts.removeListener(sourcesChanged)
         app.files.removeListener(sourcesChanged)
+        WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperChanged)
         super.onDestroy()
     }
 
@@ -284,9 +290,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             val enter = actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE ||
                 (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
             if (enter) {
-                adapter.selectedResult()?.let {
-                    onClick(it, binding.results.findViewHolderForAdapterPosition(adapter.selectedPosition())?.itemView ?: input)
-                }
+                // The highlighted result, or the web search when nothing else matched.
+                val result = adapter.selectedResult() ?: SearchResult.Web(query().trim(), prefs.webEngine)
+                onClick(result, binding.results.findViewHolderForAdapterPosition(adapter.selectedPosition())?.itemView ?: input)
             }
             enter
         }
@@ -384,6 +390,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun setupResultsGrid() {
         adapter.columns = columnsFor(resources.displayMetrics.widthPixels)
         binding.results.layoutManager = LinearLayoutManager(this)
+        // Frosted panel and pill: blurred wallpaper under a dark tint (see FrostedDrawable).
+        binding.resultsPanel.background = frosted(binding.resultsPanel, R.dimen.radius_card)
+        binding.resultsPanel.clipToOutline = true // scrolled results slide under the rounded corners
+        binding.webPill.background = frosted(binding.webPill, R.dimen.radius_pill)
+        binding.webPill.clipToOutline = true
+        binding.webPill.setOnClickListener { onClick(SearchResult.Web(query().trim(), prefs.webEngine), it) }
         // Nothing in the results may take focus: key events (Backspace from the on-screen
         // keyboard, arrows from a hardware one) go to the focused view, and that must stay the
         // search field; if the field ever loses focus, this keeps the results from catching it.
@@ -399,6 +411,16 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
     }
 
+    private fun frosted(view: View, radius: Int) =
+        FrostedDrawable(view, pxF(radius), color(R.color.surface_frost), color(R.color.surface_card))
+
+    /** A new wallpaper means a new blur behind the results panel and pill. */
+    private val wallpaperChanged = WallpaperManager.OnColorsChangedListener { _, _ ->
+        WallpaperBlur.invalidate()
+        binding.resultsPanel.invalidate()
+        binding.webPill.invalidate()
+    }
+
     private fun columnsFor(widthPx: Int): Int =
         if (widthPx / resources.displayMetrics.density >= UNFOLDED_MIN_WIDTH_DP) 6 else 4
 
@@ -408,7 +430,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * on-screen keyboard's cursor keys still move the text cursor.
      */
     private fun navigateResults(keyCode: Int, event: KeyEvent): Boolean {
-        if (!binding.results.isVisible) return false
+        if (!binding.resultsStack.isVisible) return false
         val hardKeyboard = resources.configuration.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
         val move = when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> ResultLayout.Move.UP
@@ -453,7 +475,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.cardArea.isVisible = !searching && cards.isNotEmpty()
         if (searching) widgets.exitEditMode()
         binding.widgetGrid.isVisible = !searching
-        binding.results.isVisible = searching
+        binding.resultsStack.isVisible = searching
         if (!searching) {
             app.background.cancel()
             local = emptyList()
@@ -480,13 +502,14 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         val list = ArrayList<SearchResult>(local.size + slowResults.size + 2)
         list += local
         list += slowResults
-        // Web search: first when nothing local matched (so Enter goes there), otherwise last.
-        list += SearchResult.Web(q, prefs.webEngine)
         if (!prefs.accessHintDismissed && (!app.contacts.hasPermission() || !app.files.hasPermission())) {
             list += SearchResult.AccessHint
         }
         adapter.submit(list)
         binding.results.scrollToPosition(0)
+        binding.resultsPanel.isVisible = list.isNotEmpty()
+        // Web search has its own pill under the panel (and Enter goes there when nothing matched).
+        binding.webPillText.text = getString(R.string.web_search_for, prefs.webEngine.label, q)
     }
 
     private fun resetHome() {

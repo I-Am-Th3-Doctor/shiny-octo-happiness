@@ -37,18 +37,63 @@
                 android:layout_marginHorizontal="@dimen/space_s"
                 android:layout_marginTop="@dimen/size_edit_bar_reserve" />
 
-            <!-- Results read top-down (apps grid, then sections) and sit just above the card;
-                 when there are more than fit, the list scrolls. -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/results"
+            <!--
+              Searching: a stack above the card. A frosted results panel (apps grid, then
+              sections; as tall as its results up to 70% of the screen, then it scrolls), and
+              under it the web-search pill. Nothing sits directly on the wallpaper.
+            -->
+            <LinearLayout
+                android:id="@+id/resultsStack"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom"
-                android:clipToPadding="false"
-                android:overScrollMode="never"
+                android:orientation="vertical"
                 android:paddingHorizontal="@dimen/space_m"
-                android:paddingVertical="@dimen/space_s"
-                android:visibility="gone" />
+                android:paddingBottom="@dimen/space_s"
+                android:visibility="gone">
+
+                <io.github.iamth3doctor.searchlight.ui.ResultsPanel
+                    android:id="@+id/resultsPanel"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginBottom="@dimen/space_s"
+                    android:layout_weight="1">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/results"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clipToPadding="false"
+                        android:overScrollMode="never"
+                        android:padding="@dimen/space_m"
+                        android:scrollbars="none" />
+                </io.github.iamth3doctor.searchlight.ui.ResultsPanel>
+
+                <LinearLayout
+                    android:id="@+id/webPill"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/size_row"
+                    android:foreground="?android:attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="@dimen/space_m">
+
+                    <ImageView
+                        android:layout_width="@dimen/size_icon"
+                        android:layout_height="@dimen/size_icon"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_search"
+                        android:tint="@color/on_surface_dim" />
+
+                    <TextView
+                        android:id="@+id/webPillText"
+                        style="@style/StripText"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/space_m"
+                        android:textAppearance="@style/TextAppearance.Searchlight.Body" />
+                </LinearLayout>
+            </LinearLayout>
 
             <!-- Edit mode only: a slim floating pill, top-center, in the lane above the grid. -->
             <LinearLayout

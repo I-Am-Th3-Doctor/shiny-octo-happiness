@@ -57,6 +57,9 @@ class ScreenshotTest {
         val pkg = instrumentation.targetContext.packageName
         shell("cmd package set-home-activity $pkg/.MainActivity")
         shell("am force-stop com.google.android.apps.nexuslauncher")
+        // All Files Access, as on a set-up phone: file results, and the frosted panels can read
+        // the wallpaper to blur it.
+        shell("appops set $pkg MANAGE_EXTERNAL_STORAGE allow")
         // A deterministic, realistic state: weather for a fixed place, in °F.
         instrumentation.runOnMainSync {
             app.prefs.manualPlace = GeoPlace("Austin", "Texas", "US", 30.27, -97.74)
