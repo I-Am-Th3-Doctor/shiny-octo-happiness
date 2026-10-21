@@ -28,9 +28,13 @@ class SearchEditingTest {
         home = ActivityScenario.launch(MainActivity::class.java)
         home.onActivity { it.findViewById<android.view.View>(R.id.searchPill).performClick() }
         instrumentation.waitForIdleSync()
-        instrumentation.sendStringSync("chrome")
-        instrumentation.waitForIdleSync()
-        assertEquals("typed", "chrome", text())
+        // One key at a time: the first character shows the results, which must not pull focus
+        // (and with it every later key) away from the field.
+        for ((i, c) in "chrome".withIndex()) {
+            instrumentation.sendStringSync(c.toString())
+            instrumentation.waitForIdleSync()
+            assertEquals("typed ${i + 1} (focus: ${focus()})", "chrome".take(i + 1), text())
+        }
     }
 
     @After fun close() = home.close()
@@ -43,7 +47,15 @@ class SearchEditingTest {
 
     private fun focus(): String {
         var f = ""
-        home.onActivity { f = it.currentFocus?.let { v -> "${v.javaClass.simpleName}#${runCatching { v.resources.getResourceEntryName(v.id) }.getOrDefault("?")}" } ?: "none" }
+        home.onActivity {
+            var v: android.view.View? = it.currentFocus
+            val chain = ArrayList<String>()
+            while (v != null && chain.size < 6) {
+                chain += "${v.javaClass.simpleName}#${runCatching { v!!.resources.getResourceEntryName(v!!.id) }.getOrDefault("?")}"
+                v = v.parent as? android.view.View
+            }
+            f = chain.joinToString(" < ").ifEmpty { "none" }
+        }
         return f
     }
 
