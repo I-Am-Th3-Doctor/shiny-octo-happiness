@@ -16,6 +16,9 @@ import androidx.annotation.ColorInt
  * corners and an optional hairline [border] that catches the light. Without a readable wallpaper
  * (see [WallpaperBlur]) it's the [fallbackTint] alone, which is darker so text stays readable on
  * an unblurred wallpaper. Only the background: the host's content draws on top, untouched.
+ *
+ * With an [adaptive] layer the tint takes the wallpaper's own hue ([GlassTint]) instead of
+ * [tint], which then only applies if the wallpaper's color couldn't be sampled.
  */
 class FrostedDrawable(
     private val host: View,
@@ -24,7 +27,11 @@ class FrostedDrawable(
     @ColorInt fallbackTint: Int,
     @ColorInt border: Int = 0,
     borderWidth: Float = 0f,
+    private val adaptive: GlassTint.Layer? = null,
 ) : Drawable() {
+
+    private val fixedTint = tint
+    private var tintFrom: Int? = null
 
     private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint }
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fallbackTint }
@@ -48,6 +55,13 @@ class FrostedDrawable(
             canvas.drawRoundRect(rect, r, r, fallbackPaint)
             drawBorder(canvas, r)
             return
+        }
+        if (adaptive != null) {
+            val sample = WallpaperBlur.sampledColor()
+            if (sample != tintFrom) {
+                tintFrom = sample
+                tintPaint.color = if (sample == null) fixedTint else GlassTint.tint(sample, adaptive)
+            }
         }
         // Line the blurred wallpaper up with the screen: this view's corner is at (here - screen).
         host.getLocationOnScreen(here)

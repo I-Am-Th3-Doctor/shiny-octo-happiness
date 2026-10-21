@@ -43,6 +43,7 @@ import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.AppTableAdapter
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
 import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
+import io.github.iamth3doctor.searchlight.ui.GlassTint
 import io.github.iamth3doctor.searchlight.ui.ResultsAdapter
 import io.github.iamth3doctor.searchlight.ui.Swipe
 import io.github.iamth3doctor.searchlight.ui.WallpaperBlur
@@ -280,18 +281,21 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private fun setupHomeCard() {
         // Tiles open their own app/view; anywhere else on the card means "I want to search".
-        // Frosted glass (see FrostedDrawable): the card at 50% over the blurred wallpaper, the
-        // search row lighter at 35% so the two layers read apart; both with a light hairline.
-        // No blur available: 75% card, and the row is a faint light inset on it.
+        // Frosted glass (see FrostedDrawable) tinted with the wallpaper's own hue (GlassTint):
+        // dark enough for white text, the search row one step lighter than the card, both with
+        // a light hairline. Color not sampled: near-black at 50% / 35% over the blur. No blur at
+        // all: a 75% card, and the row a faint light inset on it.
         val border = color(R.color.glass_border)
         val borderWidth = pxF(R.dimen.stroke_glass)
         binding.homeCard.background = FrostedDrawable(
             binding.homeCard, pxF(R.dimen.radius_home_card),
             color(R.color.glass_card), color(R.color.glass_card_fallback), border, borderWidth,
+            adaptive = GlassTint.Layer.CARD,
         )
         binding.searchPill.background = FrostedDrawable(
             binding.searchPill, pxF(R.dimen.radius_home_row),
             color(R.color.glass_row), color(R.color.surface_inset), border, borderWidth,
+            adaptive = GlassTint.Layer.ROW,
         )
         binding.homeCard.clipToOutline = true
         // The tile strip's tap ripples follow the card's corners too (same radius as the search row).

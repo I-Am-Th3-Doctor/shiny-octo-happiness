@@ -18,12 +18,18 @@ import kotlin.math.roundToInt
  * wallpapers, and when the wallpaper can't be read: on Android 13+ that takes "Photos & videos"
  * access (READ_MEDIA_IMAGES; Settings › Permissions, photo search). Panels then fall back to
  * their plain tint.
+ *
+ * Alongside the blur it samples the color of the wallpaper's bottom strip (where the home card
+ * sits) for the card's tinted glass ([sampledColor], see [GlassTint]); cached the same way.
  */
 object WallpaperBlur {
     private const val DOWNSCALE = 8
+    /** Bottom share of the screen sampled for the card's color: the card and a little above. */
+    private const val CARD_STRIP = 0.22f
 
     private val main = Handler(Looper.getMainLooper())
     private var cached: Bitmap? = null
+    private var cachedColor: Int? = null
     private var cachedFor = 0L
     private var building = 0L
     private var generation = 0
@@ -40,10 +46,11 @@ object WallpaperBlur {
             val gen = generation
             val app = context.applicationContext
             Thread {
-                val bmp = runCatching { build(app, width, height) }.getOrNull()
+                val built = runCatching { build(app, width, height) }.getOrNull()
                 main.post {
                     if (gen != generation) return@post
-                    cached = bmp
+                    cached = built?.first
+                    cachedColor = built?.second
                     cachedFor = key
                     building = 0L
                     val callbacks = waiting.toList()
@@ -55,6 +62,9 @@ object WallpaperBlur {
         return null
     }
 
+    /** The wallpaper's color behind the home card, once [get] has built it; null if it couldn't be read. */
+    fun sampledColor(): Int? = cachedColor
+
     /** Try again if the last attempt couldn't read the wallpaper (access may have been granted since). */
     fun retryIfUnavailable() {
         if (cachedFor != 0L && cached == null) invalidate()
@@ -64,6 +74,7 @@ object WallpaperBlur {
     fun invalidate() {
         generation++
         cached = null
+        cachedColor = null
         cachedFor = 0L
         building = 0L
     }
@@ -78,7 +89,7 @@ object WallpaperBlur {
         return max(1, (sigmaPx / DOWNSCALE).roundToInt())
     }
 
-    private fun build(context: Context, width: Int, height: Int): Bitmap? {
+    private fun build(context: Context, width: Int, height: Int): Pair<Bitmap, Int?>? {
         val wm = WallpaperManager.getInstance(context)
         if (wm.wallpaperInfo != null) return null // live wallpaper: no still image to match
         val drawable = try { wm.drawable } catch (e: SecurityException) { null } ?: return null
@@ -100,8 +111,11 @@ object WallpaperBlur {
 
         val px = IntArray(w * h)
         small.getPixels(px, 0, w, 0, 0, w, h)
+        // The strip behind the home card, before blurring (blurring would grey the hue).
+        val stripTop = (h * (1 - CARD_STRIP)).toInt()
+        val color = GlassTint.sample(px.copyOfRange(stripTop * w, px.size))
         BoxBlur.blur(px, w, h, boxRadius(context))
         small.setPixels(px, 0, w, 0, 0, w, h)
-        return small
+        return small to color
     }
 }
