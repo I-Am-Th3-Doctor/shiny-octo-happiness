@@ -48,7 +48,7 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom"
                 android:orientation="vertical"
-                android:paddingHorizontal="@dimen/space_m"
+                android:paddingHorizontal="@dimen/inset_home_card"
                 android:paddingBottom="@dimen/space_s"
                 android:visibility="gone">
 
@@ -144,8 +144,8 @@
             android:id="@+id/homeCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="@dimen/space_m"
-            android:layout_marginBottom="@dimen/space_m"
+            android:layout_marginHorizontal="@dimen/inset_home_card"
+            android:layout_marginBottom="@dimen/inset_home_card"
             android:background="@drawable/bg_glance_card"
             android:orientation="vertical"
             android:padding="@dimen/space_s">

@@ -4,12 +4,14 @@ import android.app.Activity
 import android.app.WallpaperManager
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Outline
 import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.inputmethod.EditorInfo
 import android.widget.LinearLayout
 import android.widget.PopupMenu
@@ -279,6 +281,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun setupHomeCard() {
         // Tiles open their own app/view; anywhere else on the card means "I want to search".
         binding.homeCard.clipToOutline = true
+        // The tile strip's tap ripples follow the card's corners too (same radius as the search row).
+        val rowRadius = pxF(R.dimen.radius_home_row)
+        binding.cardArea.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) = outline.setRoundRect(0, 0, view.width, view.height, rowRadius)
+        }
+        binding.cardArea.clipToOutline = true
         val focusSearch = View.OnClickListener { showKeyboard() }
         binding.homeCard.setOnClickListener(focusSearch)
         binding.searchPill.setOnClickListener(focusSearch)
