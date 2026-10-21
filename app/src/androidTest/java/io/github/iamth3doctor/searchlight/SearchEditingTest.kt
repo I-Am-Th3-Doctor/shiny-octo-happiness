@@ -23,17 +23,24 @@ class SearchEditingTest {
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private lateinit var home: ActivityScenario<MainActivity>
+    private var lostFocusAt = "-"
 
     @Before fun openSearch() {
         home = ActivityScenario.launch(MainActivity::class.java)
-        home.onActivity { it.findViewById<android.view.View>(R.id.searchPill).performClick() }
+        home.onActivity {
+            it.findViewById<android.view.View>(R.id.searchPill).performClick()
+            // Diagnostics: where the field loses focus from, if it does.
+            it.findViewById<EditText>(R.id.searchInput).setOnFocusChangeListener { _, has ->
+                if (!has) lostFocusAt = Throwable().stackTrace.take(25).joinToString(" | ") { f -> "${f.className.substringAfterLast('.')}.${f.methodName}:${f.lineNumber}" }
+            }
+        }
         instrumentation.waitForIdleSync()
         // One key at a time: the first character shows the results, which must not pull focus
         // (and with it every later key) away from the field.
         for ((i, c) in "chrome".withIndex()) {
             instrumentation.sendStringSync(c.toString())
             instrumentation.waitForIdleSync()
-            assertEquals("typed ${i + 1} (focus: ${focus()})", "chrome".take(i + 1), text())
+            assertEquals("typed ${i + 1} (focus: ${focus()}; field lost focus at: $lostFocusAt)", "chrome".take(i + 1), text())
         }
     }
 
