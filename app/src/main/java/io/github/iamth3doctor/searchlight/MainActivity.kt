@@ -50,6 +50,7 @@ import io.github.iamth3doctor.searchlight.ui.WallpaperBlur
 import io.github.iamth3doctor.searchlight.ui.color
 import io.github.iamth3doctor.searchlight.ui.px
 import io.github.iamth3doctor.searchlight.ui.pxF
+import io.github.iamth3doctor.searchlight.ui.setOnHoldListener
 import io.github.iamth3doctor.searchlight.widgets.WidgetController
 import java.text.Collator
 import java.util.Calendar
@@ -327,10 +328,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.clearButton.setOnClickListener { binding.searchInput.text = null }
         binding.settingsButton.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         binding.searchIcon.setOnClickListener { showKeyboard() }
-        binding.searchIcon.setOnLongClickListener {
-            favoritesPopup.show(binding.homeCard)
-            true
-        }
+        // Hold the magnifier for the favorites: 250ms, quicker than the system long-press.
+        binding.searchIcon.setOnHoldListener(FAVORITES_HOLD_MS) { favoritesPopup.show(binding.homeCard) }
     }
 
     /** Edit mode (long-press a widget or empty space) shows a small bar: add, settings, done. */
@@ -707,5 +706,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         const val UNFOLDED_MIN_WIDTH_DP = 560
         const val KEY_PENDING_WIDGET = "pending_widget_id"
         const val TABLE_ANIM_MS = 220L
+        const val FAVORITES_HOLD_MS = 250L
     }
 }
