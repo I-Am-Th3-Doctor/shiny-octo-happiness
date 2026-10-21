@@ -25,10 +25,10 @@
     <dimen name="radius_tile">20dp</dimen>
 
     <!-- ===== Type scale ========================================================== -->
-    <dimen name="text_glance">48sp</dimen>      <!-- big temp / time / battery % -->
-    <dimen name="text_tile_title">20sp</dimen>  <!-- a tile's main line, the search field -->
-    <dimen name="text_body">15sp</dimen>
-    <dimen name="text_caption">12sp</dimen>
+    <dimen name="text_glance">46sp</dimen>      <!-- big temp / time / battery % -->
+    <dimen name="text_tile_title">18sp</dimen>  <!-- a tile's main line, the search field -->
+    <dimen name="text_body">13sp</dimen>
+    <dimen name="text_caption">10sp</dimen>
 
     <!-- ===== Component sizes (fixed parts, not spacing) ========================== -->
     <dimen name="size_touch">48dp</dimen>             <!-- minimum touch target -->
