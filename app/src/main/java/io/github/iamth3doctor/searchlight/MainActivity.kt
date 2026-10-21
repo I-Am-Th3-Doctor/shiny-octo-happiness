@@ -319,6 +319,14 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         appTable = AppTableAdapter(app.apps, ::launchApp)
         val list = binding.appTableList
         list.layoutManager = GridLayoutManager(this, columnsFor(resources.displayMetrics.widthPixels))
+        // The table is clear glass over the wallpaper: it must never take focus (hiding the home
+        // card moves focus off the search field), or Android paints its focus highlight over it.
+        for (v in listOf(binding.appTable, list)) {
+            v.isFocusable = false
+            v.isFocusableInTouchMode = false
+            v.defaultFocusHighlightEnabled = false
+        }
+        list.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         list.adapter = appTable
         list.addOnLayoutChangeListener { v, l, _, r, _, ol, _, or_, _ ->
             if (r - l != or_ - ol) (list.layoutManager as GridLayoutManager).spanCount = columnsFor(v.width)
