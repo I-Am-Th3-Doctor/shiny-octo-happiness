@@ -19,7 +19,7 @@
          least that large gives a true pill / circle at every size. -->
     <dimen name="radius_pill">999dp</dimen>
     <dimen name="radius_home_card">30dp</dimen>     <!-- the home card (tiles + search row) -->
-    <!-- Its rows, inset by the card's space_s padding: 30 - 8, so their corners run parallel to the card's. -->
+    <!-- The tile strip, inset by the card's space_s padding: 30 - 8, so its corners run parallel to the card's. -->
     <dimen name="radius_home_row">22dp</dimen>
     <dimen name="inset_home_card">12dp</dimen>      <!-- home card to the screen sides and bottom -->
     <dimen name="radius_tile">20dp</dimen>
@@ -35,7 +35,8 @@
     <dimen name="size_touch_wide">56dp</dimen>        <!-- primary control (play/pause) -->
     <dimen name="size_icon">24dp</dimen>
     <dimen name="size_avatar">40dp</dimen>            <!-- result icons, contact photos -->
-    <dimen name="size_row">56dp</dimen>               <!-- list row / search row height -->
+    <dimen name="size_row">56dp</dimen>
+    <dimen name="size_search_row">60dp</dimen>        <!-- the search pill in the home card -->               <!-- list row / search row height -->
     <dimen name="size_row_tall">96dp</dimen>          <!-- widget-picker row -->
     <dimen name="size_quick_action">56dp</dimen>      <!-- Quick Actions circle -->
     <dimen name="size_badge">24dp</dimen>             <!-- edit-mode remove / resize badges -->

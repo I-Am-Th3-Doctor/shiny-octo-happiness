@@ -293,12 +293,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             adaptive = GlassTint.Layer.CARD,
         )
         binding.searchPill.background = FrostedDrawable(
-            binding.searchPill, pxF(R.dimen.radius_home_row),
+            binding.searchPill, pxF(R.dimen.radius_pill), // a full pill: half its height
             color(R.color.glass_row), color(R.color.surface_inset), border, borderWidth,
             adaptive = GlassTint.Layer.ROW,
         )
         binding.homeCard.clipToOutline = true
-        // The tile strip's tap ripples follow the card's corners too (same radius as the search row).
+        // The tile strip's tap ripples follow the card's corners too.
         val rowRadius = pxF(R.dimen.radius_home_row)
         binding.cardArea.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) = outline.setRoundRect(0, 0, view.width, view.height, rowRadius)

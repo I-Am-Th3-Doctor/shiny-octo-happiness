@@ -175,7 +175,7 @@
             <LinearLayout
                 android:id="@+id/searchPill"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/size_row"
+                android:layout_height="@dimen/size_search_row"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingHorizontal="@dimen/space_xs">
