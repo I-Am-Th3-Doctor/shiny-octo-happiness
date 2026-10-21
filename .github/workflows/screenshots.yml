@@ -62,7 +62,7 @@ jobs:
             adb shell wm size reset
             adb shell wm density reset
             mkdir -p shots
-            adb pull /sdcard/Download/searchlight-shots/. shots/
+            for i in 1 2 3; do adb pull /sdcard/Download/searchlight-shots/. shots/ && break; echo "adb pull failed, retrying"; sleep 3; done
             ls shots
 
       - name: Upload screenshots artifact
