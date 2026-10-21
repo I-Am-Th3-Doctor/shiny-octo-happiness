@@ -118,10 +118,10 @@ class ScreenshotTest {
             instrumentation.runOnMainSync {
                 if (app.prefs.favorites.isEmpty()) app.apps.apps.take(6).forEach { app.prefs.addFavorite(it.key) }
             }
-            home.onActivity {
-                it.findViewById<EditText>(R.id.searchInput).setText("")
-                it.findViewById<View>(R.id.searchIcon).performLongClick()
-            }
+            // Clear the search first and let the tiles come back, so the card has its idle size.
+            home.onActivity { it.findViewById<EditText>(R.id.searchInput).setText("") }
+            instrumentation.waitForIdleSync()
+            home.onActivity { it.findViewById<View>(R.id.searchIcon).performLongClick() }
             shot("02e-favorites")
             @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() } // dismisses the popup
         }
