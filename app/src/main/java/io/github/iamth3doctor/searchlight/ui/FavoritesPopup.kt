@@ -75,10 +75,9 @@ class FavoritesPopup(
             View.MeasureSpec.makeMeasureSpec(above.width, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
         )
-        val loc = IntArray(2)
-        above.getLocationInWindow(loc)
+        // Relative to the anchor itself, so system-bar insets can't shift it onto the card.
         val gap = activity.px(R.dimen.space_s)
-        popup.showAtLocation(above, Gravity.TOP or Gravity.START, loc[0], loc[1] - b.root.measuredHeight - gap)
+        popup.showAsDropDown(above, 0, -(above.height + b.root.measuredHeight + gap), Gravity.START)
         window = popup
     }
 
