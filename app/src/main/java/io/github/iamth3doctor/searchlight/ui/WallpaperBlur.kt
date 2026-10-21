@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
+import io.github.iamth3doctor.searchlight.R
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -20,7 +21,6 @@ import kotlin.math.roundToInt
  */
 object WallpaperBlur {
     private const val DOWNSCALE = 8
-    private const val RADIUS = 6 // in downscaled pixels
 
     private val main = Handler(Looper.getMainLooper())
     private var cached: Bitmap? = null
@@ -68,6 +68,16 @@ object WallpaperBlur {
         building = 0L
     }
 
+    /**
+     * The blur_radius token (24dp) as a box radius on the downscaled image. Like Android's own
+     * blur radius, it maps to a Gaussian sigma of ~0.58 × radius; three box passes of radius r
+     * have a sigma of about r.
+     */
+    private fun boxRadius(context: Context): Int {
+        val sigmaPx = context.resources.getDimension(R.dimen.blur_radius) * 0.57735f + 0.5f
+        return max(1, (sigmaPx / DOWNSCALE).roundToInt())
+    }
+
     private fun build(context: Context, width: Int, height: Int): Bitmap? {
         val wm = WallpaperManager.getInstance(context)
         if (wm.wallpaperInfo != null) return null // live wallpaper: no still image to match
@@ -90,7 +100,7 @@ object WallpaperBlur {
 
         val px = IntArray(w * h)
         small.getPixels(px, 0, w, 0, 0, w, h)
-        BoxBlur.blur(px, w, h, RADIUS)
+        BoxBlur.blur(px, w, h, boxRadius(context))
         small.setPixels(px, 0, w, 0, 0, w, h)
         return small
     }

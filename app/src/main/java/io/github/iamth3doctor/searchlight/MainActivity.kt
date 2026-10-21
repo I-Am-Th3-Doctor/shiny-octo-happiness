@@ -280,6 +280,19 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private fun setupHomeCard() {
         // Tiles open their own app/view; anywhere else on the card means "I want to search".
+        // Frosted glass (see FrostedDrawable): the card at 50% over the blurred wallpaper, the
+        // search row lighter at 35% so the two layers read apart; both with a light hairline.
+        // No blur available: 75% card, and the row is a faint light inset on it.
+        val border = color(R.color.glass_border)
+        val borderWidth = pxF(R.dimen.stroke_glass)
+        binding.homeCard.background = FrostedDrawable(
+            binding.homeCard, pxF(R.dimen.radius_home_card),
+            color(R.color.glass_card), color(R.color.glass_card_fallback), border, borderWidth,
+        )
+        binding.searchPill.background = FrostedDrawable(
+            binding.searchPill, pxF(R.dimen.radius_home_row),
+            color(R.color.glass_row), color(R.color.surface_inset), border, borderWidth,
+        )
         binding.homeCard.clipToOutline = true
         // The tile strip's tap ripples follow the card's corners too (same radius as the search row).
         val rowRadius = pxF(R.dimen.radius_home_row)
@@ -451,9 +464,11 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun frosted(view: View, radius: Int) =
         FrostedDrawable(view, pxF(radius), color(R.color.surface_frost), color(R.color.surface_card))
 
-    /** A new wallpaper means a new blur behind the results panel and pill. */
+    /** A new wallpaper means a new blur behind every glass surface. */
     private val wallpaperChanged = WallpaperManager.OnColorsChangedListener { _, _ ->
         WallpaperBlur.invalidate()
+        binding.homeCard.invalidate()
+        binding.searchPill.invalidate()
         binding.resultsPanel.invalidate()
         binding.webPill.invalidate()
     }

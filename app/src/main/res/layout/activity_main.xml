@@ -146,7 +146,7 @@
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="@dimen/inset_home_card"
             android:layout_marginBottom="@dimen/inset_home_card"
-            android:background="@drawable/bg_glance_card"
+            android:elevation="@dimen/elevation_raised"
             android:orientation="vertical"
             android:padding="@dimen/space_s">
 
@@ -176,7 +176,6 @@
                 android:id="@+id/searchPill"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/size_row"
-                android:background="@drawable/bg_search_row"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingHorizontal="@dimen/space_xs">
