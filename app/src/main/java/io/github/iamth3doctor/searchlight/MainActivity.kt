@@ -223,9 +223,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         layoutColumn()
     }
 
-    /** Folded: always there. Unfolded: only once search is asked for (the rail's magnifier). */
+    /** Folded: always there. Unfolded: once search is asked for (the rail's magnifier), or there's a query. */
     private fun updateSearchRow() {
-        binding.searchPill.isVisible = posture == Posture.FOLDED || searchOpen
+        binding.searchPill.isVisible = posture == Posture.FOLDED || searchOpen || query().isNotEmpty()
     }
 
     /**
@@ -749,6 +749,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun refreshResults() {
         val q = query()
         val searching = q.isNotBlank()
+        updateSearchRow()
         binding.clearButton.isVisible = q.isNotEmpty()
         binding.settingsButton.isVisible = q.isEmpty()
         binding.cardArea.isVisible = !searching && cards.isNotEmpty()
