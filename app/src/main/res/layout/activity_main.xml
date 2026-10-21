@@ -238,14 +238,14 @@
     </io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout>
 
     <!--
-      The app table: every app, A–Z, over the whole home screen. Opened by swiping up on empty
-      home space; closed by swiping down (from the top of the list) or Back.
+      The app table: every app, A–Z, straight over the wallpaper (no background; the home card
+      and widgets fade out while it's open). Opened by swiping up on empty home space; closed by
+      swiping down (from the top of the list) or Back.
     -->
     <FrameLayout
         android:id="@+id/appTable"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/surface_sheet"
         android:clickable="true"
         android:visibility="gone">
 

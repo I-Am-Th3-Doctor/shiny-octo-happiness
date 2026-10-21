@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.GridLayoutManager
@@ -357,17 +358,36 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.appTable.isVisible = true
         binding.appTable.translationY = binding.root.height.toFloat()
         binding.appTable.animate().translationY(0f).setDuration(TABLE_ANIM_MS).start()
+        showHome(false)
     }
 
     private fun closeAppTable(animate: Boolean = true) {
         if (!binding.appTable.isVisible) return
         binding.appTable.animate().cancel()
+        showHome(true, animate)
         if (!animate) {
             binding.appTable.isVisible = false
             return
         }
         binding.appTable.animate().translationY(binding.root.height.toFloat()).setDuration(TABLE_ANIM_MS)
             .withEndAction { binding.appTable.isVisible = false }.start()
+    }
+
+    /**
+     * The app table has no background of its own: while it's open the home card and widgets
+     * fade out, leaving just the wallpaper and the apps. They come back exactly as they were.
+     */
+    private fun showHome(show: Boolean, animate: Boolean = true) {
+        val home = binding.column
+        home.animate().cancel()
+        if (show) home.isVisible = true
+        if (!animate) {
+            home.alpha = if (show) 1f else 0f
+            home.isInvisible = !show
+            return
+        }
+        home.animate().alpha(if (show) 1f else 0f).setDuration(TABLE_ANIM_MS)
+            .withEndAction { home.isInvisible = !show }.start()
     }
 
     private fun sortedApps(): List<AppEntry> {
