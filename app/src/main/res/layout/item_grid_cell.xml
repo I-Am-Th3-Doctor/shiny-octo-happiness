@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One favorite: icon with its name beneath. Width is a sixth of the row (set in code). -->
+<!-- One favorite: icon with its name beneath (one line, then …). A sixth of the row wide. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="0dp"
     android:layout_height="wrap_content"
@@ -24,7 +24,8 @@
         android:layout_marginTop="@dimen/space_xs"
         android:ellipsize="end"
         android:gravity="center"
-        android:maxLines="2"
+        android:maxLines="1"
+        android:singleLine="true"
         android:textColor="@color/on_surface"
         android:textAppearance="@style/TextAppearance.Searchlight.Caption" />
 </LinearLayout>

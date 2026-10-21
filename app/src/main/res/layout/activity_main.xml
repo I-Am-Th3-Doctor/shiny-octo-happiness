@@ -191,4 +191,28 @@
             </LinearLayout>
         </LinearLayout>
     </io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout>
+
+    <!--
+      The app table: every app, A–Z, over the whole home screen. Opened by swiping up on empty
+      home space; closed by swiping down (from the top of the list) or Back.
+    -->
+    <FrameLayout
+        android:id="@+id/appTable"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/surface_sheet"
+        android:clickable="true"
+        android:visibility="gone">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/appTableList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_horizontal"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:paddingHorizontal="@dimen/space_m"
+            android:paddingVertical="@dimen/space_m"
+            android:scrollbars="none" />
+    </FrameLayout>
 </FrameLayout>

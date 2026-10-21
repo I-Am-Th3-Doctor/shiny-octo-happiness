@@ -46,6 +46,7 @@
     <!-- Space kept above the widget grid so the edit pill never covers a cell:
          space_s + size_edit_bar + space_s. -->
     <dimen name="size_edit_bar_reserve">56dp</dimen>
+    <dimen name="size_swipe">64dp</dimen>              <!-- distance that counts as a swipe -->
     <dimen name="size_preview_width">120dp</dimen>    <!-- widget picker preview -->
     <dimen name="size_preview_height">88dp</dimen>
     <dimen name="stroke_hairline">1.5dp</dimen>
@@ -64,6 +65,7 @@
     <!-- ===== Color: neutral dark translucent surfaces (55–65% near-black) ======== -->
     <color name="surface_card">#9E0B0B0D</color>    <!-- 62%: the home card -->
     <color name="surface_raised">#A60B0B0D</color>  <!-- 65%: popups, edit bar, badges -->
+    <color name="surface_sheet">#E00B0B0D</color>   <!-- 88%: full-screen app table -->
     <color name="surface_inset">#1FFFFFFF</color>   <!-- the search row inside the card -->
     <color name="control_off">#33FFFFFF</color>     <!-- off toggles, empty art, tracks -->
 

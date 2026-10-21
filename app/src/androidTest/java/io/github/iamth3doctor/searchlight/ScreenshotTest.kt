@@ -99,6 +99,10 @@ class ScreenshotTest {
                 shell("settings put global animator_duration_scale 0")
                 home.recreate()
             }
+            // The app table (swipe up on empty home space).
+            home.onActivity { it.openAppTable() }
+            shot("01e-app-table")
+            @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() }
             // Edit mode: the widget canvas and the floating pill (it must not cover the first row).
             home.onActivity { it.findViewById<io.github.iamth3doctor.searchlight.widgets.WidgetGridView>(R.id.widgetGrid).setEditMode(true) }
             shot("01b-edit-mode")

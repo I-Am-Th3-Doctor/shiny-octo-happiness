@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -17,7 +18,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.apps.AppEntry
 import io.github.iamth3doctor.searchlight.cards.BatteryCard
@@ -33,10 +36,14 @@ import io.github.iamth3doctor.searchlight.search.ResultLayout
 import io.github.iamth3doctor.searchlight.search.SearchEngine
 import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.Actions
+import io.github.iamth3doctor.searchlight.ui.AppTableAdapter
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
 import io.github.iamth3doctor.searchlight.ui.ResultsAdapter
+import io.github.iamth3doctor.searchlight.ui.Swipe
 import io.github.iamth3doctor.searchlight.ui.px
+import io.github.iamth3doctor.searchlight.ui.pxF
 import io.github.iamth3doctor.searchlight.widgets.WidgetController
+import java.text.Collator
 import java.util.Calendar
 import kotlin.math.max
 
@@ -53,6 +60,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private lateinit var adapter: ResultsAdapter
     private lateinit var favoritesPopup: FavoritesPopup
     private lateinit var widgets: WidgetController
+    private lateinit var appTable: AppTableAdapter
 
     private val app get() = searchlight
     private val prefs get() = app.prefs
@@ -67,7 +75,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private var cards: List<HomeCard> = emptyList()
     private var cardsStarted = false
 
-    private val sourcesChanged: () -> Unit = { refreshResults() }
+    private val sourcesChanged: () -> Unit = {
+        refreshResults()
+        if (binding.appTable.isVisible) appTable.submit(sortedApps())
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,6 +101,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         goToIdleCard()
         setupHomeCard()
         setupWidgetPage()
+        setupAppTable()
 
         app.apps.addListener(sourcesChanged)
         app.contacts.addListener(sourcesChanged)
@@ -127,13 +139,13 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
         cards.forEach { it.render() } // e.g. °F/°C changed in the Widget Center
         binding.searchInput.hint = greeting()
-        if (prefs.autoOpenKeyboard) binding.searchInput.post { showKeyboard() }
+        if (prefs.autoOpenKeyboard && !binding.appTable.isVisible) binding.searchInput.post { showKeyboard() }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         // The IME can only be shown once the window has focus; onResume is sometimes too early.
-        if (hasFocus && prefs.autoOpenKeyboard && openMenu == null) showKeyboard()
+        if (hasFocus && prefs.autoOpenKeyboard && openMenu == null && !binding.appTable.isVisible) showKeyboard()
     }
 
     override fun onStop() {
@@ -168,6 +180,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     @Deprecated("Launcher: Back never leaves home; it clears the search and drops the keyboard.")
     override fun onBackPressed() {
         when {
+            binding.appTable.isVisible -> closeAppTable()
             widgets.editing -> widgets.exitEditMode()
             favoritesPopup.isShowing -> favoritesPopup.dismiss()
             else -> resetHome()
@@ -288,6 +301,73 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     }
 
     /** Edit mode (long-press a widget or empty space) shows a small bar: add, settings, done. */
+    // ------------------------------------------------------------------ app table
+
+    /**
+     * Swipe up on empty home space opens every app, A–Z, in the search grid's cells. Swipe down
+     * from the top of the list, or Back, closes it. Launching an app closes it on the way out.
+     */
+    private fun setupAppTable() {
+        appTable = AppTableAdapter(app.apps, ::launchApp)
+        val list = binding.appTableList
+        list.layoutManager = GridLayoutManager(this, columnsFor(resources.displayMetrics.widthPixels))
+        list.adapter = appTable
+        list.addOnLayoutChangeListener { v, l, _, r, _, ol, _, or_, _ ->
+            if (r - l != or_ - ol) (list.layoutManager as GridLayoutManager).spanCount = columnsFor(v.width)
+        }
+        binding.widgetGrid.onSwipeUp = ::openAppTable
+
+        // Swipe down closes, but only from the top: otherwise it's an ordinary scroll back up.
+        val distance = pxF(R.dimen.size_swipe)
+        list.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            private var downX = 0f
+            private var downY = 0f
+            private var atTop = false
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = e.x
+                        downY = e.y
+                        atTop = !rv.canScrollVertically(-1)
+                    }
+                    MotionEvent.ACTION_MOVE ->
+                        if (atTop && Swipe.vertical(e.x - downX, e.y - downY, distance) == Swipe.Direction.DOWN) {
+                            closeAppTable()
+                            return true
+                        }
+                }
+                return false
+            }
+        })
+    }
+
+    fun openAppTable() {
+        if (binding.appTable.isVisible) return
+        hideKeyboard()
+        dismissPopups()
+        appTable.submit(sortedApps())
+        binding.appTableList.scrollToPosition(0)
+        binding.appTable.isVisible = true
+        binding.appTable.translationY = binding.root.height.toFloat()
+        binding.appTable.animate().translationY(0f).setDuration(TABLE_ANIM_MS).start()
+    }
+
+    private fun closeAppTable(animate: Boolean = true) {
+        if (!binding.appTable.isVisible) return
+        binding.appTable.animate().cancel()
+        if (!animate) {
+            binding.appTable.isVisible = false
+            return
+        }
+        binding.appTable.animate().translationY(binding.root.height.toFloat()).setDuration(TABLE_ANIM_MS)
+            .withEndAction { binding.appTable.isVisible = false }.start()
+    }
+
+    private fun sortedApps(): List<AppEntry> {
+        val collator = Collator.getInstance()
+        return app.apps.apps.sortedWith { a, b -> collator.compare(a.label, b.label) }
+    }
+
     private fun setupWidgetPage() {
         binding.editAdd.setOnClickListener { widgets.beginAdd() }
         binding.editSettings.setOnClickListener {
@@ -410,6 +490,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     }
 
     private fun resetHome() {
+        closeAppTable(animate = false)
         binding.searchInput.text = null
         binding.searchInput.clearFocus()
         if (!prefs.autoOpenKeyboard) hideKeyboard()
@@ -543,5 +624,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         /** Results area at least this wide (the unfolded screen) gets 6 app columns instead of 4. */
         const val UNFOLDED_MIN_WIDTH_DP = 560
         const val KEY_PENDING_WIDGET = "pending_widget_id"
+        const val TABLE_ANIM_MS = 220L
     }
 }

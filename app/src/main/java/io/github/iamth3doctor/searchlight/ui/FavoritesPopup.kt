@@ -70,13 +70,15 @@ class FavoritesPopup(
         popup.elevation = 12f
         popup.animationStyle = android.R.style.Animation_Dialog
 
-        // Position the row just above the anchor (the home card), centered on it.
+        // Sit just above the anchor (the home card), same width and left edge.
+        b.root.measure(
+            View.MeasureSpec.makeMeasureSpec(above.width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
         val loc = IntArray(2)
         above.getLocationInWindow(loc)
-        val rootHeight = activity.window.decorView.height
         val gap = activity.px(R.dimen.space_s)
-        val centerX = loc[0] + above.width / 2 - activity.window.decorView.width / 2
-        popup.showAtLocation(above, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, centerX, rootHeight - loc[1] + gap)
+        popup.showAtLocation(above, Gravity.TOP or Gravity.START, loc[0], loc[1] - b.root.measuredHeight - gap)
         window = popup
     }
 

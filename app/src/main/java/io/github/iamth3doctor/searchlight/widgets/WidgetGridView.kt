@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import io.github.iamth3doctor.searchlight.R
+import io.github.iamth3doctor.searchlight.ui.Swipe
 import io.github.iamth3doctor.searchlight.ui.color
 import io.github.iamth3doctor.searchlight.ui.pxF
 import kotlin.math.abs
@@ -40,6 +41,13 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     }
 
     var listener: Listener? = null
+
+    /** A swipe up on empty space (outside edit mode): opens the app table. */
+    var onSwipeUp: (() -> Unit)? = null
+    private var swipeDownX = 0f
+    private var swipeDownY = 0f
+    private var swiped = false
+    private val swipeDistance = context.pxF(R.dimen.size_swipe)
 
     var cols = 4
         private set
@@ -243,7 +251,10 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     }
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
-        if (!editMode) return super.onTouchEvent(ev)
+        if (!editMode) {
+            detectSwipeUp(ev)
+            return super.onTouchEvent(ev)
+        }
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 enteredThisGesture = false
@@ -270,6 +281,27 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
             MotionEvent.ACTION_CANCEL -> cancelGesture()
         }
         return true
+    }
+
+    /** Empty space only: a touch that starts on a widget is the widget's. Long-press still enters edit mode. */
+    private fun detectSwipeUp(ev: MotionEvent) {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                swipeDownX = ev.x
+                swipeDownY = ev.y
+                swiped = false
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = ev.x - swipeDownX
+                val dy = ev.y - swipeDownY
+                // A finger that's travelling isn't long-pressing.
+                if (abs(dx) > slop || abs(dy) > slop) cancelLongPress()
+                if (!swiped && Swipe.vertical(dx, dy, swipeDistance) == Swipe.Direction.UP) {
+                    swiped = true
+                    onSwipeUp?.invoke()
+                }
+            }
+        }
     }
 
     private fun begin(x: Float, y: Float, fromLongPress: Boolean) {
