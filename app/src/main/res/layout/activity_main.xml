@@ -91,6 +91,9 @@
           The home card: one frosted panel, two rows tall. Top row: swipeable tiles with their
           page dots (hidden while searching, or when every tile is off). Bottom row: the search
           row, always there.
+          No animateLayoutChanges: animating the search row up when the tiles hide shrinks it
+          to zero height for a frame, and Android takes focus away from zero-size views, so the
+          field lost focus and Backspace (a key event) went elsewhere.
         -->
         <LinearLayout
             android:id="@+id/homeCard"
@@ -98,7 +101,6 @@
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="@dimen/space_m"
             android:layout_marginBottom="@dimen/space_m"
-            android:animateLayoutChanges="true"
             android:background="@drawable/bg_glance_card"
             android:orientation="vertical"
             android:padding="@dimen/space_s">

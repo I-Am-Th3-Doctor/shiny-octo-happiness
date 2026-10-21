@@ -305,8 +305,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.results.layoutManager = LinearLayoutManager(this)
         // Nothing in the results may take focus: key events (Backspace from the on-screen
         // keyboard, arrows from a hardware one) go to the focused view, and that must stay the
-        // search field. Arrow keys move the highlight from there (navigateResults). Set in code
-        // because RecyclerView makes itself focusable in its constructor, over the XML.
+        // search field; if the field ever loses focus, this keeps the results from catching it.
+        // Arrow keys move the highlight from the field (navigateResults). Set in code because
+        // RecyclerView makes itself focusable in its constructor, over the XML.
         binding.results.isFocusable = false
         binding.results.isFocusableInTouchMode = false
         binding.results.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
