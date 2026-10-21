@@ -46,7 +46,6 @@ class WidgetController(
 
     init {
         grid.listener = this
-        grid.emptyHint = activity.getString(R.string.widgets_empty_hint)
         migrateFromStack()
     }
 

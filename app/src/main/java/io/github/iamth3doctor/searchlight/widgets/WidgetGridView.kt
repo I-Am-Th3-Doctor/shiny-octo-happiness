@@ -40,7 +40,6 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     }
 
     var listener: Listener? = null
-    var emptyHint: String = ""
 
     var cols = 4
         private set
@@ -172,22 +171,12 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = hairline; color = context.color(R.color.on_surface); strokeCap = Paint.Cap.ROUND
     }
-    private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = context.color(R.color.on_surface_dim)
-        textSize = context.pxF(R.dimen.text_caption)
-        typeface = androidx.core.content.res.ResourcesCompat.getFont(context, R.font.lexend)
-        textAlign = Paint.Align.CENTER
-        setShadowLayer(context.pxF(R.dimen.space_xs), 0f, hairline, context.color(R.color.scrim))
-    }
     private val badgeR = context.pxF(R.dimen.size_badge) / 2
 
     override fun onDraw(canvas: Canvas) {
-        if (editMode) {
-            for (r in 0 until rows) for (c in 0 until cols) {
-                canvas.drawRoundRect(RectF(c * cellW + gap, r * cellH + gap, (c + 1) * cellW - gap, (r + 1) * cellH - gap), tileRadius, tileRadius, gridPaint)
-            }
-        } else if (childCount == 0 && emptyHint.isNotEmpty()) {
-            canvas.drawText(emptyHint, width / 2f, (minOf(height, gridHeight)) / 2f, hintPaint)
+        if (!editMode) return
+        for (r in 0 until rows) for (c in 0 until cols) {
+            canvas.drawRoundRect(RectF(c * cellW + gap, r * cellH + gap, (c + 1) * cellW - gap, (r + 1) * cellH - gap), tileRadius, tileRadius, gridPaint)
         }
     }
 
