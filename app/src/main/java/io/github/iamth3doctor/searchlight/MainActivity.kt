@@ -444,7 +444,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun setupResultsGrid() {
         adapter.columns = columnsFor(resources.displayMetrics.widthPixels)
         binding.results.layoutManager = LinearLayoutManager(this)
-        // Frosted panel and pill: blurred wallpaper under a dark tint (see FrostedDrawable).
+        // Panel and pill are glass like the home card, each with its own shadow (see frosted()).
         binding.resultsPanel.background = frosted(binding.resultsPanel, R.dimen.radius_card)
         binding.resultsPanel.clipToOutline = true // scrolled results slide under the rounded corners
         binding.webPill.background = frosted(binding.webPill, R.dimen.radius_pill)
@@ -465,8 +465,11 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
     }
 
-    private fun frosted(view: View, radius: Int) =
-        FrostedDrawable(view, pxF(radius), color(R.color.surface_frost), color(R.color.surface_card))
+    /** The results panel and web pill: the same glass as the home card (wallpaper-tinted, hairline). */
+    private fun frosted(view: View, radius: Int) = FrostedDrawable(
+        view, pxF(radius), color(R.color.glass_card), color(R.color.glass_card_fallback),
+        color(R.color.glass_border), pxF(R.dimen.stroke_glass), adaptive = GlassTint.Layer.CARD,
+    )
 
     /** A new wallpaper means a new blur behind every glass surface. */
     private val wallpaperChanged = WallpaperManager.OnColorsChangedListener { _, _ ->

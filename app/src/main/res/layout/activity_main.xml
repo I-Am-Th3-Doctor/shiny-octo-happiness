@@ -54,6 +54,7 @@
 
                 <io.github.iamth3doctor.searchlight.ui.ResultsPanel
                     android:id="@+id/resultsPanel"
+                    android:elevation="@dimen/elevation_raised"
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
                     android:layout_marginBottom="@dimen/space_s"
@@ -71,6 +72,7 @@
 
                 <LinearLayout
                     android:id="@+id/webPill"
+                    android:elevation="@dimen/elevation_raised"
                     android:layout_width="match_parent"
                     android:layout_height="@dimen/size_row"
                     android:foreground="?android:attr/selectableItemBackground"

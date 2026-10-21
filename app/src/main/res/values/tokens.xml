@@ -70,14 +70,12 @@
     <color name="on_accent">#FFFFFFFF</color>
 
     <!-- ===== Color: neutral dark translucent surfaces (55–65% near-black) ======== -->
-    <color name="surface_card">#9E0B0B0D</color>    <!-- 62%: results panel and web pill without a blur -->
     <color name="surface_raised">#A60B0B0D</color>  <!-- 65%: popups, edit bar, badges -->
     <!-- Home card glass: over the blurred wallpaper / without a blur (darker, for legibility). -->
     <color name="glass_card">#800B0B0D</color>      <!-- 50% -->
     <color name="glass_card_fallback">#BF0B0B0D</color> <!-- 75% -->
     <color name="glass_row">#590B0B0D</color>       <!-- 35%: the search row, lighter than the card -->
     <color name="glass_border">#26FFFFFF</color>    <!-- 15% white hairline round the glass -->
-    <color name="surface_frost">#730B0B0D</color>   <!-- 45%: over the blurred wallpaper (results panel, web pill) -->
     <color name="surface_inset">#1FFFFFFF</color>   <!-- the search row inside the card -->
     <color name="control_off">#33FFFFFF</color>     <!-- off toggles, empty art, tracks -->
 
