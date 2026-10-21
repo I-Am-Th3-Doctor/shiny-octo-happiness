@@ -58,7 +58,7 @@
     <string name="card_weather">Weather</string>
     <string name="card_weather_desc">Current conditions and today\'s high/low from Open-Meteo</string>
     <string name="card_calendar">Calendar &amp; Date</string>
-    <string name="card_calendar_desc">Date, clock and how far through the year you are</string>
+    <string name="card_calendar_desc">Clock and today\'s date</string>
     <string name="card_battery">Battery &amp; Signals</string>
     <string name="card_battery_desc">Battery level, charging, Wi-Fi and cell signal</string>
     <string name="card_music">Music Player</string>
