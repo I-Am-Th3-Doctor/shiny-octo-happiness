@@ -60,6 +60,12 @@ class ScreenshotTest {
         // All Files Access, as on a set-up phone: file results, and the frosted panels can read
         // the wallpaper to blur it.
         shell("appops set $pkg MANAGE_EXTERNAL_STORAGE allow")
+        // TEMP diagnostic: why the wallpaper can't be read, encoded in a file name.
+        val why = runCatching {
+            val wm = android.app.WallpaperManager.getInstance(instrumentation.targetContext)
+            "info-${wm.wallpaperInfo?.packageName}_mgr-${android.os.Environment.isExternalStorageManager()}_d-${wm.drawable?.intrinsicWidth}"
+        }.getOrElse { "err-${it.javaClass.simpleName}-${it.message?.take(80)}" }.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        shell("touch $DIR/${prefix}_diag_$why.png")
         // A deterministic, realistic state: weather for a fixed place, in °F.
         instrumentation.runOnMainSync {
             app.prefs.manualPlace = GeoPlace("Austin", "Texas", "US", 30.27, -97.74)
