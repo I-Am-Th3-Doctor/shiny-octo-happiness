@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.LinearLayout
 import android.widget.PopupMenu
@@ -302,6 +303,13 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun setupResultsGrid() {
         adapter.columns = columnsFor(resources.displayMetrics.widthPixels)
         binding.results.layoutManager = LinearLayoutManager(this)
+        // Nothing in the results may take focus: key events (Backspace from the on-screen
+        // keyboard, arrows from a hardware one) go to the focused view, and that must stay the
+        // search field. Arrow keys move the highlight from there (navigateResults). Set in code
+        // because RecyclerView makes itself focusable in its constructor, over the XML.
+        binding.results.isFocusable = false
+        binding.results.isFocusableInTouchMode = false
+        binding.results.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         binding.results.adapter = adapter
         binding.results.itemAnimator = null
         binding.results.addOnLayoutChangeListener { v, l, _, r, _, ol, _, or_, _ ->
