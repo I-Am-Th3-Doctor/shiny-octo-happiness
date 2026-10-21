@@ -4,8 +4,6 @@ import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.os.Build
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import kotlin.math.max
@@ -16,8 +14,9 @@ import kotlin.math.roundToInt
  *
  * Built off the main thread at 1/[DOWNSCALE] size (scaled back up when drawn, which smooths it
  * further) and cached until the wallpaper or screen size changes. Unavailable (null) for live
- * wallpapers, and when the wallpaper can't be read: Android only lets apps with All Files Access
- * read it. Panels then fall back to their plain tint.
+ * wallpapers, and when the wallpaper can't be read: on Android 13+ that takes "Photos & videos"
+ * access (READ_MEDIA_IMAGES; Settings › Permissions, photo search). Panels then fall back to
+ * their plain tint.
  */
 object WallpaperBlur {
     private const val DOWNSCALE = 8
@@ -56,6 +55,11 @@ object WallpaperBlur {
         return null
     }
 
+    /** Try again if the last attempt couldn't read the wallpaper (access may have been granted since). */
+    fun retryIfUnavailable() {
+        if (cachedFor != 0L && cached == null) invalidate()
+    }
+
     /** The wallpaper changed: rebuild on next use. */
     fun invalidate() {
         generation++
@@ -65,7 +69,6 @@ object WallpaperBlur {
     }
 
     private fun build(context: Context, width: Int, height: Int): Bitmap? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) return null
         val wm = WallpaperManager.getInstance(context)
         if (wm.wallpaperInfo != null) return null // live wallpaper: no still image to match
         val drawable = try { wm.drawable } catch (e: SecurityException) { null } ?: return null

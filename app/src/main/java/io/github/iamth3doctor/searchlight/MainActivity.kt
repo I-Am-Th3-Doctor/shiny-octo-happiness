@@ -144,6 +144,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.startSources()
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
         cards.forEach { it.render() } // e.g. °F/°C changed in the Widget Center
+        WallpaperBlur.retryIfUnavailable() // photo access may have been granted in Settings
         binding.searchInput.hint = greeting()
         if (prefs.autoOpenKeyboard && !binding.appTable.isVisible) binding.searchInput.post { showKeyboard() }
     }
