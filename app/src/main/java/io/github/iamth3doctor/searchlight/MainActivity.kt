@@ -473,8 +473,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     }
 
     /**
-     * Results: a vertical list whose first block is the app grid (4 columns folded, 6 unfolded,
-     * every matching app). 4 columns folded, 7 unfolded (see applyPosture).
+     * Results: a vertical list whose first block is the app grid (every matching app; 4 columns
+     * folded, 7 unfolded, see applyPosture).
      */
     private fun setupResultsGrid() {
         adapter.columns = appColumns()
