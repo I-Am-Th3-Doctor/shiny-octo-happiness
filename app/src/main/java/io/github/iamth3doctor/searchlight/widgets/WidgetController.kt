@@ -14,14 +14,17 @@ import android.util.SizeF
 import android.widget.Toast
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.data.Prefs
+import io.github.iamth3doctor.searchlight.ui.Posture
 import kotlin.math.roundToInt
 
 /**
  * Real Android widgets on a free-placement grid above the home card.
  *
  * Positions are stored as grid cells ([GridSpec]); [WidgetGridView] turns them into pixels.
- * When the grid changes size (fold/unfold), stored positions are re-fitted for display only, so
- * unfolding again restores the original arrangement.
+ * Folded and unfolded (7 columns) each have their own stored layout: arranging widgets in one
+ * never moves them in the other. A widget that's only been placed in one gets the first free
+ * spot in the other the first time that one is shown. If the grid changes size within a
+ * posture, stored positions are re-fitted for display only.
  *
  * Add flow (the same one the stock launcher uses):
  *   picker → allocate id → bind (asks you once: "Allow Searchlight to create widgets") →
@@ -43,6 +46,26 @@ class WidgetController(
     var pendingId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
 
     val editing get() = grid.editMode
+
+    /** Which layout is showing; set on start and whenever the device folds or unfolds. */
+    var posture: Posture = Posture.FOLDED
+        set(value) {
+            if (field == value) return
+            field = value
+            exitEditMode()
+            grid.unfolded = value == Posture.UNFOLDED // re-measures, then renders that layout
+        }
+
+    private val unfolded get() = posture == Posture.UNFOLDED
+
+    /** This posture's stored layout. */
+    private var layout: List<GridSpec>
+        get() = if (unfolded) prefs.widgetGridUnfolded else prefs.widgetGrid
+        set(value) {
+            if (unfolded) prefs.widgetGridUnfolded = value else prefs.widgetGrid = value
+        }
+
+    private val otherLayout get() = if (unfolded) prefs.widgetGrid else prefs.widgetGridUnfolded
 
     init {
         grid.listener = this
@@ -73,7 +96,7 @@ class WidgetController(
     /** Frees ids the system still has for us but that aren't on the grid (e.g. an add that was abandoned). */
     fun cleanUpOrphans() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val placed = prefs.widgetGrid.mapTo(HashSet()) { it.id }
+        val placed = (prefs.widgetGrid + prefs.widgetGridUnfolded).mapTo(HashSet()) { it.id }
         host.appWidgetIds.filter { it !in placed && it != pendingId }.forEach { host.deleteAppWidgetId(it) }
     }
 
@@ -87,17 +110,28 @@ class WidgetController(
     // ------------------------------------------------------------------ rendering
 
     fun render() {
-        val stored = prefs.widgetGrid
-        val alive = stored.filter { manager.getAppWidgetInfo(it.id) != null }
-        if (alive.size != stored.size) {
-            // The app behind a widget was uninstalled: take it off the grid.
-            stored.filter { it !in alive }.forEach { gone ->
-                host.deleteAppWidgetId(gone.id)
-                views.remove(gone.id)
+        // The app behind a widget was uninstalled: take it off both layouts.
+        val gone = (prefs.widgetGrid + prefs.widgetGridUnfolded).map { it.id }.distinct()
+            .filter { manager.getAppWidgetInfo(it) == null }
+        if (gone.isNotEmpty()) {
+            gone.forEach { id ->
+                host.deleteAppWidgetId(id)
+                views.remove(id)
             }
-            prefs.widgetGrid = alive
+            prefs.widgetGrid = prefs.widgetGrid.filter { it.id !in gone }
+            prefs.widgetGridUnfolded = prefs.widgetGridUnfolded.filter { it.id !in gone }
         }
-        val fit = WidgetGrid.fitToGrid(alive, grid.cols, grid.rows)
+        var current = layout
+        // Widgets so far only arranged in the other posture get a spot here: only once the
+        // grid has been measured for this posture, so they're placed on the right grid.
+        if (grid.measuredUnfolded == unfolded) {
+            val arranged = WidgetGrid.withMissing(current, otherLayout, grid.cols, grid.rows)
+            if (arranged.size != current.size) {
+                layout = arranged
+                current = arranged
+            }
+        }
+        val fit = WidgetGrid.fitToGrid(current, grid.cols, grid.rows)
         grid.setWidgets(fit.shown.mapNotNull { spec -> viewFor(spec.id)?.let { it to spec } })
     }
 
@@ -134,11 +168,12 @@ class WidgetController(
 
     /** A move or resize was dropped on free cells: that's now the stored position. */
     override fun onCommit(spec: GridSpec) {
-        prefs.widgetGrid = WidgetGrid.upsert(prefs.widgetGrid, spec)
+        layout = WidgetGrid.upsert(layout, spec)
     }
 
     override fun onRemove(id: Int) {
         prefs.widgetGrid = WidgetGrid.remove(prefs.widgetGrid, id)
+        prefs.widgetGridUnfolded = WidgetGrid.remove(prefs.widgetGridUnfolded, id)
         host.deleteAppWidgetId(id)
         views.remove(id)
         reportedSizes.remove(id)
@@ -232,7 +267,7 @@ class WidgetController(
             Toast.makeText(activity, R.string.widget_no_room, Toast.LENGTH_LONG).show()
             return
         }
-        prefs.widgetGrid = WidgetGrid.upsert(prefs.widgetGrid, spot)
+        layout = WidgetGrid.upsert(layout, spot)
         render()
     }
 

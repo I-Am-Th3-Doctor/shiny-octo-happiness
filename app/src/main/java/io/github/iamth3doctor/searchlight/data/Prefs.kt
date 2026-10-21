@@ -98,10 +98,15 @@ class Prefs(context: Context) {
         quickActionSlots = quickActionSlots.toMutableList().also { it[index] = action }
     }
 
-    /** Real Android widgets on the home grid: cell position + span each, never pixels. */
+    /** Real Android widgets on the home grid (folded): cell position + span each, never pixels. */
     var widgetGrid: List<GridSpec>
         get() = WidgetGrid.parse(sp.getString(KEY_WIDGET_GRID, null))
         set(value) = sp.edit().putString(KEY_WIDGET_GRID, WidgetGrid.serialize(value)).apply()
+
+    /** The same widgets' own arrangement on the unfolded screen (7 columns). */
+    var widgetGridUnfolded: List<GridSpec>
+        get() = WidgetGrid.parse(sp.getString(KEY_WIDGET_GRID_UNFOLDED, null))
+        set(value) = sp.edit().putString(KEY_WIDGET_GRID_UNFOLDED, WidgetGrid.serialize(value)).apply()
 
     /**
      * The pre-grid single-column layout ("id:heightDp,…"), returned once and then deleted.
@@ -217,6 +222,7 @@ class Prefs(context: Context) {
         private const val KEY_QA_SLOTS = "quick_action_slots"
         private const val KEY_LEGACY_WIDGETS = "widgets"
         private const val KEY_WIDGET_GRID = "widget_grid"
+        private const val KEY_WIDGET_GRID_UNFOLDED = "widget_grid_unfolded"
         private const val KEY_TEMP_UNIT = "temp_unit"
         private const val KEY_PLACE_NAME = "place_name"
         private const val KEY_PLACE_ADMIN = "place_admin"

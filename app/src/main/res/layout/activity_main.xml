@@ -16,7 +16,7 @@
         android:layout_height="match_parent"
         android:layout_gravity="center_horizontal"
         android:orientation="vertical"
-        app:maxWidth="@dimen/content_max_width">
+        app:maxWidth="@dimen/home_max_width">
 
         <!--
           The space above the home card. Idle: the widget grid (long-press to arrange). Searching:
@@ -164,6 +164,13 @@
                     android:id="@+id/cards"
                     android:layout_width="match_parent"
                     android:layout_height="@dimen/size_tile_height" />
+
+                <!-- Unfolded: every tile at once, side by side, instead of the pager. -->
+                <io.github.iamth3doctor.searchlight.ui.TileRowLayout
+                    android:id="@+id/tileRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/size_tile_height"
+                    android:visibility="gone" />
 
                 <LinearLayout
                     android:id="@+id/dots"

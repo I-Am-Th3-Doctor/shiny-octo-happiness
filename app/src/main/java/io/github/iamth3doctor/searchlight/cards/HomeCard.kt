@@ -5,6 +5,7 @@ import android.text.SpannableStringBuilder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.DimenRes
 import androidx.annotation.LayoutRes
 import androidx.annotation.StringRes
 import androidx.recyclerview.widget.RecyclerView
@@ -30,6 +31,9 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
         private set
 
     @get:LayoutRes protected abstract val layout: Int
+
+    /** Narrowest this tile can be when tiles sit side by side (unfolded): room for its buttons. */
+    @get:DimenRes open val minRowWidth: Int = 0
 
     protected abstract fun bind(root: View)
 

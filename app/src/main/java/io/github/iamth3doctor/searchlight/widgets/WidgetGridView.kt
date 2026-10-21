@@ -60,6 +60,18 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
      */
     var imeVisible = false
 
+    /** Unfolded: 7 columns (see WidgetGrid.gridSize). */
+    var unfolded = false
+        set(value) {
+            if (field == value) return
+            field = value
+            requestLayout()
+        }
+
+    /** The posture the current [cols] × [rows] were measured for; null before the first measure. */
+    var measuredUnfolded: Boolean? = null
+        private set
+
     private val density = resources.displayMetrics.density
     /**
      * Inset of a widget inside its cells. With the grid's own space_s margin, widget edges line up
@@ -126,10 +138,11 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
         val w = MeasureSpec.getSize(widthMeasureSpec)
         val h = MeasureSpec.getSize(heightMeasureSpec)
         if (!imeVisible || gridHeight == 0 || w != measuredWidth) gridHeight = h
-        val (c, r) = WidgetGrid.gridSize(w / density, gridHeight / density)
-        if (c != cols || r != rows) {
+        val (c, r) = WidgetGrid.gridSize(w / density, gridHeight / density, unfolded)
+        if (c != cols || r != rows || measuredUnfolded != unfolded) {
             cols = c
             rows = r
+            measuredUnfolded = unfolded
             // Re-fit happens outside of measure.
             post { listener?.onGridSizeChanged(cols, rows) }
         }

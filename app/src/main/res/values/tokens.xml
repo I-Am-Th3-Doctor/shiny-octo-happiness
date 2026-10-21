@@ -43,6 +43,9 @@
     <dimen name="size_dot">6dp</dimen>                <!-- page dots, inside the tile row -->
     <dimen name="size_progress">4dp</dimen>           <!-- day-of-year bar -->
     <dimen name="size_tile_height">60dp</dimen>      <!-- the tile pager: one row of tiles -->
+    <!-- Unfolded, tiles sit side by side; these need room for their buttons. -->
+    <dimen name="size_tile_min_actions">200dp</dimen> <!-- 4 × 40dp circles with gaps -->
+    <dimen name="size_tile_min_music">232dp</dimen>   <!-- art + some title + 3 × 48dp controls -->
     <dimen name="size_grid_icon">56dp</dimen>         <!-- favorites grid icon -->
     <dimen name="size_result_icon">48dp</dimen>       <!-- search results app icon -->
     <dimen name="marquee_speed">32dp</dimen>           <!-- tile text scroll, per second -->
@@ -61,6 +64,8 @@
     <dimen name="elevation_raised">8dp</dimen>
     <!-- On the unfolded inner screen content stays a comfortable column instead of stretching. -->
     <dimen name="content_max_width">600dp</dimen>
+    <!-- Home: the card, widgets and results panel, capped and centered unfolded. -->
+    <dimen name="home_max_width">720dp</dimen>
 
     <!-- ===== Color: one accent ==================================================== -->
     <!-- Rust. For fills and strokes (selection, "on" states, progress, drop targets). It's too

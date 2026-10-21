@@ -78,6 +78,8 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
         override fun onReceive(c: Context, intent: Intent) = render()
     }
 
+    override val minRowWidth = R.dimen.size_tile_min_actions
+
     override fun bind(root: View) {
         slots = listOf(R.id.qaSlot0, R.id.qaSlot1, R.id.qaSlot2, R.id.qaSlot3).mapIndexed { index, id ->
             val circle = root.findViewById<ViewGroup>(id).getChildAt(0) as ViewGroup

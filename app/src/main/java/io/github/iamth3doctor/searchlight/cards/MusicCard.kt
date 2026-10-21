@@ -57,6 +57,7 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
     private lateinit var next: ImageButton
 
     override val layout = R.layout.card_music
+    override val minRowWidth = R.dimen.size_tile_min_music
 
     val isPlaying: Boolean get() = controller?.playbackState?.state == PlaybackState.STATE_PLAYING
 

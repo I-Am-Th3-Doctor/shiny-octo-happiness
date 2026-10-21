@@ -44,12 +44,15 @@ object WidgetGrid {
 
     // ------------------------------------------------------------------ geometry
 
+    /** Columns on the unfolded screen (its layout is stored separately from the folded one). */
+    const val UNFOLDED_COLUMNS = 7
+
     /**
-     * Grid dimensions for the area above the home card. A typical phone gives 4 × 6; wider screens
-     * (unfolded) get more columns so cells stay roughly the same physical size.
+     * Grid dimensions for the area above the home card. A typical phone gives 4 × 6; unfolded
+     * always has [UNFOLDED_COLUMNS] columns.
      */
-    fun gridSize(widthDp: Float, heightDp: Float): Pair<Int, Int> {
-        val cols = (widthDp / 96f).toInt().coerceIn(4, 8)
+    fun gridSize(widthDp: Float, heightDp: Float, unfolded: Boolean = false): Pair<Int, Int> {
+        val cols = if (unfolded) UNFOLDED_COLUMNS else (widthDp / 96f).toInt().coerceIn(4, 8)
         val rows = (heightDp / 80f).toInt().coerceIn(3, 8)
         return cols to rows
     }
@@ -107,6 +110,24 @@ object WidgetGrid {
         }
         val order = list.withIndex().associate { it.value.id to it.index }
         return Fit(kept.sortedBy { order[it.id] }, hidden)
+    }
+
+    /**
+     * Folded and unfolded each keep their own layout. A widget that so far only has a place in
+     * the [other] layout is added to this one at the first free spot that fits (its size there,
+     * shrunk if needed). Ones with no room at all are left out until there is.
+     */
+    fun withMissing(layout: List<GridSpec>, other: List<GridSpec>, cols: Int, rows: Int): List<GridSpec> {
+        val ids = layout.mapTo(HashSet()) { it.id }
+        val taken = ArrayList(fitToGrid(layout, cols, rows).shown)
+        val added = ArrayList<GridSpec>()
+        for (s in other) {
+            if (s.id in ids) continue
+            val spot = place(taken, s.id, s.colSpan, s.rowSpan, 1, 1, cols, rows) ?: continue
+            taken += spot
+            added += spot
+        }
+        return layout + added
     }
 
     /** One-time move from the old single-column stack (id → height in dp) to grid cells. */

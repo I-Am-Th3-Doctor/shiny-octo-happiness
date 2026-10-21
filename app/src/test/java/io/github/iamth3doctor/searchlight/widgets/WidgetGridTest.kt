@@ -19,7 +19,9 @@ class WidgetGridTest {
 
     @Test fun startsAtFourBySixOnAPhone() {
         assertEquals(4 to 6, WidgetGrid.gridSize(411f, 520f))
-        assertEquals(6 to 6, WidgetGrid.gridSize(600f, 520f)) // unfolded, column capped at 600dp
+        assertEquals(6 to 6, WidgetGrid.gridSize(600f, 520f)) // a wide folded window
+        assertEquals(7 to 6, WidgetGrid.gridSize(704f, 520f, unfolded = true))
+        assertEquals(7 to 6, WidgetGrid.gridSize(900f, 520f, unfolded = true)) // always 7 unfolded
         assertEquals(4 to 3, WidgetGrid.gridSize(300f, 100f)) // never fewer than 4 × 3
     }
 
@@ -79,5 +81,23 @@ class WidgetGridTest {
         assertEquals(2, WidgetGrid.spanFor(180f, 100f, 4))
         assertEquals(1, WidgetGrid.spanFor(105f, 100f, 4)) // a hair over one cell still fits one
         assertEquals(4, WidgetGrid.spanFor(900f, 100f, 4))
+    }
+
+    @Test fun eachPostureKeepsItsOwnLayout() {
+        val folded = listOf(g(1, 0, 0, 4, 2), g(2, 0, 2, 2, 2))
+        val unfolded = listOf(g(1, 3, 1, 4, 2))
+        // Widget 2 was never arranged unfolded: it gets the first free spot there, its size kept.
+        val u = WidgetGrid.withMissing(unfolded, folded, cols = 7, rows = 6)
+        assertEquals(g(1, 3, 1, 4, 2), u[0])
+        assertEquals(g(2, 0, 0, 2, 2), u[1])
+        // The folded layout isn't touched by any of this.
+        assertEquals(folded, WidgetGrid.withMissing(folded, u, cols = 4, rows = 6))
+    }
+
+    @Test fun missingWidgetShrinksToFitOrWaits() {
+        val full = listOf(g(1, 0, 0, 4, 5))
+        val other = listOf(g(2, 0, 0, 4, 2), g(3, 0, 2, 4, 4))
+        val out = WidgetGrid.withMissing(full, other, cols = 4, rows = 6)
+        assertEquals(listOf(g(1, 0, 0, 4, 5), g(2, 0, 5, 4, 1)), out) // 2 shrinks to the last row; 3 waits
     }
 }

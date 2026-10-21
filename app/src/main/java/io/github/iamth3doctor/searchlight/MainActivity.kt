@@ -44,6 +44,7 @@ import io.github.iamth3doctor.searchlight.ui.AppTableAdapter
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
 import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
 import io.github.iamth3doctor.searchlight.ui.GlassTint
+import io.github.iamth3doctor.searchlight.ui.Posture
 import io.github.iamth3doctor.searchlight.ui.ResultsAdapter
 import io.github.iamth3doctor.searchlight.ui.Swipe
 import io.github.iamth3doctor.searchlight.ui.WallpaperBlur
@@ -82,6 +83,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private var slowResults: List<SearchResult> = emptyList()
 
     private var cards: List<HomeCard> = emptyList()
+    private var posture = Posture.FOLDED
     private var cardsStarted = false
 
     private val sourcesChanged: () -> Unit = {
@@ -111,6 +113,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         setupHomeCard()
         setupWidgetPage()
         setupAppTable()
+        applyPosture(Posture.of(resources.configuration))
 
         app.apps.addListener(sourcesChanged)
         app.contacts.addListener(sourcesChanged)
@@ -187,6 +190,43 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         super.onConfigurationChanged(newConfig)
         // Fold/unfold: views re-measure themselves; popups are anchored to stale coordinates.
         dismissPopups()
+        applyPosture(Posture.of(newConfig))
+    }
+
+    /**
+     * Folded: one tile at a time (swipe, dots), 4 app columns, the folded widget layout.
+     * Unfolded: every tile side by side, 7 app columns, the unfolded widget layout.
+     */
+    private fun applyPosture(p: Posture) {
+        val changed = p != posture
+        posture = p
+        widgets.posture = p
+        adapter.columns = appColumns()
+        (binding.appTableList.layoutManager as? GridLayoutManager)?.spanCount = appColumns()
+        if (changed) applyTileMode()
+    }
+
+    private fun appColumns() = if (posture == Posture.UNFOLDED) UNFOLDED_APP_COLUMNS else FOLDED_APP_COLUMNS
+
+    /** Puts the tile views in the pager (folded) or the side-by-side row (unfolded). */
+    private fun applyTileMode() {
+        val row = binding.tileRow
+        row.removeAllViews()
+        if (posture == Posture.UNFOLDED) {
+            binding.cards.adapter = null // releases the tile views to the row
+            for (card in cards) {
+                row.addView(card.viewFor(row).apply { minimumWidth = if (card.minRowWidth != 0) px(card.minRowWidth) else 0 })
+            }
+            binding.cards.isVisible = false
+            binding.dots.isVisible = false
+            row.isVisible = true
+        } else {
+            row.isVisible = false
+            binding.cards.isVisible = true
+            binding.cards.adapter = CardsAdapter(cards)
+            binding.dots.isVisible = cards.size > 1
+            goToIdleCard()
+        }
     }
 
     @Deprecated("Launcher: Back never leaves home; it clears the search and drops the keyboard.")
@@ -233,7 +273,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                 CardType.QUICK_ACTIONS -> QuickActionsCard(this)
             }
         }
-        binding.cards.adapter = CardsAdapter(cards)
         binding.dots.removeAllViews()
         val dotSize = px(R.dimen.size_dot)
         val dotGap = px(R.dimen.space_xs)
@@ -243,7 +282,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                 layoutParams = LinearLayout.LayoutParams(dotSize, dotSize).apply { marginStart = dotGap; marginEnd = dotGap }
             })
         }
-        binding.dots.isVisible = cards.size > 1
+        applyTileMode()
         if (wasStarted) startCards()
         goToIdleCard()
         refreshResults()
@@ -342,7 +381,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun setupAppTable() {
         appTable = AppTableAdapter(app.apps, ::launchApp)
         val list = binding.appTableList
-        list.layoutManager = GridLayoutManager(this, columnsFor(resources.displayMetrics.widthPixels))
+        list.layoutManager = GridLayoutManager(this, appColumns())
         // The table is clear glass over the wallpaper: it must never take focus (hiding the home
         // card moves focus off the search field), or Android paints its focus highlight over it.
         for (v in listOf(binding.appTable, list)) {
@@ -352,9 +391,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
         list.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         list.adapter = appTable
-        list.addOnLayoutChangeListener { v, l, _, r, _, ol, _, or_, _ ->
-            if (r - l != or_ - ol) (list.layoutManager as GridLayoutManager).spanCount = columnsFor(v.width)
-        }
         binding.widgetGrid.onSwipeUp = ::openAppTable
 
         // Swipe down closes, but only from the top: otherwise it's an ordinary scroll back up.
@@ -438,10 +474,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     /**
      * Results: a vertical list whose first block is the app grid (4 columns folded, 6 unfolded,
-     * every matching app). Columns are recomputed whenever the width changes.
+     * every matching app). 4 columns folded, 7 unfolded (see applyPosture).
      */
     private fun setupResultsGrid() {
-        adapter.columns = columnsFor(resources.displayMetrics.widthPixels)
+        adapter.columns = appColumns()
         binding.results.layoutManager = LinearLayoutManager(this)
         // Panel and pill are glass like the home card, each with its own shadow (see frosted()).
         binding.resultsPanel.background = frosted(binding.resultsPanel, R.dimen.radius_card)
@@ -459,9 +495,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.results.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         binding.results.adapter = adapter
         binding.results.itemAnimator = null
-        binding.results.addOnLayoutChangeListener { v, l, _, r, _, ol, _, or_, _ ->
-            if (r - l != or_ - ol) adapter.columns = columnsFor(v.width)
-        }
     }
 
     /** The results panel and web pill: the same glass as the home card (wallpaper-tinted, hairline). */
@@ -478,9 +511,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.resultsPanel.invalidate()
         binding.webPill.invalidate()
     }
-
-    private fun columnsFor(widthPx: Int): Int =
-        if (widthPx / resources.displayMetrics.density >= UNFOLDED_MIN_WIDTH_DP) 6 else 4
 
     /**
      * Moves the highlight through the results: ↑/↓ by row (grid rows, then list rows), Tab /
@@ -702,8 +732,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private companion object {
         const val WEATHER_MAX_AGE_MS = 30 * 60 * 1000L
-        /** Results area at least this wide (the unfolded screen) gets 6 app columns instead of 4. */
-        const val UNFOLDED_MIN_WIDTH_DP = 560
+        const val FOLDED_APP_COLUMNS = 4
+        const val UNFOLDED_APP_COLUMNS = 7
         const val KEY_PENDING_WIDGET = "pending_widget_id"
         const val TABLE_ANIM_MS = 220L
         const val FAVORITES_HOLD_MS = 250L
