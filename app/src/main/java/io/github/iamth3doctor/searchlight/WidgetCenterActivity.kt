@@ -24,6 +24,7 @@ import io.github.iamth3doctor.searchlight.ui.Type
 import io.github.iamth3doctor.searchlight.ui.edgeToEdge
 import io.github.iamth3doctor.searchlight.ui.isLightTheme
 import io.github.iamth3doctor.searchlight.ui.padForSystemBars
+import io.github.iamth3doctor.searchlight.ui.pickWeatherApp
 import io.github.iamth3doctor.searchlight.ui.wrappingItems
 import io.github.iamth3doctor.searchlight.ui.wrappingSingleChoice
 import io.github.iamth3doctor.searchlight.ui.primaryText
@@ -91,6 +92,10 @@ class WidgetCenterActivity : Activity() {
         if (enabled.isEmpty()) help(R.string.wc_no_cards)
 
         section(R.string.wc_section_weather)
+        val weatherApp = prefs.weatherAppKey?.let { app.apps.find(it) }
+        row(getString(R.string.weather_app), weatherApp?.label ?: getString(R.string.weather_app_unset)) {
+            pickWeatherApp { render() }
+        }
         unitPicker()
         val place = prefs.manualPlace
         row(

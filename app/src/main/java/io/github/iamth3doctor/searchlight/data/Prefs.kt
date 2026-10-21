@@ -80,6 +80,11 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_MUSIC_PACKAGE, null)
         set(value) = sp.edit().putString(KEY_MUSIC_PACKAGE, value).apply()
 
+    /** App key (see AppEntry.key) of the app the weather tile opens; null = not chosen yet. */
+    var weatherAppKey: String?
+        get() = sp.getString(KEY_WEATHER_APP, null)
+        set(value) = sp.edit().putString(KEY_WEATHER_APP, value).apply()
+
     /** The four Quick Actions slots, in order. Unknown/missing entries fall back per slot. */
     var quickActionSlots: List<QuickAction>
         get() = SlotConfig.parse(
@@ -208,6 +213,7 @@ class Prefs(context: Context) {
         private const val KEY_IDLE_CARD = "idle_card"
         private const val KEY_MUSIC_FRONT = "music_auto_front"
         private const val KEY_MUSIC_PACKAGE = "music_default_package"
+        private const val KEY_WEATHER_APP = "weather_app"
         private const val KEY_QA_SLOTS = "quick_action_slots"
         private const val KEY_LEGACY_WIDGETS = "widgets"
         private const val KEY_WIDGET_GRID = "widget_grid"

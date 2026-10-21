@@ -77,6 +77,10 @@
     <string name="weather_switch_unit">Show in %1$s</string>
     <string name="weather_refresh">Refresh weather</string>
     <string name="weather_settings">Weather settings</string>
+    <string name="weather_app">Weather app</string>
+    <string name="weather_app_choose">Choose weather app</string>
+    <string name="weather_app_none">None (tapping the tile asks)</string>
+    <string name="weather_app_unset">Not chosen: tapping the weather tile asks</string>
 
 
     <string name="battery_full">Fully charged</string>
