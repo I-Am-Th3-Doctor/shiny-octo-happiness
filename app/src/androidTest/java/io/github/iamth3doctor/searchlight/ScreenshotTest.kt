@@ -86,6 +86,19 @@ class ScreenshotTest {
                 home.onActivity { it.findViewById<ViewPager2>(R.id.cards).setCurrentItem(i, false) }
                 shot("01-home-tile$i")
             }
+            // Tile text that doesn't fit scrolls. CI runs with animations off, so the shots above
+            // show the "…" fallback; switch them on for the start of the loop and mid-scroll.
+            shell("settings put global animator_duration_scale 1")
+            try {
+                home.recreate()
+                home.onActivity { it.findViewById<ViewPager2>(R.id.cards).setCurrentItem(0, false) }
+                shot("01c-marquee-start")
+                Thread.sleep(1500)
+                shot("01d-marquee-scrolling")
+            } finally {
+                shell("settings put global animator_duration_scale 0")
+                home.recreate()
+            }
             // Edit mode: the widget canvas and the floating pill (it must not cover the first row).
             home.onActivity { it.findViewById<io.github.iamth3doctor.searchlight.widgets.WidgetGridView>(R.id.widgetGrid).setEditMode(true) }
             shot("01b-edit-mode")

@@ -1,6 +1,7 @@
 package io.github.iamth3doctor.searchlight.cards
 
 import android.app.Activity
+import android.text.SpannableStringBuilder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -62,6 +63,14 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
 
     open fun onStop() {
         started = false
+    }
+}
+
+/** Non-blank [parts] joined with " · ", keeping their spans: one line of tile text. */
+fun joinedLine(vararg parts: CharSequence): CharSequence = SpannableStringBuilder().apply {
+    parts.filter { it.isNotBlank() }.forEachIndexed { i, part ->
+        if (i > 0) append(" · ")
+        append(part)
     }
 }
 

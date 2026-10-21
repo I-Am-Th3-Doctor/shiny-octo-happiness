@@ -26,9 +26,7 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
 
     private val main = Handler(Looper.getMainLooper())
     private lateinit var percent: TextView
-    private lateinit var status: TextView
-    private lateinit var wifi: TextView
-    private lateinit var cell: TextView
+    private lateinit var line: TextView
     private var batteryIntent: Intent? = null
 
     override val layout = R.layout.card_battery
@@ -49,9 +47,7 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
 
     override fun bind(root: View) {
         percent = root.findViewById(R.id.batteryPercent)
-        status = root.findViewById(R.id.batteryStatus)
-        wifi = root.findViewById(R.id.wifiSignal)
-        cell = root.findViewById(R.id.cellSignal)
+        line = root.findViewById(R.id.batteryLine)
         root.findViewById<View>(R.id.card).setOnClickListener {
             try {
                 activity.startActivity(Intent(Intent.ACTION_POWER_USAGE_SUMMARY))
@@ -75,6 +71,7 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
 
     override fun draw() {
         val i = batteryIntent
+        var status: CharSequence = ""
         if (i != null) {
             val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
             val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
@@ -82,13 +79,13 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
             percent.text = if (pct >= 0) "$pct%" else "--"
             val plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
             val state = i.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
-            status.text = when {
+            status = when {
                 state == BatteryManager.BATTERY_STATUS_FULL || (plugged && pct >= 100) -> activity.getString(R.string.battery_full)
                 plugged -> chargingText()
                 else -> activity.getString(R.string.battery_discharging)
             }
         }
-        renderSignals()
+        line.text = joinedLine(status, wifiSignal(), cellSignal())
     }
 
     private fun chargingText(): String {
@@ -101,12 +98,12 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
     }
 
     @Suppress("DEPRECATION") // allNetworks / calculateSignalLevel: simplest way to read Wi-Fi RSSI on API 29+.
-    private fun renderSignals() {
+    private fun wifiSignal(): CharSequence {
         val cm = activity.getSystemService(ConnectivityManager::class.java)
         val wm = activity.applicationContext.getSystemService(WifiManager::class.java)
         val wifiCaps = cm?.allNetworks?.mapNotNull { cm.getNetworkCapabilities(it) }
             ?.firstOrNull { it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) }
-        wifi.text = when {
+        return when {
             wifiCaps != null -> {
                 val rssi = wifiCaps.signalStrength
                 val lvl = if (rssi == NetworkCapabilities.SIGNAL_STRENGTH_UNSPECIFIED) 4 else WifiManager.calculateSignalLevel(rssi, 5)
@@ -115,9 +112,11 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
             wm?.isWifiEnabled == true -> activity.getString(R.string.signal_wifi_disconnected)
             else -> activity.getString(R.string.signal_wifi_off)
         }
+    }
 
+    private fun cellSignal(): CharSequence {
         val tm = activity.getSystemService(TelephonyManager::class.java)
-        cell.text = try {
+        return try {
             when {
                 tm == null || tm.simState != TelephonyManager.SIM_STATE_READY -> activity.getString(R.string.signal_no_sim)
                 else -> {
