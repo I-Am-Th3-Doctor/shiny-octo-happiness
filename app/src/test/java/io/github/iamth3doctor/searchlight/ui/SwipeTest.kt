@@ -16,4 +16,11 @@ class SwipeTest {
         assertNull(Swipe.vertical(dx = 200f, dy = -120f, minDistance = 100f))
         assertNull(Swipe.vertical(dx = 70f, dy = -120f, minDistance = 100f))
     }
+
+    @Test fun sideways() {
+        assertEquals(Swipe.Direction.RIGHT, Swipe.horizontal(dx = 120f, dy = 10f, minDistance = 100f))
+        assertEquals(Swipe.Direction.LEFT, Swipe.horizontal(dx = -120f, dy = 10f, minDistance = 100f))
+        assertNull(Swipe.horizontal(dx = 120f, dy = 80f, minDistance = 100f))
+        assertNull(Swipe.horizontal(dx = 60f, dy = 0f, minDistance = 100f))
+    }
 }

@@ -228,6 +228,27 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
         }
     }
 
+    /**
+     * Opens [entry] next to the current app (split-screen) where the system allows it.
+     * Android only lets the system launcher start a split from the home screen, so on most
+     * devices this opens it full-screen, like [launch]. Other profiles (work) can't be launched
+     * this way and just use [launch].
+     */
+    fun launchAdjacent(entry: AppEntry, from: Context) {
+        if (entry.isSelf || entry.user != android.os.Process.myUserHandle()) return launch(entry, null, from)
+        prefs.recordLaunch(entry.key)
+        val intent = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER)
+            .setComponent(entry.component)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+        try {
+            from.startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Adjacent launch failed for ${entry.key}", e)
+            launch(entry, null, from)
+        }
+    }
+
     fun openAppInfo(entry: AppEntry, source: View?) {
         val bounds = source?.let {
             val loc = IntArray(2)

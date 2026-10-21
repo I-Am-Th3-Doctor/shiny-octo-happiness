@@ -44,6 +44,13 @@
     <dimen name="size_progress">4dp</dimen>           <!-- day-of-year bar -->
     <dimen name="size_tile_height">60dp</dimen>      <!-- the tile pager: one row of tiles -->
     <!-- Unfolded, tiles sit side by side; these need room for their buttons. -->
+    <!-- Unfolded rail and all-apps panel. -->
+    <dimen name="size_rail">64dp</dimen>
+    <dimen name="size_rail_cell">56dp</dimen>
+    <dimen name="size_rail_icon">44dp</dimen>
+    <dimen name="size_rail_divider">32dp</dimen>
+    <dimen name="size_all_apps_panel">224dp</dimen>  <!-- two columns of app cells -->
+    <dimen name="size_drop_zone">72dp</dimen>        <!-- screen-edge drop targets while dragging -->
     <dimen name="size_tile_min_actions">192dp</dimen> <!-- 4 × 40dp circles with small gaps -->
     <dimen name="size_tile_min_music">184dp</dimen>   <!-- art + some title + play/pause (no prev/next in the row) -->
     <dimen name="size_grid_icon">56dp</dimen>         <!-- favorites grid icon -->

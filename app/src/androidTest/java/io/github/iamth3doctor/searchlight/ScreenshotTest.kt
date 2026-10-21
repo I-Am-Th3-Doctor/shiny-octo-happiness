@@ -91,7 +91,16 @@ class ScreenshotTest {
                 shot("01-home-tile$i")
             }
             // Unfolded there's no pager: every tile shows at once, side by side.
-            if (tiles == 0) shot("01-home-tile-row")
+            if (tiles == 0) {
+                shot("01-home-tile-row")
+                // ...with the rail on the right; its all-apps panel, then search from the rail.
+                home.onActivity { it.openAllApps() }
+                shot("01f-all-apps-panel")
+                @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() }
+                home.onActivity { it.findViewById<View>(R.id.railSearch).performClick() }
+                shot("01g-rail-search-open")
+                @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() }
+            }
             // Tile text that doesn't fit scrolls. CI runs with animations off, so the shots above
             // show the "…" fallback; switch them on for the start of the loop and mid-scroll.
             shell("settings put global animator_duration_scale 1")

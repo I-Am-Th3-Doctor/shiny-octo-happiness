@@ -77,6 +77,8 @@
     <string name="weather_switch_unit">Show in %1$s</string>
     <string name="weather_refresh">Refresh weather</string>
     <string name="weather_settings">Weather settings</string>
+    <string name="rail_search">Search</string>
+    <string name="rail_all_apps">All apps</string>
     <string name="weather_app">Weather app</string>
     <string name="weather_app_choose">Choose weather app</string>
     <string name="weather_app_none">None (tapping the tile asks)</string>

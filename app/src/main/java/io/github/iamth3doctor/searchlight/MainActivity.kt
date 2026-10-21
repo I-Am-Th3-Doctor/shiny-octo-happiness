@@ -13,6 +13,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.inputmethod.EditorInfo
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.Toast
@@ -42,6 +44,7 @@ import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.AppTableAdapter
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
+import io.github.iamth3doctor.searchlight.ui.FavoritesRail
 import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
 import io.github.iamth3doctor.searchlight.ui.GlassTint
 import io.github.iamth3doctor.searchlight.ui.Posture
@@ -84,10 +87,16 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private var cards: List<HomeCard> = emptyList()
     private var posture = Posture.FOLDED
+    private lateinit var rail: FavoritesRail
+    private lateinit var allApps: AppTableAdapter
+    /** Unfolded the search row is hidden until the rail's magnifier (or Home + auto-keyboard) asks for it. */
+    private var searchOpen = false
+    private val favoritesChanged: () -> Unit = { rail.render() }
     private var cardsStarted = false
 
     private val sourcesChanged: () -> Unit = {
         refreshResults()
+        if (posture == Posture.UNFOLDED) rail.render()
         if (binding.appTable.isVisible) appTable.submit(sortedApps())
     }
 
@@ -113,9 +122,11 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         setupHomeCard()
         setupWidgetPage()
         setupAppTable()
+        setupRail()
         applyPosture(Posture.of(resources.configuration))
 
         app.apps.addListener(sourcesChanged)
+        prefs.addFavoritesListener(favoritesChanged)
         app.contacts.addListener(sourcesChanged)
         app.files.addListener(sourcesChanged)
         WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperChanged, android.os.Handler(mainLooper))
@@ -123,6 +134,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     override fun onDestroy() {
         app.apps.removeListener(sourcesChanged)
+        prefs.removeFavoritesListener(favoritesChanged)
         app.contacts.removeListener(sourcesChanged)
         app.files.removeListener(sourcesChanged)
         WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperChanged)
@@ -204,6 +216,44 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         adapter.columns = appColumns()
         (binding.appTableList.layoutManager as? GridLayoutManager)?.spanCount = appColumns()
         if (changed) applyTileMode()
+        val unfolded = p == Posture.UNFOLDED
+        binding.rail.isVisible = unfolded && !binding.appTable.isVisible
+        if (unfolded) rail.render() else closeAllApps(animate = false)
+        updateSearchRow()
+        layoutColumn()
+    }
+
+    /** Folded: always there. Unfolded: only once search is asked for (the rail's magnifier). */
+    private fun updateSearchRow() {
+        binding.searchPill.isVisible = posture == Posture.FOLDED || searchOpen
+    }
+
+    /**
+     * Unfolded, the home column (card, widgets, results) sits beside the rail: capped at
+     * home_max_width and centered in the space left of it. Folded: centered on screen as before.
+     */
+    private fun layoutColumn() {
+        val root = binding.root
+        val lp = binding.column.layoutParams as FrameLayout.LayoutParams
+        val gravity: Int
+        val width: Int
+        val left: Int
+        if (posture == Posture.UNFOLDED && root.width > 0) {
+            val avail = root.width - root.paddingLeft - root.paddingRight - FavoritesRail.reservedWidth(this)
+            width = minOf(px(R.dimen.home_max_width), avail)
+            gravity = Gravity.START
+            left = (avail - width) / 2
+        } else {
+            width = ViewGroup.LayoutParams.MATCH_PARENT
+            gravity = Gravity.CENTER_HORIZONTAL
+            left = 0
+        }
+        if (lp.gravity != gravity || lp.width != width || lp.leftMargin != left) {
+            lp.gravity = gravity
+            lp.width = width
+            lp.leftMargin = left
+            binding.column.layoutParams = lp
+        }
     }
 
     private fun appColumns() = if (posture == Posture.UNFOLDED) UNFOLDED_APP_COLUMNS else FOLDED_APP_COLUMNS
@@ -234,6 +284,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     @Deprecated("Launcher: Back never leaves home; it clears the search and drops the keyboard.")
     override fun onBackPressed() {
         when {
+            binding.allApps.isVisible -> closeAllApps()
             binding.appTable.isVisible -> closeAppTable()
             widgets.editing -> widgets.exitEditMode()
             favoritesPopup.isShowing -> favoritesPopup.dismiss()
@@ -448,16 +499,154 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * fade out, leaving just the wallpaper and the apps. They come back exactly as they were.
      */
     private fun showHome(show: Boolean, animate: Boolean = true) {
-        val home = binding.column
-        home.animate().cancel()
-        if (show) home.isVisible = true
+        val views = listOfNotNull(binding.column, binding.rail.takeIf { posture == Posture.UNFOLDED })
+        for (home in views) {
+            home.animate().cancel()
+            if (show) home.isVisible = true
+            if (!animate) {
+                home.alpha = if (show) 1f else 0f
+                home.isInvisible = !show
+                continue
+            }
+            home.animate().alpha(if (show) 1f else 0f).setDuration(TABLE_ANIM_MS)
+                .withEndAction { home.isInvisible = !show }.start()
+        }
+    }
+
+    // ------------------------------------------------------------------ unfolded rail
+
+    /**
+     * Unfolded: a frosted rail on the right with search, the six favorites (one tap each, no
+     * long-press) and all apps, which slides in a two-column panel of every app.
+     */
+    private fun setupRail() {
+        rail = FavoritesRail(this, app.apps, prefs, binding.railFavorites, ::launchApp)
+        binding.rail.background = frosted(binding.rail, R.dimen.radius_pill)
+        binding.rail.clipToOutline = true
+        binding.railSearch.setOnClickListener { showKeyboard() }
+        binding.railAllApps.setOnClickListener { openAllApps() }
+        binding.root.addOnLayoutChangeListener { _, l, _, r, _, ol, _, or_, _ -> if (r - l != or_ - ol) layoutColumn() }
+
+        allApps = AppTableAdapter(app.apps, ::launchApp, ::startDrag)
+        val list = binding.allAppsList
+        list.layoutManager = GridLayoutManager(this, 2)
+        list.adapter = allApps
+        list.isFocusable = false
+        list.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        binding.allApps.background = frosted(binding.allApps, R.dimen.radius_card)
+        binding.allApps.clipToOutline = true
+
+        // Swipe toward the right edge closes; once an app is held, the same finger drags it.
+        val distance = pxF(R.dimen.size_swipe)
+        list.addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
+            private var downX = 0f
+            private var downY = 0f
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                if (dragged != null) return true
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = e.x
+                        downY = e.y
+                    }
+                    MotionEvent.ACTION_MOVE ->
+                        if (Swipe.horizontal(e.x - downX, e.y - downY, distance) == Swipe.Direction.RIGHT) {
+                            closeAllApps()
+                            return true
+                        }
+                }
+                return false
+            }
+
+            override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
+                if (dragged == null) return
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_MOVE -> moveDrag(e.rawX, e.rawY)
+                    MotionEvent.ACTION_UP -> endDrag(e.rawX)
+                    MotionEvent.ACTION_CANCEL -> endDrag(null)
+                }
+            }
+
+            override fun onRequestDisallowInterceptTouchEvent(disallow: Boolean) = Unit
+        })
+    }
+
+    fun openAllApps() {
+        if (binding.allApps.isVisible) return
+        hideKeyboard()
+        dismissPopups()
+        allApps.submit(sortedApps())
+        binding.allAppsList.scrollToPosition(0)
+        binding.allApps.isVisible = true
+        binding.allApps.translationX = binding.allApps.width.takeIf { it > 0 }?.toFloat() ?: px(R.dimen.size_all_apps_panel).toFloat()
+        binding.allApps.animate().translationX(0f).setDuration(TABLE_ANIM_MS).start()
+    }
+
+    private fun closeAllApps(animate: Boolean = true) {
+        if (!binding.allApps.isVisible) return
+        endDrag(null)
+        binding.allApps.animate().cancel()
         if (!animate) {
-            home.alpha = if (show) 1f else 0f
-            home.isInvisible = !show
+            binding.allApps.isVisible = false
             return
         }
-        home.animate().alpha(if (show) 1f else 0f).setDuration(TABLE_ANIM_MS)
-            .withEndAction { home.isInvisible = !show }.start()
+        binding.allApps.animate().translationX(binding.allApps.width + px(R.dimen.inset_home_card).toFloat())
+            .setDuration(TABLE_ANIM_MS).withEndAction { binding.allApps.isVisible = false }.start()
+    }
+
+    // Dragging an app out of the all-apps panel onto a screen edge opens it side by side.
+    private var dragged: AppEntry? = null
+    private var dragGhost: ImageView? = null
+
+    private fun startDrag(entry: AppEntry, from: View) {
+        dragged = entry
+        val size = px(R.dimen.size_grid_icon)
+        dragGhost = ImageView(this).apply {
+            setImageBitmap(app.apps.icon(entry) { setImageBitmap(it) })
+            elevation = pxF(R.dimen.elevation_raised) * 2
+            alpha = 0.9f
+            binding.root.addView(this, FrameLayout.LayoutParams(size, size))
+        }
+        val loc = IntArray(2)
+        from.getLocationOnScreen(loc)
+        moveDrag(loc[0] + from.width / 2f, loc[1] + from.height / 2f)
+        binding.dropLeft.isVisible = true
+        binding.dropRight.isVisible = true
+    }
+
+    private fun moveDrag(rawX: Float, rawY: Float) {
+        val ghost = dragGhost ?: return
+        val root = IntArray(2).also { binding.root.getLocationOnScreen(it) }
+        ghost.x = rawX - root[0] - ghost.layoutParams.width / 2f
+        ghost.y = rawY - root[1] - ghost.layoutParams.height / 2f
+        val side = edgeAt(rawX)
+        binding.dropLeft.alpha = if (side == Gravity.START) 1f else 0.4f
+        binding.dropRight.alpha = if (side == Gravity.END) 1f else 0.4f
+    }
+
+    /** Ends a drag: dropped on an edge ([rawX] inside a drop zone) opens the app side by side. */
+    private fun endDrag(rawX: Float?) {
+        val entry = dragged ?: return
+        dragged = null
+        dragGhost?.let { binding.root.removeView(it) }
+        dragGhost = null
+        binding.dropLeft.isVisible = false
+        binding.dropRight.isVisible = false
+        if (rawX != null && edgeAt(rawX) != null) {
+            dismissPopups()
+            launchedSomething = true
+            app.apps.launchAdjacent(entry, this)
+        }
+    }
+
+    /** Gravity.START / END if [rawX] is over the left / right drop zone, else null. */
+    private fun edgeAt(rawX: Float): Int? {
+        val loc = IntArray(2).also { binding.root.getLocationOnScreen(it) }
+        val zone = px(R.dimen.size_drop_zone)
+        return when {
+            rawX < loc[0] + zone -> Gravity.START
+            rawX > loc[0] + binding.root.width - zone -> Gravity.END
+            else -> null
+        }
     }
 
     private fun sortedApps(): List<AppEntry> {
@@ -604,6 +793,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private fun resetHome() {
         closeAppTable(animate = false)
+        closeAllApps(animate = false)
+        searchOpen = false
+        updateSearchRow()
         binding.searchInput.text = null
         binding.searchInput.clearFocus()
         if (!prefs.autoOpenKeyboard) hideKeyboard()
@@ -611,6 +803,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     }
 
     private fun showKeyboard() {
+        if (!searchOpen && posture == Posture.UNFOLDED) {
+            searchOpen = true
+            updateSearchRow()
+        }
         val input = binding.searchInput
         input.requestFocus()
         WindowCompat.getInsetsController(window, input).show(WindowInsetsCompat.Type.ime())

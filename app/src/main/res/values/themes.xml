@@ -60,6 +60,22 @@
         <item name="android:textColor">@color/on_surface</item>
     </style>
 
+    <!-- A hairline between the unfolded rail's groups. -->
+    <style name="RailDivider">
+        <item name="android:layout_width">@dimen/size_rail_divider</item>
+        <item name="android:layout_height">@dimen/stroke_glass</item>
+        <item name="android:layout_marginVertical">@dimen/space_s</item>
+        <item name="android:background">@color/glass_border</item>
+    </style>
+
+    <!-- An edge you can drop a dragged app on (unfolded all-apps panel). -->
+    <style name="DropZone">
+        <item name="android:layout_width">@dimen/size_drop_zone</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:background">@color/accent_soft</item>
+        <item name="android:visibility">gone</item>
+    </style>
+
     <style name="EditPillButton">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">match_parent</item>

@@ -9,10 +9,14 @@ import io.github.iamth3doctor.searchlight.apps.AppEntry
 import io.github.iamth3doctor.searchlight.apps.AppRepository
 import io.github.iamth3doctor.searchlight.databinding.ItemAppCellBinding
 
-/** Every app, A–Z, in the same cells as the search results' app grid. */
+/**
+ * Every app, A–Z, in the same cells as the search results' app grid. Used by the app table
+ * (swipe up) and the unfolded all-apps panel, which also passes [onHold] to drag apps out.
+ */
 class AppTableAdapter(
     private val repo: AppRepository,
     private val onLaunch: (AppEntry, View) -> Unit,
+    private val onHold: ((AppEntry, View) -> Unit)? = null,
 ) : RecyclerView.Adapter<AppTableAdapter.Holder>() {
 
     private var apps: List<AppEntry> = emptyList()
@@ -32,6 +36,7 @@ class AppTableAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
         Holder(ItemAppCellBinding.inflate(LayoutInflater.from(parent.context), parent, false)).also { h ->
             h.b.root.setOnClickListener { v -> h.entry?.let { onLaunch(it, v) } }
+            if (onHold != null) h.b.root.setOnLongClickListener { v -> h.entry?.let { onHold.invoke(it, v) }; true }
         }
 
     override fun onBindViewHolder(h: Holder, position: Int) {

@@ -246,6 +246,84 @@
     </io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout>
 
     <!--
+      Unfolded only: a frosted rail on the right edge. Search (brings up the search row), the
+      six favorites, then all apps. Folded keeps the card's search row and the long-press popup.
+    -->
+    <LinearLayout
+        android:id="@+id/rail"
+        android:layout_width="@dimen/size_rail"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="@dimen/inset_home_card"
+        android:elevation="@dimen/elevation_raised"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingVertical="@dimen/space_s"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/railSearch"
+            android:layout_width="@dimen/size_rail_cell"
+            android:layout_height="@dimen/size_rail_cell"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/rail_search"
+            android:src="@drawable/ic_search" />
+
+        <View style="@style/RailDivider" />
+
+        <LinearLayout
+            android:id="@+id/railFavorites"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <View style="@style/RailDivider" />
+
+        <ImageButton
+            android:id="@+id/railAllApps"
+            android:layout_width="@dimen/size_rail_cell"
+            android:layout_height="@dimen/size_rail_cell"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/rail_all_apps"
+            android:src="@drawable/ic_apps" />
+    </LinearLayout>
+
+    <!--
+      Unfolded: every app in two columns, sliding in from the right over the rail. Tap to open;
+      hold and drag to a screen edge to open it side by side (where Android allows). Back or a
+      swipe toward the right edge closes it.
+    -->
+    <FrameLayout
+        android:id="@+id/allApps"
+        android:layout_width="@dimen/size_all_apps_panel"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:layout_margin="@dimen/inset_home_card"
+        android:elevation="@dimen/elevation_raised"
+        android:visibility="gone">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/allAppsList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:padding="@dimen/space_s"
+            android:scrollbars="none" />
+    </FrameLayout>
+
+    <!-- While dragging an app out of the panel: drop it on an edge to open it there. -->
+    <View
+        android:id="@+id/dropLeft"
+        style="@style/DropZone"
+        android:layout_gravity="start" />
+
+    <View
+        android:id="@+id/dropRight"
+        style="@style/DropZone"
+        android:layout_gravity="end" />
+
+    <!--
       The app table: every app, A–Z, straight over the wallpaper (no background; the home card
       and widgets fade out while it's open). Opened by swiping up on empty home space; closed by
       swiping down (from the top of the list) or Back.
