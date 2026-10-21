@@ -31,7 +31,7 @@ class MarqueeTextView @JvmOverloads constructor(
     init {
         isSingleLine = true
         isHorizontalFadingEdgeEnabled = true
-        setFadingEdgeLength(context.px(R.dimen.space_m))
+        setFadingEdgeLength(context.px(R.dimen.space_l))
         ready = true
     }
 
