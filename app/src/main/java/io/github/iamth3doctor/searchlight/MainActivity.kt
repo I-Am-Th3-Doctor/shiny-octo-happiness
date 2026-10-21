@@ -216,12 +216,14 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             binding.cards.adapter = null // releases the tile views to the row
             for (card in cards) {
                 row.addView(card.viewFor(row).apply { minimumWidth = if (card.minRowWidth != 0) px(card.minRowWidth) else 0 })
+                card.setInRow(true)
             }
             binding.cards.isVisible = false
             binding.dots.isVisible = false
             row.isVisible = true
         } else {
             row.isVisible = false
+            cards.forEach { it.setInRow(false) }
             binding.cards.isVisible = true
             binding.cards.adapter = CardsAdapter(cards)
             binding.dots.isVisible = cards.size > 1

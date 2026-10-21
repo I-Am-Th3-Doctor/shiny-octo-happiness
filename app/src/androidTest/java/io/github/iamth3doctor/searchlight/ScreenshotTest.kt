@@ -90,6 +90,8 @@ class ScreenshotTest {
                 home.onActivity { it.findViewById<ViewPager2>(R.id.cards).setCurrentItem(i, false) }
                 shot("01-home-tile$i")
             }
+            // Unfolded there's no pager: every tile shows at once, side by side.
+            if (tiles == 0) shot("01-home-tile-row")
             // Tile text that doesn't fit scrolls. CI runs with animations off, so the shots above
             // show the "…" fallback; switch them on for the start of the loop and mid-scroll.
             shell("settings put global animator_duration_scale 1")

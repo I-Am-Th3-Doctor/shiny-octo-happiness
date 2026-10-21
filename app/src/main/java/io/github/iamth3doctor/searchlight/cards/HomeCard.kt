@@ -54,6 +54,22 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
         draw()
     }
 
+    private var sidePadding: Pair<Int, Int>? = null
+
+    /**
+     * Unfolded, tiles sit side by side: tighter side padding, and [onRowChanged] lets a tile
+     * slim down (Music drops prev/next). Folded restores the original padding.
+     */
+    fun setInRow(inRow: Boolean) {
+        val card = view?.findViewById<View>(R.id.card) ?: return
+        val (start, end) = sidePadding ?: (card.paddingStart to card.paddingEnd).also { sidePadding = it }
+        val p = activity.resources.getDimensionPixelSize(R.dimen.space_s)
+        card.setPaddingRelative(if (inRow) minOf(p, start) else start, card.paddingTop, if (inRow) minOf(p, end) else end, card.paddingBottom)
+        onRowChanged(inRow)
+    }
+
+    protected open fun onRowChanged(inRow: Boolean) = Unit
+
     fun viewFor(parent: ViewGroup): View {
         val v = ensureView(parent)
         (v.parent as? ViewGroup)?.removeView(v)

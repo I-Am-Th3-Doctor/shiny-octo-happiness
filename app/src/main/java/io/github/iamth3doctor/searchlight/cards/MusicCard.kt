@@ -59,6 +59,14 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
     override val layout = R.layout.card_music
     override val minRowWidth = R.dimen.size_tile_min_music
 
+    /** Side by side with other tiles (unfolded): play/pause only, so the title has room. */
+    private var compact = false
+
+    override fun onRowChanged(inRow: Boolean) {
+        compact = inRow
+        render()
+    }
+
     val isPlaying: Boolean get() = controller?.playbackState?.state == PlaybackState.STATE_PLAYING
 
     fun hasAccess() = NotificationManagerCompat.getEnabledListenerPackages(activity).contains(activity.packageName)
@@ -187,9 +195,9 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
     private fun setControlsVisible(visible: Boolean) {
         // Gone, not invisible: in the one-row tile the text gets the room back.
         val v = if (visible) View.VISIBLE else View.GONE
-        prev.visibility = v
+        prev.visibility = if (compact) View.GONE else v
         playPause.visibility = v
-        next.visibility = v
+        next.visibility = if (compact) View.GONE else v
     }
 
     /** "main · sub" with the second part dimmed, so one line carries both. */
