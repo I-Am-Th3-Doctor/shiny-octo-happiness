@@ -3,6 +3,7 @@ package io.github.iamth3doctor.searchlight
 import android.app.Application
 import android.content.Context
 import io.github.iamth3doctor.searchlight.apps.AppRepository
+import io.github.iamth3doctor.searchlight.apps.AppShortcuts
 import io.github.iamth3doctor.searchlight.apps.AutoFavorites
 import io.github.iamth3doctor.searchlight.contacts.ContactRepository
 import io.github.iamth3doctor.searchlight.data.Prefs
@@ -19,6 +20,8 @@ class SearchlightApp : Application() {
     lateinit var apps: AppRepository
         private set
     lateinit var autoFavorites: AutoFavorites
+        private set
+    lateinit var shortcuts: AppShortcuts
         private set
     lateinit var contacts: ContactRepository
         private set
@@ -48,6 +51,8 @@ class SearchlightApp : Application() {
         background = BackgroundSearch(files, media, messages)
         weather = WeatherRepository(this, prefs)
         apps.start()
+        shortcuts = AppShortcuts(this, apps, prefs)
+        shortcuts.start()
         startSources()
         weather.start()
     }

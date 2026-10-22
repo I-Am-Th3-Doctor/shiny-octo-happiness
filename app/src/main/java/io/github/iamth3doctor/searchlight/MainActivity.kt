@@ -45,6 +45,7 @@ import io.github.iamth3doctor.searchlight.search.SearchEngine
 import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.AppTableAdapter
+import io.github.iamth3doctor.searchlight.ui.AppMenu
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
 import io.github.iamth3doctor.searchlight.ui.FavoritesRail
 import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
@@ -82,6 +83,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private val prefs get() = app.prefs
 
     private var openMenu: PopupMenu? = null
+    internal val appMenu by lazy { AppMenu(this) } // internal: the device tests tap its rows
     private var launchedSomething = false
 
     /** Results for the current query: [local] is instant, [slowResults] arrives a moment later. */
@@ -170,6 +172,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         // Permissions may have been granted in Settings since last time.
         app.startSources()
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
+        app.shortcuts.refreshIfAccessChanged() // e.g. just made the default home: shortcuts become readable
         app.autoFavorites.refreshIfStale() // daily, and picks up usage access granted (or revoked) in Settings
         cards.forEach { it.render() } // e.g. °F/°C changed in the Widget Center
         WallpaperBlur.retryIfUnavailable() // photo access may have been granted in Settings
@@ -180,7 +183,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         // The IME can only be shown once the window has focus; onResume is sometimes too early.
-        if (hasFocus && prefs.autoOpenKeyboard && openMenu == null && !binding.appTable.isVisible) showKeyboard()
+        if (hasFocus && prefs.autoOpenKeyboard && openMenu == null && !appMenu.isShowing && !binding.appTable.isVisible) showKeyboard()
     }
 
     override fun onStop() {
@@ -937,34 +940,53 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     /**
      * Long-press on any app icon (search results, app table, favorites popup, rail, all-apps):
-     * App info (the system's page for it), Uninstall (the system flow; not for Searchlight or
-     * work apps), then add/remove favorite, the only way to set favorites. Not while automatic
-     * favorites are showing: the manual six are hidden then, so editing them would look like a no-op.
+     * the stock-style menu. The app's own shortcuts first (from the cache, so it opens at once),
+     * then App info, Widgets (only if the app has any), Uninstall (not for Searchlight or work
+     * apps), and add/remove favorite, the only way to set favorites (not while automatic
+     * favorites are showing: the manual six are hidden then, so editing them would look like a no-op).
      */
-    private fun showAppMenu(entry: AppEntry, anchor: View) = menu(anchor) {
-        add(R.string.menu_app_info) {
+    private fun showAppMenu(entry: AppEntry, anchor: View) {
+        val cached = app.shortcuts.menuFor(entry)
+        val shortcuts = cached.shortcuts.map { s ->
+            AppMenu.Item(s.label, bitmap = s.icon ?: app.apps.icon(entry) {}) {
+                favoritesPopup.dismiss()
+                launchedSomething = true
+                app.shortcuts.launch(entry, s, anchor)
+            }
+        }
+        val actions = ArrayList<AppMenu.Item>()
+        actions += AppMenu.Item(getString(R.string.menu_app_info), iconRes = R.drawable.ic_info) {
             favoritesPopup.dismiss()
             app.apps.openAppInfo(entry, anchor)
         }
-        if (app.apps.canUninstall(entry)) add(R.string.menu_uninstall) {
+        if (cached.hasWidgets) actions += AppMenu.Item(getString(R.string.menu_widgets), iconRes = R.drawable.ic_widgets) {
+            favoritesPopup.dismiss()
+            resetHome() // the widget lands on the home grid, so that's where you come back to
+            widgets.beginAdd(entry.packageName, entry.user)
+        }
+        if (app.apps.canUninstall(entry)) actions += AppMenu.Item(getString(R.string.menu_uninstall), iconRes = R.drawable.ic_delete) {
             favoritesPopup.dismiss()
             app.apps.uninstall(entry, this@MainActivity)
         }
-        if (prefs.autoFavoritesActive) return@menu
-        if (prefs.isFavorite(entry.key)) {
-            add(R.string.menu_remove_favorite) {
-                favoritesPopup.dismiss()
-                prefs.removeFavorite(entry.key)
-            }
-        } else {
-            add(R.string.menu_add_favorite) {
-                if (prefs.addFavorite(entry.key)) {
-                    Toast.makeText(this@MainActivity, getString(R.string.favorite_added, entry.label), Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@MainActivity, R.string.favorites_full, Toast.LENGTH_LONG).show()
+        if (!prefs.autoFavoritesActive) {
+            actions += if (prefs.isFavorite(entry.key)) {
+                AppMenu.Item(getString(R.string.menu_remove_favorite), iconRes = R.drawable.ic_close) {
+                    favoritesPopup.dismiss()
+                    prefs.removeFavorite(entry.key)
+                }
+            } else {
+                AppMenu.Item(getString(R.string.menu_add_favorite), iconRes = R.drawable.ic_star) {
+                    if (prefs.addFavorite(entry.key)) {
+                        Toast.makeText(this, getString(R.string.favorite_added, entry.label), Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, R.string.favorites_full, Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         }
+        openMenu?.dismiss()
+        openMenu = null
+        appMenu.show(anchor, shortcuts, actions) {}
     }
 
     private fun showFileMenu(result: SearchResult.File, anchor: View) = menu(anchor) {
@@ -980,6 +1002,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private fun dismissPopups() {
         favoritesPopup.dismiss()
+        appMenu.dismiss()
         openMenu?.dismiss()
         openMenu = null
     }

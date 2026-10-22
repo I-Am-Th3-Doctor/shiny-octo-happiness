@@ -257,10 +257,17 @@ class WidgetController(
 
     // ------------------------------------------------------------------ add flow
 
-    /** Opens the widget picker; the chosen widget lands in the first free space that fits it. */
-    fun beginAdd() {
+    /**
+     * Opens the widget picker (only [pkg]'s widgets, in [user]'s profile, when given); the chosen
+     * widget lands in the first free space that fits it.
+     */
+    fun beginAdd(pkg: String? = null, user: UserHandle? = null) {
+        val intent = Intent(activity, WidgetPickerActivity::class.java)
+        if (pkg != null) {
+            intent.putExtra(WidgetPickerActivity.EXTRA_FILTER_PACKAGE, pkg).putExtra(WidgetPickerActivity.EXTRA_FILTER_USER, user)
+        }
         @Suppress("DEPRECATION")
-        activity.startActivityForResult(Intent(activity, WidgetPickerActivity::class.java), REQUEST_PICK)
+        activity.startActivityForResult(intent, REQUEST_PICK)
     }
 
     /** @return true if the result belonged to the widget flow. */

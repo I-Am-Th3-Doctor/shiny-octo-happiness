@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.UserHandle
 import android.os.UserManager
 import android.text.Editable
 import android.text.TextWatcher
@@ -30,8 +31,10 @@ import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 /**
- * Every widget from every installed app (personal and work profile), with its preview.
- * Plain on purpose; visual polish is Phase 4. Returns the chosen provider to the home screen.
+ * Every widget from every installed app (personal and work profile), with its preview; or only
+ * one app's, when opened from that app's long-press menu ([EXTRA_FILTER_PACKAGE] and
+ * [EXTRA_FILTER_USER]). Plain on purpose; visual polish is Phase 4. Returns the chosen provider
+ * to the home screen.
  */
 class WidgetPickerActivity : Activity() {
 
@@ -94,8 +97,12 @@ class WidgetPickerActivity : Activity() {
             val manager = AppWidgetManager.getInstance(this)
             val pm = packageManager
             val density = resources.displayMetrics.density
+            val onlyPackage = intent.getStringExtra(EXTRA_FILTER_PACKAGE)
+            val onlyUser = intent.getParcelableExtraCompat<UserHandle>(EXTRA_FILTER_USER)
             val rows = getSystemService(UserManager::class.java).userProfiles.flatMap { profile ->
-                manager.getInstalledProvidersForProfile(profile)
+                if (onlyPackage == null) manager.getInstalledProvidersForProfile(profile)
+                else if (onlyUser == null || onlyUser == profile) manager.getInstalledProvidersForPackage(onlyPackage, profile)
+                else emptyList()
             }.map { info ->
                 val appLabel = try {
                     pm.getApplicationLabel(pm.getApplicationInfo(info.provider.packageName, 0)).toString()
@@ -128,6 +135,10 @@ class WidgetPickerActivity : Activity() {
         fun cells(px: Int) = (((px / density) + 30) / 70).roundToInt().coerceAtLeast(1)
         return "${cells(info.minWidth)} × ${cells(info.minHeight)}"
     }
+
+    private inline fun <reified T : android.os.Parcelable> Intent.getParcelableExtraCompat(key: String): T? =
+        if (Build.VERSION.SDK_INT >= 33) getParcelableExtra(key, T::class.java)
+        else @Suppress("DEPRECATION") getParcelableExtra(key)
 
     private fun choose(row: Row) {
         setResult(RESULT_OK, Intent()
@@ -185,5 +196,7 @@ class WidgetPickerActivity : Activity() {
     companion object {
         const val EXTRA_PROVIDER = "provider"
         const val EXTRA_PROFILE = "profile"
+        const val EXTRA_FILTER_PACKAGE = "filter_package"
+        const val EXTRA_FILTER_USER = "filter_user"
     }
 }
