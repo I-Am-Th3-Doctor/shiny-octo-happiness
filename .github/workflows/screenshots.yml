@@ -64,19 +64,22 @@ jobs:
             mkdir -p shots
             for i in 1 2 3; do adb pull /sdcard/Download/searchlight-shots/. shots/ && break; echo "adb pull failed, retrying"; sleep 3; done
             ls shots
+            cat shots/widgets-*.txt || true
 
       - name: Upload screenshots artifact
         uses: actions/upload-artifact@v7
         with:
           name: screenshots-${{ github.run_number }}
-          path: shots/*.png
+          path: |
+            shots/*.png
+            shots/*.txt
 
       - name: Publish rolling screenshots release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete screenshots-latest --cleanup-tag --yes || true
-          gh release create screenshots-latest shots/*.png \
+          gh release create screenshots-latest shots/*.png shots/*.txt \
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "Screenshots #${{ github.run_number }} (${GITHUB_SHA::7})" \
