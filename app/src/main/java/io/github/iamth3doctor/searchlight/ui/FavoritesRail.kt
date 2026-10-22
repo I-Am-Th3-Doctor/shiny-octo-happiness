@@ -27,6 +27,7 @@ class FavoritesRail(
     fun render() {
         container.removeAllViews()
         val favorites = prefs.favorites.mapNotNull(repo::find)
+        val emptyHint = if (prefs.autoFavoritesActive) R.string.favorites_auto_empty_hint else R.string.favorites_empty_hint
         val cell = activity.px(R.dimen.size_rail_cell)
         val icon = activity.px(R.dimen.size_rail_icon)
         for (i in 0 until Prefs.MAX_FAVORITES) {
@@ -52,8 +53,8 @@ class FavoritesRail(
                 image.setImageResource(R.drawable.ic_add)
                 image.setBackgroundResource(R.drawable.bg_empty_slot)
                 image.alpha = 0.6f
-                slot.contentDescription = activity.getString(R.string.favorites_empty_hint)
-                slot.setOnClickListener { Toast.makeText(activity, R.string.favorites_empty_hint, Toast.LENGTH_SHORT).show() }
+                slot.contentDescription = activity.getString(emptyHint)
+                slot.setOnClickListener { Toast.makeText(activity, emptyHint, Toast.LENGTH_SHORT).show() }
             }
             container.addView(slot, LinearLayout.LayoutParams(cell, cell))
         }

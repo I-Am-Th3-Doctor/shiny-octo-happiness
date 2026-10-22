@@ -94,7 +94,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private lateinit var allApps: AppTableAdapter
     /** Unfolded the search row is hidden until the rail's magnifier (or Home + auto-keyboard) asks for it. */
     private var searchOpen = false
-    private val favoritesChanged: () -> Unit = { rail.render() }
+    private val favoritesChanged: () -> Unit = {
+        rail.render()
+        favoritesPopup.rerenderIfShowing() // e.g. a fresh automatic ranking landed while it's open
+    }
     private var cardsStarted = false
 
     private val sourcesChanged: () -> Unit = {
@@ -167,6 +170,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         // Permissions may have been granted in Settings since last time.
         app.startSources()
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
+        app.autoFavorites.refreshIfStale() // daily, and picks up usage access granted (or revoked) in Settings
         cards.forEach { it.render() } // e.g. °F/°C changed in the Widget Center
         WallpaperBlur.retryIfUnavailable() // photo access may have been granted in Settings
         binding.searchInput.hint = greeting()
@@ -434,7 +438,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.settingsButton.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         binding.searchIcon.setOnClickListener { showKeyboard() }
         // Hold the magnifier for the favorites: 250ms, quicker than the system long-press.
-        binding.searchIcon.setOnHoldListener(FAVORITES_HOLD_MS) { favoritesPopup.show(binding.homeCard) }
+        binding.searchIcon.setOnHoldListener(FAVORITES_HOLD_MS) {
+            app.autoFavorites.refreshIfStale()
+            favoritesPopup.show(binding.homeCard)
+        }
     }
 
     /** Edit mode (long-press a widget or empty space) shows a small bar: add, settings, done. */
@@ -931,7 +938,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     /**
      * Long-press on any app icon (search results, app table, favorites popup, rail, all-apps):
      * App info (the system's page for it), Uninstall (the system flow; not for Searchlight or
-     * work apps), then add/remove favorite, the only way to set favorites.
+     * work apps), then add/remove favorite, the only way to set favorites. Not while automatic
+     * favorites are showing: the manual six are hidden then, so editing them would look like a no-op.
      */
     private fun showAppMenu(entry: AppEntry, anchor: View) = menu(anchor) {
         add(R.string.menu_app_info) {
@@ -942,6 +950,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             favoritesPopup.dismiss()
             app.apps.uninstall(entry, this@MainActivity)
         }
+        if (prefs.autoFavoritesActive) return@menu
         if (prefs.isFavorite(entry.key)) {
             add(R.string.menu_remove_favorite) {
                 favoritesPopup.dismiss()

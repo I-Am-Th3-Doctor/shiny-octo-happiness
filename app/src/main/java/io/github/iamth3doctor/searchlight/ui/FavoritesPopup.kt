@@ -30,6 +30,7 @@ class FavoritesPopup(
     private val onLongPress: (AppEntry, View) -> Unit,
 ) {
     private var window: PopupWindow? = null
+    private var anchor: View? = null
 
     val isShowing get() = window?.isShowing == true
 
@@ -37,6 +38,7 @@ class FavoritesPopup(
         dismiss()
         val b = PopupFavoritesBinding.inflate(LayoutInflater.from(activity))
         val favorites = prefs.favorites.mapNotNull(repo::find)
+        val emptyHint = if (prefs.autoFavoritesActive) R.string.favorites_auto_empty_hint else R.string.favorites_empty_hint
         val inflater = LayoutInflater.from(activity)
         val iconPx = iconSize(above.width - b.root.paddingLeft - b.root.paddingRight)
 
@@ -62,11 +64,12 @@ class FavoritesPopup(
                 cell.icon.alpha = 0.6f
                 cell.label.text = ""
                 cell.root.setOnClickListener {
-                    Toast.makeText(activity, R.string.favorites_empty_hint, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity, emptyHint, Toast.LENGTH_SHORT).show()
                 }
             }
             b.row.addView(cell.root)
         }
+        b.hint.setText(emptyHint)
         b.hint.visibility = if (favorites.isEmpty()) View.VISIBLE else View.GONE
 
         val popup = PopupWindow(b.root, above.width, ViewGroup.LayoutParams.WRAP_CONTENT, false)
@@ -84,6 +87,13 @@ class FavoritesPopup(
         val gap = activity.px(R.dimen.space_s)
         popup.showAsDropDown(above, 0, -(above.height + b.root.measuredHeight + gap), Gravity.START)
         window = popup
+        anchor = above
+    }
+
+    /** Redraws the open popup in place, e.g. when the automatic ranking changes under it. */
+    fun rerenderIfShowing() {
+        val a = anchor
+        if (isShowing && a != null) show(a)
     }
 
     /** Largest icon (up to the usual size) that lets six cells fit across [rowWidthPx]. */

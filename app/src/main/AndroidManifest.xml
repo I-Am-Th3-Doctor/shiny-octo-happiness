@@ -36,6 +36,12 @@
         android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Automatic favorites: launch counts from usage stats (granted by you in Settings, optional).
+         Read on the device only, never sent anywhere. -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- Android 11+ package visibility: let us see every launchable app. -->
     <queries>
         <intent>

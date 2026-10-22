@@ -45,6 +45,10 @@ object Permissions {
 
     fun openDndAccessSettings(c: Context) = c.start(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
 
+    /** Usage access (automatic favorites): our own page where the device has one, else the list. */
+    fun openUsageAccessSettings(c: Context) =
+        c.start(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, packageUri(c)), Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+
     fun hasWriteSettings(c: Context) = Settings.System.canWrite(c)
 
     fun openWriteSettings(c: Context) =

@@ -17,6 +17,8 @@ import android.widget.Switch
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.iamth3doctor.searchlight.cards.QuickAction
+import io.github.iamth3doctor.searchlight.data.FavoritesMode
+import io.github.iamth3doctor.searchlight.data.Prefs
 import io.github.iamth3doctor.searchlight.data.WebEngine
 import io.github.iamth3doctor.searchlight.media.MusicApps
 import io.github.iamth3doctor.searchlight.ui.Type
@@ -53,6 +55,8 @@ class SettingsActivity : Activity() {
         binding.autoKeyboard.setOnCheckedChangeListener { _, checked -> prefs.autoOpenKeyboard = checked }
         binding.greetingRow.setOnClickListener { editGreeting() }
         binding.webEngineRow.setOnClickListener { pickWebEngine() }
+        binding.favoritesModeRow.setOnClickListener { pickFavoritesMode() }
+        binding.usageAccessRow.setOnClickListener { Permissions.openUsageAccessSettings(this) }
         binding.widgetCenterRow.setOnClickListener { startActivity(Intent(this, WidgetCenterActivity::class.java)) }
         binding.reindex.setOnClickListener { app.files.rescan() }
         binding.about.text = getString(R.string.settings_about, BuildConfig.VERSION_NAME)
@@ -72,6 +76,7 @@ class SettingsActivity : Activity() {
     override fun onResume() {
         super.onResume()
         app.startSources()
+        app.autoFavorites.refreshIfStale() // usage access may have just been granted
         render()
     }
 
@@ -318,10 +323,52 @@ class SettingsActivity : Activity() {
 
     // ------------------------------------------------------------------ favorites
 
+    private fun pickFavoritesMode() {
+        val modes = FavoritesMode.entries
+        val labels = listOf(
+            getString(R.string.favorites_mode_manual) + " — " + getString(R.string.favorites_mode_manual_desc),
+            getString(R.string.favorites_mode_automatic) + " — " + getString(R.string.favorites_mode_automatic_desc),
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_favorites_mode)
+            .wrappingSingleChoice(labels, modes.indexOf(prefs.favoritesMode)) { d, which ->
+                d.dismiss()
+                val mode = modes[which]
+                if (mode == prefs.favoritesMode) return@wrappingSingleChoice
+                prefs.favoritesMode = mode
+                if (mode == FavoritesMode.AUTOMATIC) {
+                    if (app.autoFavorites.hasAccess()) app.autoFavorites.refresh() else askUsageAccess()
+                }
+            }
+            .show()
+    }
+
+    private fun askUsageAccess() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.usage_access_prompt_title)
+            .setMessage(R.string.usage_access_prompt)
+            .setPositiveButton(R.string.usage_access_open) { _, _ -> Permissions.openUsageAccessSettings(this) }
+            .setNegativeButton(R.string.not_now, null)
+            .show()
+    }
+
     private fun renderFavorites() {
+        val automatic = prefs.favoritesMode == FavoritesMode.AUTOMATIC
+        binding.favoritesModeValue.setText(if (automatic) R.string.favorites_mode_automatic else R.string.favorites_mode_manual)
+        binding.usageAccessRow.visibility =
+            if (automatic && !app.autoFavorites.hasAccess()) android.view.View.VISIBLE else android.view.View.GONE
+        binding.favoritesHelp.setText(if (prefs.autoFavoritesActive) R.string.settings_favorites_help_auto else R.string.settings_favorites_help)
+
         val list = binding.favoritesList
         list.removeAllViews()
-        val keys = prefs.favorites
+        if (prefs.autoFavoritesActive) {
+            // Read-only: the six the home screen shows (installed only), best first.
+            prefs.favorites.mapNotNull(app.apps::find).take(Prefs.MAX_FAVORITES).forEach { entry ->
+                list.addView(favoriteRow(entry.key))
+            }
+            return
+        }
+        val keys = prefs.manualFavorites
         if (keys.isEmpty()) {
             list.addView(TextView(this).apply {
                 setText(R.string.settings_no_favorites)
@@ -330,26 +377,8 @@ class SettingsActivity : Activity() {
             return
         }
         keys.forEachIndexed { index, key ->
-            val entry = app.apps.find(key)
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = px(R.dimen.size_row)
-            }
-            val label = TextView(this).apply {
-                text = entry?.label ?: key.substringAfter('/').substringBefore('/')
-                type(Type.BODY)
-                setTextColor(primaryText())
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginStart = px(R.dimen.space_m)
-                }
-            }
-            val icon = ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(px(R.dimen.size_avatar), px(R.dimen.size_avatar))
-                if (entry != null) setImageBitmap(app.apps.icon(entry) { setImageBitmap(it) })
-            }
-            row.addView(icon)
-            row.addView(label)
+            val row = favoriteRow(key)
+            val label = row.getChildAt(1) as TextView
             row.addView(button(R.drawable.ic_arrow_up, R.string.move_up, label, enabled = index > 0) {
                 prefs.moveFavorite(key, -1)
             })
@@ -361,6 +390,31 @@ class SettingsActivity : Activity() {
             })
             list.addView(row)
         }
+    }
+
+    /** Icon + label; the manual list adds its reorder/remove buttons after. */
+    private fun favoriteRow(key: String): LinearLayout {
+        val entry = app.apps.find(key)
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = px(R.dimen.size_row)
+        }
+        val label = TextView(this).apply {
+            text = entry?.label ?: key.substringAfter('/').substringBefore('/')
+            type(Type.BODY)
+            setTextColor(primaryText())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = px(R.dimen.space_m)
+            }
+        }
+        val icon = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(px(R.dimen.size_avatar), px(R.dimen.size_avatar))
+            if (entry != null) setImageBitmap(app.apps.icon(entry) { setImageBitmap(it) })
+        }
+        row.addView(icon)
+        row.addView(label)
+        return row
     }
 
     private fun button(icon: Int, desc: Int, tintFrom: TextView, enabled: Boolean, onClick: () -> Unit) =

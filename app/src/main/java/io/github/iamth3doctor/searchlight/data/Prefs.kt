@@ -161,24 +161,56 @@ class Prefs(context: Context) {
 
     // ---- Favorites: an ordered list of up to MAX_FAVORITES app keys ----
 
-    val favorites: List<String>
+    /** Manual = the six you pick; Automatic = picked from your app usage (see AutoFavorites). */
+    var favoritesMode: FavoritesMode
+        get() = FavoritesMode.entries.firstOrNull { it.name == sp.getString(KEY_FAVORITES_MODE, null) } ?: FavoritesMode.MANUAL
+        set(value) {
+            sp.edit().putString(KEY_FAVORITES_MODE, value.name).apply()
+            favoriteListeners.toList().forEach { it() }
+        }
+
+    /** The six you picked. Kept untouched while Automatic is on, so switching back restores them. */
+    val manualFavorites: List<String>
         get() = sp.getString(KEY_FAVORITES, "").orEmpty().split('\n').filter { it.isNotEmpty() }
 
-    fun isFavorite(key: String) = key in favorites
+    /** Most-launched apps first, as last ranked; empty until ranked (or without usage access). */
+    val autoFavorites: List<String>
+        get() = sp.getString(KEY_AUTO_FAVORITES, "").orEmpty().split('\n').filter { it.isNotEmpty() }
+
+    /** When [autoFavorites] was last ranked; 0 = never, or usage access was lost. */
+    val autoFavoritesAt: Long get() = sp.getLong(KEY_AUTO_FAVORITES_AT, 0)
+
+    fun saveAutoFavorites(keys: List<String>, at: Long) {
+        sp.edit().putString(KEY_AUTO_FAVORITES, keys.joinToString("\n")).putLong(KEY_AUTO_FAVORITES_AT, at).apply()
+        favoriteListeners.toList().forEach { it() }
+    }
+
+    /** Automatic is on and has a ranking to show (needs usage access); otherwise the manual six show. */
+    val autoFavoritesActive: Boolean get() = favoritesMode == FavoritesMode.AUTOMATIC && autoFavoritesAt > 0
+
+    /**
+     * What the popup, rail and Settings show, best first. Automatic: the ranking, then your manual
+     * picks to fill any gap. May hold more than six (and apps since uninstalled): callers keep the
+     * first six that are still installed.
+     */
+    val favorites: List<String>
+        get() = if (autoFavoritesActive) (autoFavorites + manualFavorites).distinct() else manualFavorites
+
+    fun isFavorite(key: String) = key in manualFavorites
 
     /** @return false if the list is already full. */
     fun addFavorite(key: String): Boolean {
-        val list = favorites
+        val list = manualFavorites
         if (key in list) return true
         if (list.size >= MAX_FAVORITES) return false
         saveFavorites(list + key)
         return true
     }
 
-    fun removeFavorite(key: String) = saveFavorites(favorites - key)
+    fun removeFavorite(key: String) = saveFavorites(manualFavorites - key)
 
     fun moveFavorite(key: String, delta: Int) {
-        val list = favorites.toMutableList()
+        val list = manualFavorites.toMutableList()
         val from = list.indexOf(key)
         if (from < 0) return
         val to = (from + delta).coerceIn(0, list.lastIndex)
@@ -208,6 +240,9 @@ class Prefs(context: Context) {
     companion object {
         const val MAX_FAVORITES = 6
         private const val KEY_FAVORITES = "favorites"
+        private const val KEY_FAVORITES_MODE = "favorites_mode"
+        private const val KEY_AUTO_FAVORITES = "auto_favorites"
+        private const val KEY_AUTO_FAVORITES_AT = "auto_favorites_at"
         private const val KEY_AUTO_KEYBOARD = "auto_keyboard_v2"
         private const val KEY_GREETING = "greeting"
         private const val KEY_WEB_ENGINE = "web_engine"
@@ -232,6 +267,8 @@ class Prefs(context: Context) {
         private const val KEY_WEATHER = "last_weather"
     }
 }
+
+enum class FavoritesMode { MANUAL, AUTOMATIC }
 
 enum class WebEngine(val label: String, private val template: String) {
     GOOGLE("Google", "https://www.google.com/search?q=%s"),

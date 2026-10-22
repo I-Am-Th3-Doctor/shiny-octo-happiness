@@ -98,9 +98,24 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:id="@+id/favoritesHelp"
             android:text="@string/settings_favorites_help"
             android:textAppearance="@style/TextAppearance.Searchlight.Caption"
             android:textColor="?android:attr/textColorSecondary" />
+
+        <LinearLayout
+            android:id="@+id/favoritesModeRow"
+            style="@style/SettingsRow">
+            <TextView style="@style/SettingsRowTitle" android:text="@string/settings_favorites_mode" />
+            <TextView android:id="@+id/favoritesModeValue" style="@style/SettingsRowSummary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/usageAccessRow"
+            style="@style/SettingsRow">
+            <TextView style="@style/SettingsRowTitle" android:text="@string/usage_access_needed" />
+            <TextView style="@style/SettingsRowSummary" android:text="@string/usage_access_needed_desc" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/favoritesList"
