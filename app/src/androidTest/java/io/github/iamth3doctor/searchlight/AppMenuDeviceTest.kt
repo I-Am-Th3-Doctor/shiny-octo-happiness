@@ -124,12 +124,14 @@ class AppMenuDeviceTest {
             // A shortcut opens the Clock (on that shortcut's screen).
             tapRow(home, labels.first())
             waitFor("${c.label} opened") { resumedActivity().contains(c.packageName) }
-            shell("input keyevent KEYCODE_HOME")
-            waitFor("back home") { resumedActivity().contains(pkg) }
-            Thread.sleep(1000)
+            shell("input keyevent KEYCODE_HOME") // (the system's home may recreate this activity)
+            Thread.sleep(1500)
+        }
+        if (!hasWidgets) return
 
-            // Widgets: the picker, with only this app's widgets.
-            if (!hasWidgets) return@use
+        // Widgets: the picker, with only this app's widgets.
+        ActivityScenario.launch(MainActivity::class.java).use { home ->
+            Thread.sleep(1500)
             openMenu(home, c)
             tapRow(home, app.getString(R.string.menu_widgets))
             waitFor("widget picker") { resumedActivity().contains("WidgetPickerActivity") }
