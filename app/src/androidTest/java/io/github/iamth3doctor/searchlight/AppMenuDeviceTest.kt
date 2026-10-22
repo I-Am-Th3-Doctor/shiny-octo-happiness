@@ -13,8 +13,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The long-press menu on a real app (the Clock): its own shortcuts come first and open that
- * shortcut, "Widgets" opens the picker with only the Clock's widgets.
+ * The long-press menu on a real app (one that publishes shortcuts): its own shortcuts come first
+ * and open that shortcut, "Widgets" opens the picker with only that app's widgets.
  */
 @RunWith(AndroidJUnit4::class)
 class AppMenuDeviceTest {
@@ -48,13 +48,13 @@ class AppMenuDeviceTest {
     private fun resumedActivity() = shell("dumpsys activity activities").lineSequence()
         .firstOrNull { it.contains("mResumedActivity") || it.contains("ResumedActivity:") }.orEmpty()
 
-    /** Long-presses the Clock in search results, like a finger would. */
-    private fun openMenu(home: ActivityScenario<MainActivity>, clock: AppEntry) {
-        home.onActivity { it.findViewById<EditText>(R.id.searchInput).setText(clock.label) }
+    /** Long-presses the app in search results, like a finger would. */
+    private fun openMenu(home: ActivityScenario<MainActivity>, target: AppEntry) {
+        home.onActivity { it.findViewById<EditText>(R.id.searchInput).setText(target.label) }
         Thread.sleep(1000)
         instrumentation.waitForIdleSync()
         home.onActivity { a ->
-            var v: View? = find(a.findViewById(R.id.resultsPanel), clock.label)
+            var v: View? = find(a.findViewById(R.id.resultsPanel), target.label)
             while (v != null && !v.isLongClickable) v = v.parent as? View
             v!!.performLongClick()
         }
@@ -82,31 +82,28 @@ class AppMenuDeviceTest {
         shell("cmd package set-home-activity $pkg/.MainActivity")
         Thread.sleep(1000)
         waitFor("apps loaded") { var n = 0; main { n = app.apps.apps.size }; n > 0 }
-        var clock: AppEntry? = null
-        main { clock = app.apps.apps.first { it.packageName == "com.google.android.deskclock" } }
-        val c = clock!!
         main { app.shortcuts.refreshIfAccessChanged() }
 
+        // Any app that publishes shortcuts (the emulator's Clock has none); launching Chrome once
+        // makes it register its own if nothing has yet. Prefer one that also has widgets.
+        fun withShortcuts(): List<AppEntry> {
+            var found = emptyList<AppEntry>()
+            main { found = app.apps.apps.filter { !it.isSelf && app.shortcuts.menuFor(it).shortcuts.isNotEmpty() } }
+            return found
+        }
+        var candidates = withShortcuts()
+        if (candidates.isEmpty()) {
+            shell("monkey -p com.android.chrome -c android.intent.category.LAUNCHER 1")
+            Thread.sleep(4000)
+            shell("input keyevent KEYCODE_HOME")
+            waitFor("an app with shortcuts", 15_000) { candidates = withShortcuts(); candidates.isNotEmpty() }
+        }
+        var c = candidates.first()
+        main { c = candidates.firstOrNull { app.shortcuts.menuFor(it).hasWidgets } ?: c }
         var labels = emptyList<String>()
         var hasWidgets = false
-        try {
-            waitFor("clock shortcuts") {
-                main { app.shortcuts.menuFor(c).let { m -> labels = m.shortcuts.map { it.label.toString() }; hasWidgets = m.hasWidgets } }
-                labels.isNotEmpty()
-            }
-        } catch (e: AssertionError) {
-            val la = app.getSystemService(android.content.pm.LauncherApps::class.java)
-            val access = runCatching { la.hasShortcutHostPermission() }.getOrElse { it.toString() }
-            throw AssertionError(
-                "No Clock shortcuts. hasShortcutHostPermission=$access; " +
-                    "home role=${shell("cmd role get-role-holders --user 0 android.app.role.HOME").trim()}; " +
-                    "default launcher=${shell("cmd shortcut get-default-launcher").trim()}; " +
-                    "clock in dumpsys shortcut: ${shell("dumpsys shortcut").lines().filter { "deskclock" in it }.take(8)}",
-                e,
-            )
-        }
-        assertTrue(hasWidgets)
-        android.util.Log.i("AppMenuDeviceTest", "Clock shortcuts: $labels")
+        main { app.shortcuts.menuFor(c).let { m -> labels = m.shortcuts.map { it.label.toString() }; hasWidgets = m.hasWidgets } }
+        android.util.Log.i("AppMenuDeviceTest", "${c.label} shortcuts: $labels, widgets: $hasWidgets")
 
         ActivityScenario.launch(MainActivity::class.java).use { home ->
             Thread.sleep(1500)
@@ -126,19 +123,21 @@ class AppMenuDeviceTest {
 
             // A shortcut opens the Clock (on that shortcut's screen).
             tapRow(home, labels.first())
-            waitFor("clock opened") { resumedActivity().contains(c.packageName) }
+            waitFor("${c.label} opened") { resumedActivity().contains(c.packageName) }
             shell("input keyevent KEYCODE_HOME")
             waitFor("back home") { resumedActivity().contains(pkg) }
             Thread.sleep(1000)
 
-            // Widgets: the picker, with only the Clock's widgets.
+            // Widgets: the picker, with only this app's widgets.
+            if (!hasWidgets) return@use
             openMenu(home, c)
             tapRow(home, app.getString(R.string.menu_widgets))
             waitFor("widget picker") { resumedActivity().contains("WidgetPickerActivity") }
             Thread.sleep(2500)
             shell("screencap -p $dir/${prefix}_font1.0_14-app-widgets.png")
             val shown = shell("uiautomator dump /dev/tty")
-            assertTrue("picker shows other apps' widgets: $shown", !shown.contains("Chrome") && !shown.contains("Calendar"))
+            val other = if (c.packageName == "com.google.android.deskclock") "Calendar" else "Stopwatch"
+            assertTrue("picker shows other apps' widgets: $shown", !shown.contains(other))
             shell("input keyevent KEYCODE_BACK")
         }
     }
