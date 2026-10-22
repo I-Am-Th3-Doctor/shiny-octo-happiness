@@ -78,7 +78,7 @@ class AppMenuDeviceTest {
 
     @Test fun shortcutsFirstAndWidgetsFiltered() {
         // The default home (only it may read other apps' shortcuts).
-        shell("cmd role add-role-holder android.app.role.HOME $pkg")
+        shell("cmd role add-role-holder --user 0 android.app.role.HOME $pkg")
         shell("cmd package set-home-activity $pkg/.MainActivity")
         Thread.sleep(1000)
         waitFor("apps loaded") { var n = 0; main { n = app.apps.apps.size }; n > 0 }
@@ -89,9 +89,21 @@ class AppMenuDeviceTest {
 
         var labels = emptyList<String>()
         var hasWidgets = false
-        waitFor("clock shortcuts") {
-            main { app.shortcuts.menuFor(c).let { m -> labels = m.shortcuts.map { it.label.toString() }; hasWidgets = m.hasWidgets } }
-            labels.isNotEmpty()
+        try {
+            waitFor("clock shortcuts") {
+                main { app.shortcuts.menuFor(c).let { m -> labels = m.shortcuts.map { it.label.toString() }; hasWidgets = m.hasWidgets } }
+                labels.isNotEmpty()
+            }
+        } catch (e: AssertionError) {
+            val la = app.getSystemService(android.content.pm.LauncherApps::class.java)
+            val access = runCatching { la.hasShortcutHostPermission() }.getOrElse { it.toString() }
+            throw AssertionError(
+                "No Clock shortcuts. hasShortcutHostPermission=$access; " +
+                    "home role=${shell("cmd role get-role-holders --user 0 android.app.role.HOME").trim()}; " +
+                    "default launcher=${shell("cmd shortcut get-default-launcher").trim()}; " +
+                    "clock in dumpsys shortcut: ${shell("dumpsys shortcut").lines().filter { "deskclock" in it }.take(8)}",
+                e,
+            )
         }
         assertTrue(hasWidgets)
         android.util.Log.i("AppMenuDeviceTest", "Clock shortcuts: $labels")
