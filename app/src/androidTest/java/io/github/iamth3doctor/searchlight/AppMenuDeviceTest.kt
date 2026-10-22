@@ -78,6 +78,7 @@ class AppMenuDeviceTest {
 
     @Test fun shortcutsFirstAndWidgetsFiltered() {
         // The default home (only it may read other apps' shortcuts).
+        shell("mkdir -p $dir") // this test can run before any other has made it
         shell("cmd role add-role-holder --user 0 android.app.role.HOME $pkg")
         shell("cmd package set-home-activity $pkg/.MainActivity")
         Thread.sleep(1000)
