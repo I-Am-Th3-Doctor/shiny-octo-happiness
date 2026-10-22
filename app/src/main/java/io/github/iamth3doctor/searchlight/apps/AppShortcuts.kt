@@ -65,7 +65,7 @@ class AppShortcuts(private val context: Context, private val repo: AppRepository
             cache.clear()
         }
         val todo = repo.apps.asSequence().filter { !it.isSelf }.map { it.packageName to it.user }.distinct()
-            .filter { (p, u) -> key(p, u) !in cache }.toList()
+            .filter { (p, u) -> !cache.containsKey(key(p, u)) }.toList()
         if (todo.isNotEmpty()) worker.execute { todo.forEach { (p, u) -> load(p, u) } }
     }
 
