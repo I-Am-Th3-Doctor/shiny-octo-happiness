@@ -22,6 +22,7 @@ class FavoritesRail(
     private val prefs: Prefs,
     private val container: LinearLayout,
     private val onLaunch: (AppEntry, View) -> Unit,
+    private val onLongPress: (AppEntry, View) -> Unit,
 ) {
     fun render() {
         container.removeAllViews()
@@ -43,6 +44,10 @@ class FavoritesRail(
                 slot.contentDescription = entry.label
                 slot.tooltipText = entry.label
                 slot.setOnClickListener { onLaunch(entry, it) }
+                slot.setOnLongClickListener {
+                    onLongPress(entry, it)
+                    true
+                }
             } else {
                 image.setImageResource(R.drawable.ic_add)
                 image.setBackgroundResource(R.drawable.bg_empty_slot)

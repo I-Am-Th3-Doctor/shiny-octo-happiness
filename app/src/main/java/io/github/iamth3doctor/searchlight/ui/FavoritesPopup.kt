@@ -27,6 +27,7 @@ class FavoritesPopup(
     private val repo: AppRepository,
     private val prefs: Prefs,
     private val onLaunch: (AppEntry, View) -> Unit,
+    private val onLongPress: (AppEntry, View) -> Unit,
 ) {
     private var window: PopupWindow? = null
 
@@ -50,6 +51,10 @@ class FavoritesPopup(
                 cell.root.setOnClickListener { v ->
                     dismiss()
                     onLaunch(entry, v)
+                }
+                cell.root.setOnLongClickListener { v ->
+                    onLongPress(entry, v)
+                    true
                 }
             } else {
                 cell.icon.setImageResource(R.drawable.ic_add)

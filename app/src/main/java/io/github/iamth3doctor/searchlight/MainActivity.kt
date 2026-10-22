@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.inputmethod.EditorInfo
@@ -58,6 +59,7 @@ import io.github.iamth3doctor.searchlight.ui.setOnHoldListener
 import io.github.iamth3doctor.searchlight.widgets.WidgetController
 import java.text.Collator
 import java.util.Calendar
+import kotlin.math.abs
 import kotlin.math.max
 
 /**
@@ -108,7 +110,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
         engine = SearchEngine(prefs, app.apps, app.contacts)
         adapter = ResultsAdapter(app.apps, app.contacts, app.thumbnails, this)
-        favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp)
+        favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp, ::showAppMenu)
         widgets = WidgetController(this, binding.widgetGrid, prefs) { editing -> binding.editBar.isVisible = editing }
         savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
         widgets.cleanUpOrphans()
@@ -432,7 +434,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * from the top of the list, or Back, closes it. Launching an app closes it on the way out.
      */
     private fun setupAppTable() {
-        appTable = AppTableAdapter(app.apps, ::launchApp)
+        appTable = AppTableAdapter(app.apps, ::launchApp, ::showAppMenu)
         val list = binding.appTableList
         list.layoutManager = GridLayoutManager(this, appColumns())
         // The table is clear glass over the wallpaper: it must never take focus (hiding the home
@@ -520,14 +522,18 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * long-press) and all apps, which slides in a two-column panel of every app.
      */
     private fun setupRail() {
-        rail = FavoritesRail(this, app.apps, prefs, binding.railFavorites, ::launchApp)
+        rail = FavoritesRail(this, app.apps, prefs, binding.railFavorites, ::launchApp, ::showAppMenu)
         binding.rail.background = frosted(binding.rail, R.dimen.radius_pill)
         binding.rail.clipToOutline = true
         binding.railSearch.setOnClickListener { showKeyboard() }
         binding.railAllApps.setOnClickListener { openAllApps() }
         binding.root.addOnLayoutChangeListener { _, l, _, r, _, ol, _, or_, _ -> if (r - l != or_ - ol) layoutColumn() }
 
-        allApps = AppTableAdapter(app.apps, ::launchApp, ::startDrag)
+        // Hold: the app menu, with a drag armed; moving the held finger closes it and drags instead.
+        allApps = AppTableAdapter(app.apps, ::launchApp) { entry, view ->
+            heldApp = entry to view
+            showAppMenu(entry, view)
+        }
         val list = binding.allAppsList
         list.layoutManager = GridLayoutManager(this, 2)
         list.adapter = allApps
@@ -541,10 +547,23 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         list.addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
             private var downX = 0f
             private var downY = 0f
+            private val slop = ViewConfiguration.get(this@MainActivity).scaledTouchSlop * 2
             override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
                 if (dragged != null) return true
+                heldApp?.let { (entry, view) ->
+                    when (e.actionMasked) {
+                        MotionEvent.ACTION_MOVE -> if (abs(e.x - downX) > slop || abs(e.y - downY) > slop) {
+                            heldApp = null
+                            dismissPopups() // the app menu: the finger is dragging, not choosing
+                            startDrag(entry, view)
+                            return true
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> heldApp = null // keep the menu
+                    }
+                }
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
+                        heldApp = null
                         downX = e.x
                         downY = e.y
                     }
@@ -594,6 +613,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     }
 
     // Dragging an app out of the all-apps panel onto a screen edge opens it side by side.
+    /** An app being held (its menu is showing) whose drag starts if the finger moves. */
+    private var heldApp: Pair<AppEntry, View>? = null
     private var dragged: AppEntry? = null
     private var dragGhost: ImageView? = null
 
@@ -896,9 +917,25 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         popup.show()
     }
 
+    /**
+     * Long-press on any app icon (search results, app table, favorites popup, rail, all-apps):
+     * App info (the system's page for it), Uninstall (the system flow; not for Searchlight or
+     * work apps), then add/remove favorite, the only way to set favorites.
+     */
     private fun showAppMenu(entry: AppEntry, anchor: View) = menu(anchor) {
+        add(R.string.menu_app_info) {
+            favoritesPopup.dismiss()
+            app.apps.openAppInfo(entry, anchor)
+        }
+        if (app.apps.canUninstall(entry)) add(R.string.menu_uninstall) {
+            favoritesPopup.dismiss()
+            app.apps.uninstall(entry, this@MainActivity)
+        }
         if (prefs.isFavorite(entry.key)) {
-            add(R.string.menu_remove_favorite) { prefs.removeFavorite(entry.key) }
+            add(R.string.menu_remove_favorite) {
+                favoritesPopup.dismiss()
+                prefs.removeFavorite(entry.key)
+            }
         } else {
             add(R.string.menu_add_favorite) {
                 if (prefs.addFavorite(entry.key)) {
@@ -908,8 +945,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                 }
             }
         }
-        add(R.string.menu_app_info) { app.apps.openAppInfo(entry, anchor) }
-        if (app.apps.canUninstall(entry)) add(R.string.menu_uninstall) { app.apps.uninstall(entry, this@MainActivity) }
     }
 
     private fun showFileMenu(result: SearchResult.File, anchor: View) = menu(anchor) {

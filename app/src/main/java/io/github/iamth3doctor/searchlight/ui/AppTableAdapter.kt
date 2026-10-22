@@ -11,7 +11,8 @@ import io.github.iamth3doctor.searchlight.databinding.ItemAppCellBinding
 
 /**
  * Every app, A–Z, in the same cells as the search results' app grid. Used by the app table
- * (swipe up) and the unfolded all-apps panel, which also passes [onHold] to drag apps out.
+ * (swipe up) and the unfolded all-apps panel. Holding an app calls [onHold]: the app menu (the
+ * panel also arms a drag to a screen edge).
  */
 class AppTableAdapter(
     private val repo: AppRepository,
