@@ -2,6 +2,7 @@ package io.github.iamth3doctor.searchlight
 
 import android.app.Activity
 import android.app.WallpaperManager
+import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Outline
@@ -127,6 +128,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         setupRail()
         applyPosture(Posture.of(resources.configuration))
 
+        placeRequestedWidget(intent)
         app.apps.addListener(sourcesChanged)
         prefs.addFavoritesListener(favoritesChanged)
         app.contacts.addListener(sourcesChanged)
@@ -192,12 +194,21 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     /** Pressing Home (from another app, or on the home screen itself) lands here. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        placeRequestedWidget(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
             widgets.exitEditMode()
             dismissPopups()
             resetHome()
             if (prefs.autoOpenKeyboard) showKeyboard()
         }
+    }
+
+    /** A widget an app pinned ("Add to home screen"), handed over by PinWidgetActivity. */
+    private fun placeRequestedWidget(intent: Intent?) {
+        val id = intent?.getIntExtra(EXTRA_PLACE_WIDGET, AppWidgetManager.INVALID_APPWIDGET_ID) ?: return
+        if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
+        intent.removeExtra(EXTRA_PLACE_WIDGET) // once, not again on recreate
+        widgets.placePinned(id)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -964,12 +975,15 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         openMenu = null
     }
 
-    private companion object {
-        const val WEATHER_MAX_AGE_MS = 30 * 60 * 1000L
-        const val FOLDED_APP_COLUMNS = 4
-        const val UNFOLDED_APP_COLUMNS = 7
-        const val KEY_PENDING_WIDGET = "pending_widget_id"
-        const val TABLE_ANIM_MS = 220L
-        const val FAVORITES_HOLD_MS = 250L
+    companion object {
+        /** A widget id (already bound, e.g. from a pin request) to place on the home grid. */
+        const val EXTRA_PLACE_WIDGET = "place_widget"
+
+        private const val WEATHER_MAX_AGE_MS = 30 * 60 * 1000L
+        private const val FOLDED_APP_COLUMNS = 4
+        private const val UNFOLDED_APP_COLUMNS = 7
+        private const val KEY_PENDING_WIDGET = "pending_widget_id"
+        private const val TABLE_ANIM_MS = 220L
+        private const val FAVORITES_HOLD_MS = 250L
     }
 }

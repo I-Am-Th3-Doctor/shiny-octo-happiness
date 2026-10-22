@@ -100,4 +100,10 @@ class WidgetGridTest {
         val out = WidgetGrid.withMissing(full, other, cols = 4, rows = 6)
         assertEquals(listOf(g(1, 0, 0, 4, 5), g(2, 0, 5, 4, 1)), out) // 2 shrinks to the last row; 3 waits
     }
+
+    @Test fun restoredIdsAreRemappedInPlace() {
+        val list = listOf(g(10, 0, 0, 4, 2), g(11, 0, 2, 2, 2), g(12, 2, 2, 2, 2))
+        val out = WidgetGrid.remapIds(list, intArrayOf(10, 12, 99), intArrayOf(40, 42))
+        assertEquals(listOf(g(40, 0, 0, 4, 2), g(11, 0, 2, 2, 2), g(42, 2, 2, 2, 2)), out)
+    }
 }

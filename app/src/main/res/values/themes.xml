@@ -76,6 +76,14 @@
         <item name="android:visibility">gone</item>
     </style>
 
+    <!-- Invisible activity that only shows a dialog (widget pin requests). -->
+    <style name="Theme.Searchlight.Translucent" parent="Theme.Searchlight.Settings">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <style name="EditPillButton">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">match_parent</item>

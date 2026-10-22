@@ -130,6 +130,12 @@ object WidgetGrid {
         return layout + added
     }
 
+    /** After a restore the system hands out new widget ids: [oldIds][i] became [newIds][i]. */
+    fun remapIds(list: List<GridSpec>, oldIds: IntArray, newIds: IntArray): List<GridSpec> {
+        val map = oldIds.indices.filter { it < newIds.size }.associate { oldIds[it] to newIds[it] }
+        return list.map { s -> map[s.id]?.let { s.copy(id = it) } ?: s }
+    }
+
     /** One-time move from the old single-column stack (id → height in dp) to grid cells. */
     fun fromStack(stack: List<Pair<Int, Int>>, cols: Int, rows: Int, cellHeightDp: Float): List<GridSpec> {
         val out = ArrayList<GridSpec>()

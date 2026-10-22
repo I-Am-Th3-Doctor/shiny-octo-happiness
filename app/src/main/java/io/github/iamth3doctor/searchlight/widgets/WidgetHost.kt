@@ -9,10 +9,21 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import kotlin.math.abs
 
-/** Our AppWidgetHost: same as the platform one, but hands out long-pressable host views. */
+/**
+ * Our AppWidgetHost: same as the platform one, but hands out long-pressable host views and tells
+ * us when the set of providers changes (an app installed, updated or removed).
+ */
 class SearchlightWidgetHost(context: Context, hostId: Int) : AppWidgetHost(context, hostId) {
+
+    var onProvidersChanged: (() -> Unit)? = null
+
     override fun onCreateView(context: Context, appWidgetId: Int, appWidget: AppWidgetProviderInfo?): AppWidgetHostView =
         LongPressWidgetHostView(context)
+
+    override fun onProvidersChanged() {
+        super.onProvidersChanged()
+        onProvidersChanged?.invoke()
+    }
 }
 
 /**

@@ -69,8 +69,36 @@ class WidgetController(
 
     init {
         grid.listener = this
+        host.onProvidersChanged = ::refreshProviders
         migrateFromStack()
     }
+
+    /**
+     * An app with widgets was installed, updated or removed: rebuild the views whose provider
+     * changed (or vanished) instead of leaving them blank or stale; render() drops widgets whose
+     * app is gone.
+     */
+    private fun refreshProviders() {
+        for (id in views.keys.toList()) {
+            val now = manager.getAppWidgetInfo(id)
+            val shown = views[id]?.appWidgetInfo
+            if (now == null || shown == null || now.provider != shown.provider || now.initialLayout != shown.initialLayout) {
+                views.remove(id)
+                reportedSizes.remove(id)
+            }
+        }
+        render()
+    }
+
+    /**
+     * A widget an app asked to pin ("Add to home screen"), already bound: place it like a new
+     * one, once the grid has been measured (on a cold start it hasn't yet).
+     */
+    fun placePinned(id: Int) {
+        if (grid.measuredUnfolded == null) pendingPin = id else place(id)
+    }
+
+    private var pendingPin = AppWidgetManager.INVALID_APPWIDGET_ID
 
     fun start() {
         try {
@@ -132,6 +160,9 @@ class WidgetController(
             }
         }
         val fit = WidgetGrid.fitToGrid(current, grid.cols, grid.rows)
+        // Tell new widgets their size before their first layout, so they inflate the right
+        // layout for it from the start (layout then reports the exact size).
+        for (spec in fit.shown) if (spec.id !in reportedSizes) reportCells(spec)
         grid.setWidgets(fit.shown.mapNotNull { spec -> viewFor(spec.id)?.let { it to spec } })
     }
 
@@ -143,6 +174,27 @@ class WidgetController(
             // Tell the widget its real size whenever its cell span (or the cell size) changes.
             v.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ -> reportSize(id, v, r - l, b - t) }
             views[id] = v
+        }
+    }
+
+    private fun reportCells(spec: GridSpec) {
+        val w = (grid.cellWidthDp * spec.colSpan).roundToInt()
+        val h = (grid.cellHeightDp * spec.rowSpan).roundToInt()
+        if (w <= 0 || h <= 0) return
+        reportedSizes[spec.id] = w to h
+        val options = Bundle().apply {
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, w)
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, w)
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, h)
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, h)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                putParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, arrayListOf(SizeF(w.toFloat(), h.toFloat())))
+            }
+        }
+        try {
+            manager.updateAppWidgetOptions(spec.id, options)
+        } catch (e: Exception) {
+            Log.w(TAG, "Couldn't send size to widget ${spec.id}", e)
         }
     }
 
@@ -164,7 +216,15 @@ class WidgetController(
 
     override fun onEditModeChanged(editing: Boolean) = onEditModeChanged.invoke(editing)
 
-    override fun onGridSizeChanged(cols: Int, rows: Int) = render()
+    override fun onGridSizeChanged(cols: Int, rows: Int) {
+        if (pendingPin != AppWidgetManager.INVALID_APPWIDGET_ID) {
+            val id = pendingPin
+            pendingPin = AppWidgetManager.INVALID_APPWIDGET_ID
+            place(id) // renders
+        } else {
+            render()
+        }
+    }
 
     /** A move or resize was dropped on free cells: that's now the stored position. */
     override fun onCommit(spec: GridSpec) {

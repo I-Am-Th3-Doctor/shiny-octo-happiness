@@ -111,6 +111,26 @@
             android:label="@string/widget_picker_title"
             android:theme="@style/Theme.Searchlight.Settings" />
 
+        <!-- An app's "Add widget to home screen" (requestPinAppWidget) comes here. -->
+        <activity
+            android:name=".widgets.PinWidgetActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.Searchlight.Translucent">
+            <intent-filter>
+                <action android:name="android.content.pm.action.CONFIRM_PIN_APPWIDGET" />
+            </intent-filter>
+        </activity>
+
+        <!-- After a backup restore, maps our old widget ids to the new ones. -->
+        <receiver
+            android:name=".widgets.WidgetRestoreReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_HOST_RESTORED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Lets the Music card see media sessions. It ignores notifications entirely. -->
         <service
             android:name=".media.MediaListenerService"
