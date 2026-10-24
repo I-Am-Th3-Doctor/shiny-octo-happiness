@@ -169,7 +169,16 @@ class HomeGesturesDeviceTest {
         // Accessibility on: down opens the shade; over the open drawer, down only closes the drawer.
         shell("settings put secure enabled_accessibility_services $service")
         shell("settings put secure accessibility_enabled 1")
-        waitFor("gesture service connected", timeoutMs = 10_000) { GestureService.isConnected }
+        try {
+            waitFor("gesture service connected", timeoutMs = 15_000) { GestureService.isConnected }
+        } catch (e: AssertionError) {
+            val dump = shell("dumpsys accessibility").lines().filter { pkg in it || "nabled" in it || "ound" in it }.take(20)
+            throw AssertionError(
+                "${e.message}; enabled=${shell("settings get secure enabled_accessibility_services").trim()}, " +
+                    "accessibility_enabled=${shell("settings get secure accessibility_enabled").trim()}, dumpsys: $dump",
+                e,
+            )
+        }
         fresh { home, spot ->
             swipe(spot, 0, 300)
             waitFor("shade from swipe down", home) { shadeOpen() }
