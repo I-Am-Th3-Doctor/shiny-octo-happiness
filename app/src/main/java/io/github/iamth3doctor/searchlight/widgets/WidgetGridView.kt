@@ -125,6 +125,15 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
         enteredThisGesture = true
     }
 
+    /**
+     * A home swipe asked for edit mode: enter it, and let the rest of that swipe (its finger is
+     * still down) pass without counting as the tap on empty space that leaves edit mode.
+     */
+    fun enterEditModeFromSwipe() {
+        setEditMode(true)
+        enteredThisGesture = true
+    }
+
     fun setEditMode(on: Boolean) {
         if (editMode == on) return
         editMode = on

@@ -124,7 +124,12 @@ class AppMenuDeviceTest {
 
             // A shortcut opens the Clock (on that shortcut's screen).
             tapRow(home, labels.first())
-            waitFor("${c.label} opened") { resumedActivity().contains(c.packageName) }
+            // A cold first launch on the emulator can be slow.
+            try {
+                waitFor("${c.label} opened", 20_000) { resumedActivity().contains(c.packageName) }
+            } catch (e: AssertionError) {
+                throw AssertionError("${e.message}; resumed: ${resumedActivity().trim()}", e)
+            }
             shell("input keyevent KEYCODE_HOME") // (the system's home may recreate this activity)
             Thread.sleep(1500)
         }

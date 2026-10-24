@@ -759,7 +759,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             GestureAction.LOCK_SCREEN -> globalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
             GestureAction.APP_DRAWER -> openAppTable()
             GestureAction.SEARCH -> showKeyboard()
-            GestureAction.WIDGET_CENTER -> binding.widgetGrid.setEditMode(true)
+            GestureAction.WIDGET_CENTER -> binding.widgetGrid.enterEditModeFromSwipe()
             // Uninstalled since it was chosen: nothing to open (Settings says "App not installed").
             GestureAction.LAUNCH_APP -> prefs.gestureApp(gesture)?.let(app.apps::findByPackage)?.let { launchApp(it, null) }
         }
