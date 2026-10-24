@@ -34,13 +34,31 @@ class HomeGesturesDeviceTest {
     private fun shell(cmd: String): String =
         instrumentation.uiAutomation.executeShellCommand(cmd).use { String(java.io.FileInputStream(it.fileDescriptor).readBytes()) }
 
-    private fun waitFor(what: String, timeoutMs: Long = 5_000, check: () -> Boolean) {
+    private fun waitFor(what: String, home: ActivityScenario<MainActivity>? = null, timeoutMs: Long = 5_000, check: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             if (check()) return
             Thread.sleep(150)
         }
-        throw AssertionError("timed out: $what")
+        throw AssertionError("timed out: $what" + (home?.let { " (${state(it)})" } ?: ""))
+    }
+
+    /** What the screen was doing, for failure messages. */
+    private fun state(home: ActivityScenario<MainActivity>): String = on(home) { a ->
+        "last swipe=${a.lastHomeSwipe}, focus=${a.currentFocus?.javaClass?.simpleName}, " +
+            "results=${a.findViewById<View>(R.id.resultsStack).isShown}, drawer=${a.findViewById<View>(R.id.appTable).isShown}, " +
+            "editing=${a.findViewById<WidgetGridView>(R.id.widgetGrid).editMode}, window=${focusedWindow().trim()}"
+    }
+
+    /** A step on a fresh home screen, from an empty spot on it. */
+    private fun fresh(step: (ActivityScenario<MainActivity>, Pair<Int, Int>) -> Unit) {
+        ActivityScenario.launch(MainActivity::class.java).use { home ->
+            Thread.sleep(1500)
+            instrumentation.waitForIdleSync()
+            step(home, emptySpot(home))
+        }
+        shell("input keyevent KEYCODE_BACK") // whatever the step left open (keyboard, other app)
+        Thread.sleep(500)
     }
 
     private fun <T> on(home: ActivityScenario<MainActivity>, read: (MainActivity) -> T): T {
@@ -92,72 +110,79 @@ class HomeGesturesDeviceTest {
         set(HomeGesture.SWIPE_LEFT, GestureAction.APP_DRAWER)
         set(HomeGesture.SWIPE_RIGHT, GestureAction.SEARCH)
 
-        ActivityScenario.launch(MainActivity::class.java).use { home ->
-            Thread.sleep(1500)
-            val spot = emptySpot(home)
-
-            // Left: the app drawer. Back closes it.
+        // Left: the app drawer. Back closes it.
+        fresh { home, spot ->
             swipe(spot, -300, 0)
-            waitFor("drawer from swipe left") { drawerOpen(home) }
+            waitFor("drawer from swipe left", home) { drawerOpen(home) }
             @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() }
-            waitFor("drawer closed") { !drawerOpen(home) }
+            waitFor("drawer closed", home) { !drawerOpen(home) }
+        }
 
-            // Right: search, focused.
+        // Right: search, focused.
+        fresh { home, spot ->
             swipe(spot, 300, 0)
-            waitFor("search from swipe right") { on(home) { it.findViewById<EditText>(R.id.searchInput).isFocused } }
-            @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() }
-            Thread.sleep(500)
+            waitFor("search from swipe right", home) { on(home) { it.findViewById<EditText>(R.id.searchInput).isFocused } }
+        }
 
-            // A swipe that starts on the card is the card's: no drawer.
-            val pill = on(home) { a ->
-                val v = a.findViewById<View>(R.id.homeCard) // (the search row is hidden unfolded until asked for)
+        // A swipe that starts on the card is the card's: no drawer.
+        fresh { home, _ ->
+            val card = on(home) { a ->
+                val v = a.findViewById<View>(R.id.homeCard)
                 val l = IntArray(2)
                 v.getLocationOnScreen(l)
                 (l[0] + v.width / 2) to (l[1] + v.height / 2)
             }
-            swipe(pill, -300, 0)
-            assertFalse("a swipe from the card opened the drawer", drawerOpen(home))
+            swipe(card, -300, 0)
+            assertFalse("a swipe from the card opened the drawer (${state(home)})", drawerOpen(home))
+        }
 
-            // Down without accessibility access: nothing crashes, the shade stays shut (a toast explains).
+        // Down without accessibility access: nothing crashes, the shade stays shut (a toast explains).
+        fresh { home, spot ->
             swipe(spot, 0, 300)
+            assertTrue(state(home), on(home) { it.lastHomeSwipe } == "SWIPE_DOWN -> NOTIFICATIONS")
             assertFalse(shadeOpen())
-            assertTrue(on(home) { !it.isFinishing })
+        }
 
-            // Widget Center: edit mode; while editing, gestures do nothing.
-            set(HomeGesture.SWIPE_RIGHT, GestureAction.WIDGET_CENTER)
+        // Widget Center: edit mode; while editing, gestures do nothing.
+        set(HomeGesture.SWIPE_RIGHT, GestureAction.WIDGET_CENTER)
+        fresh { home, spot ->
             swipe(spot, 300, 0)
-            waitFor("edit mode from swipe right") { on(home) { it.findViewById<WidgetGridView>(R.id.widgetGrid).editMode } }
+            waitFor("edit mode from swipe right", home) { on(home) { it.findViewById<WidgetGridView>(R.id.widgetGrid).editMode } }
             swipe(spot, -300, 0)
-            assertFalse("a gesture ran in edit mode", drawerOpen(home))
+            assertFalse("a gesture ran in edit mode (${state(home)})", drawerOpen(home))
             home.onActivity { it.findViewById<WidgetGridView>(R.id.widgetGrid).setEditMode(false) }
+        }
 
-            // Launch App: an uninstalled app does nothing; an installed one opens.
-            set(HomeGesture.SWIPE_RIGHT, GestureAction.LAUNCH_APP, "com.example.not.installed")
+        // Launch App: an uninstalled app does nothing; an installed one opens.
+        set(HomeGesture.SWIPE_RIGHT, GestureAction.LAUNCH_APP, "com.example.not.installed")
+        fresh { home, spot ->
             swipe(spot, 300, 0)
+            assertTrue(state(home), on(home) { it.lastHomeSwipe } == "SWIPE_RIGHT -> LAUNCH_APP")
             assertTrue("Searchlight should still be in front", pkg in focusedWindow())
-            set(HomeGesture.SWIPE_RIGHT, GestureAction.LAUNCH_APP, "com.android.settings")
+        }
+        set(HomeGesture.SWIPE_RIGHT, GestureAction.LAUNCH_APP, "com.android.settings")
+        fresh { home, spot ->
             swipe(spot, 300, 0)
-            waitFor("Settings launched", 8_000) { "com.android.settings" in focusedWindow() }
+            waitFor("Settings launched", home, 8_000) { "com.android.settings" in focusedWindow() }
         }
 
         // Accessibility on: down opens the shade; over the open drawer, down only closes the drawer.
         shell("settings put secure enabled_accessibility_services $service")
         shell("settings put secure accessibility_enabled 1")
-        waitFor("gesture service connected", 10_000) { GestureService.isConnected }
-        ActivityScenario.launch(MainActivity::class.java).use { home ->
-            Thread.sleep(1500)
-            val spot = emptySpot(home)
+        waitFor("gesture service connected", timeoutMs = 10_000) { GestureService.isConnected }
+        fresh { home, spot ->
             swipe(spot, 0, 300)
-            waitFor("shade from swipe down") { shadeOpen() }
+            waitFor("shade from swipe down", home) { shadeOpen() }
             shell("screencap -p $dir/${prefix}_font1.0_15-gesture-notifications.png")
             shell("cmd statusbar collapse")
             Thread.sleep(800)
-
+        }
+        fresh { home, spot ->
             home.onActivity { it.openAppTable() }
-            waitFor("drawer open") { drawerOpen(home) }
+            waitFor("drawer open", home) { drawerOpen(home) }
             Thread.sleep(500)
             swipe(spot, 0, 300)
-            waitFor("drawer closed by swipe down") { !drawerOpen(home) }
+            waitFor("drawer closed by swipe down", home) { !drawerOpen(home) }
             assertFalse("swipe down over the drawer also opened the shade", shadeOpen())
         }
     }

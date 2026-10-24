@@ -705,6 +705,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     // ------------------------------------------------------------------ home gestures
 
     private var gestureToast: Toast? = null
+    /** What the last home swipe did, for the device tests. */
+    internal var lastHomeSwipe: String? = null
 
     /**
      * Swipe down / left / right on empty home space runs the action chosen in Settings. Empty
@@ -744,8 +746,13 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun onHomeSwipe(direction: Swipe.Direction) {
         val gesture = HomeGesture.of(direction) ?: return
         // The app table and all-apps panel keep their own swipes; edit mode is for arranging.
-        if (binding.appTable.isVisible || binding.allApps.isVisible || binding.widgetGrid.editMode) return
-        when (prefs.gestureAction(gesture)) {
+        if (binding.appTable.isVisible || binding.allApps.isVisible || binding.widgetGrid.editMode) {
+            lastHomeSwipe = "$gesture ignored"
+            return
+        }
+        val action = prefs.gestureAction(gesture)
+        lastHomeSwipe = "$gesture -> $action"
+        when (action) {
             GestureAction.NONE -> Unit
             GestureAction.NOTIFICATIONS -> globalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
             GestureAction.QUICK_SETTINGS -> globalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)
