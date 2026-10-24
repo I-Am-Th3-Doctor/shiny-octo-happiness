@@ -172,10 +172,13 @@ class HomeGesturesDeviceTest {
         try {
             waitFor("gesture service connected", timeoutMs = 15_000) { GestureService.isConnected }
         } catch (e: AssertionError) {
-            val dump = shell("dumpsys accessibility").lines().filter { pkg in it || "nabled" in it || "ound" in it }.take(20)
+            val dump = shell("dumpsys accessibility").lines().map { it.trim() }.filter { it.isNotEmpty() }.take(60)
+            val registered = shell("dumpsys package $pkg").lines().map { it.trim() }
+                .dropWhile { "android.accessibilityservice.AccessibilityService" !in it }.take(6)
             throw AssertionError(
                 "${e.message}; enabled=${shell("settings get secure enabled_accessibility_services").trim()}, " +
-                    "accessibility_enabled=${shell("settings get secure accessibility_enabled").trim()}, dumpsys: $dump",
+                    "accessibility_enabled=${shell("settings get secure accessibility_enabled").trim()}, " +
+                    "package registers: $registered, dumpsys: ${dump.joinToString(" | ")}",
                 e,
             )
         }
