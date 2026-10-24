@@ -62,7 +62,8 @@ class HomeGesturesDeviceTest {
             instrumentation.waitForIdleSync()
             step(home, emptySpot(home))
         }
-        shell("input keyevent KEYCODE_BACK") // whatever the step left open (keyboard, other app)
+        // (No Back press here: with this screen closed it would land on another home screen,
+        // which could then take the next step's swipe. Closing the screen clears what it opened.)
         Thread.sleep(500)
     }
 
