@@ -1,5 +1,6 @@
 package io.github.iamth3doctor.searchlight
 
+import android.app.UiAutomation
 import android.graphics.Rect
 import android.view.View
 import android.view.ViewGroup
@@ -31,8 +32,12 @@ class HomeGesturesDeviceTest {
     private val dir = "/sdcard/Download/searchlight-shots"
     private val service = "$pkg/$pkg.gestures.GestureService"
 
+    // The test's own automation connection must not keep Searchlight's accessibility service from
+    // starting: by default Android holds back every other service while it's connected.
+    private val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+
     private fun shell(cmd: String): String =
-        instrumentation.uiAutomation.executeShellCommand(cmd).use { String(java.io.FileInputStream(it.fileDescriptor).readBytes()) }
+        automation.executeShellCommand(cmd).use { String(java.io.FileInputStream(it.fileDescriptor).readBytes()) }
 
     private fun waitFor(what: String, home: ActivityScenario<MainActivity>? = null, timeoutMs: Long = 5_000, check: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
