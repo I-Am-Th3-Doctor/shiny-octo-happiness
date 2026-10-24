@@ -4,6 +4,8 @@ import android.content.Context
 import io.github.iamth3doctor.searchlight.cards.CardType
 import io.github.iamth3doctor.searchlight.cards.QuickAction
 import io.github.iamth3doctor.searchlight.cards.SlotConfig
+import io.github.iamth3doctor.searchlight.gestures.GestureAction
+import io.github.iamth3doctor.searchlight.gestures.HomeGesture
 import io.github.iamth3doctor.searchlight.weather.GeoPlace
 import io.github.iamth3doctor.searchlight.weather.TempUnit
 import io.github.iamth3doctor.searchlight.weather.WeatherData
@@ -227,6 +229,20 @@ class Prefs(context: Context) {
     fun addFavoritesListener(l: () -> Unit) { favoriteListeners += l }
     fun removeFavoritesListener(l: () -> Unit) { favoriteListeners -= l }
 
+    // ---- Home gestures: one action per swipe, the same folded and unfolded ----
+
+    fun gestureAction(g: HomeGesture): GestureAction =
+        GestureAction.entries.firstOrNull { it.name == sp.getString(KEY_GESTURE + g.name, null) } ?: g.default
+
+    /** Launch App: the package to open (null when another action is chosen). */
+    fun gestureApp(g: HomeGesture): String? = sp.getString(KEY_GESTURE_APP + g.name, null)
+
+    fun setGesture(g: HomeGesture, action: GestureAction, appPackage: String? = null) {
+        sp.edit().putString(KEY_GESTURE + g.name, action.name)
+            .putString(KEY_GESTURE_APP + g.name, appPackage.takeIf { action == GestureAction.LAUNCH_APP })
+            .apply()
+    }
+
     // ---- Launch counts: feed the ranking so your usual app wins ties ----
 
     fun launchCount(key: String): Int = usage[key] ?: 0
@@ -240,6 +256,8 @@ class Prefs(context: Context) {
     companion object {
         const val MAX_FAVORITES = 6
         private const val KEY_FAVORITES = "favorites"
+        private const val KEY_GESTURE = "gesture_"
+        private const val KEY_GESTURE_APP = "gesture_app_"
         private const val KEY_FAVORITES_MODE = "favorites_mode"
         private const val KEY_AUTO_FAVORITES = "auto_favorites"
         private const val KEY_AUTO_FAVORITES_AT = "auto_favorites_at"

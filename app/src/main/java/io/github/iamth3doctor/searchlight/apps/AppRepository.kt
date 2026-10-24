@@ -66,6 +66,10 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
 
     fun find(key: String): AppEntry? = byKey[key]
 
+    /** The app [pkg] opens as (its personal-profile entry first); null once it's uninstalled. */
+    fun findByPackage(pkg: String): AppEntry? =
+        apps.filter { it.packageName == pkg && !it.isSelf }.minByOrNull { if (it.user == Process.myUserHandle()) 0 else 1 }
+
     fun addListener(l: () -> Unit) { listeners += l }
     fun removeListener(l: () -> Unit) { listeners -= l }
 

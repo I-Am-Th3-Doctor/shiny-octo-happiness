@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
+import io.github.iamth3doctor.searchlight.gestures.GestureService
 import io.github.iamth3doctor.searchlight.media.MediaListenerService
 
 /** Checks and settings-screen shortcuts for the special (non-runtime) permissions. */
@@ -48,6 +49,16 @@ object Permissions {
     /** Usage access (automatic favorites): our own page where the device has one, else the list. */
     fun openUsageAccessSettings(c: Context) =
         c.start(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, packageUri(c)), Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+
+    /**
+     * Accessibility (home gestures): straight to Searchlight's own page where the device allows
+     * it, else the Accessibility list.
+     */
+    fun openAccessibilitySettings(c: Context) = c.start(
+        Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS")
+            .putExtra(Intent.EXTRA_COMPONENT_NAME, ComponentName(c, GestureService::class.java).flattenToString()),
+        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
+    )
 
     fun hasWriteSettings(c: Context) = Settings.System.canWrite(c)
 

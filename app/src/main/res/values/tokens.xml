@@ -62,6 +62,7 @@
          space_s + size_edit_bar + space_s. -->
     <dimen name="size_edit_bar_reserve">56dp</dimen>
     <dimen name="size_swipe">64dp</dimen>              <!-- distance that counts as a swipe -->
+    <dimen name="size_gesture">56dp</dimen>            <!-- home gestures (down/left/right) on empty space -->
     <dimen name="size_preview_width">120dp</dimen>    <!-- widget picker preview -->
     <dimen name="size_preview_height">88dp</dimen>
     <dimen name="stroke_hairline">1.5dp</dimen>

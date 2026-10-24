@@ -18,6 +18,10 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.iamth3doctor.searchlight.cards.QuickAction
 import io.github.iamth3doctor.searchlight.data.FavoritesMode
+import io.github.iamth3doctor.searchlight.databinding.ItemGestureRowBinding
+import io.github.iamth3doctor.searchlight.gestures.GestureAction
+import io.github.iamth3doctor.searchlight.gestures.GestureService
+import io.github.iamth3doctor.searchlight.gestures.HomeGesture
 import io.github.iamth3doctor.searchlight.data.Prefs
 import io.github.iamth3doctor.searchlight.data.WebEngine
 import io.github.iamth3doctor.searchlight.media.MusicApps
@@ -86,6 +90,7 @@ class SettingsActivity : Activity() {
         binding.webEngineValue.text = prefs.webEngine.label
 
         renderTileSettings()
+        renderGestures()
         renderPermissions()
         renderIndexStatus()
         renderFavorites()
@@ -249,7 +254,8 @@ class SettingsActivity : Activity() {
                 openSpecial = { Permissions.openDndAccessSettings(this) }),
             Perm(R.string.perm_brightness, R.string.perm_brightness_desc, { Permissions.hasWriteSettings(this) },
                 openSpecial = { Permissions.openWriteSettings(this) }),
-            Perm(R.string.perm_accessibility, R.string.perm_accessibility_desc, { false }, comingLater = true),
+            Perm(R.string.perm_accessibility, R.string.perm_accessibility_desc, { GestureService.isEnabled(this) },
+                openSpecial = { Permissions.openAccessibilitySettings(this) }),
         )
     }
 
@@ -319,6 +325,70 @@ class SettingsActivity : Activity() {
         binding.indexStatus.visibility = if (files.hasPermission()) android.view.View.VISIBLE else android.view.View.GONE
         binding.reindex.visibility = binding.indexStatus.visibility
         binding.reindex.isEnabled = scanning == null
+    }
+
+    // ------------------------------------------------------------------ gestures
+
+    private fun renderGestures() {
+        val list = binding.gesturesList
+        list.removeAllViews()
+        val accessibility = GestureService.isEnabled(this)
+        for (g in HomeGesture.entries) {
+            val row = ItemGestureRowBinding.inflate(layoutInflater, list, false)
+            val action = prefs.gestureAction(g)
+            val appPackage = prefs.gestureApp(g)
+            val target = appPackage?.let(app.apps::findByPackage)
+            row.title.setText(g.title)
+            row.summary.text = when {
+                action != GestureAction.LAUNCH_APP -> getString(action.label)
+                target != null -> getString(R.string.gesture_launch_named, target.label)
+                else -> getString(action.label)
+            }
+            val problem = when {
+                action.needsAccessibility && !accessibility -> R.string.gesture_needs_access
+                action == GestureAction.LAUNCH_APP && target == null -> R.string.gesture_app_missing
+                else -> 0
+            }
+            row.problem.visibility = if (problem != 0) android.view.View.VISIBLE else android.view.View.GONE
+            if (problem != 0) row.problemText.setText(problem)
+            row.fix.visibility = if (problem == R.string.gesture_needs_access) android.view.View.VISIBLE else android.view.View.GONE
+            row.fix.setOnClickListener { Permissions.openAccessibilitySettings(this) }
+            row.root.setOnClickListener { pickGestureAction(g) }
+            list.addView(row.root)
+        }
+    }
+
+    private fun pickGestureAction(g: HomeGesture) {
+        val actions = GestureAction.entries
+        AlertDialog.Builder(this)
+            .setTitle(g.title)
+            .wrappingSingleChoice(actions.map { getString(it.label) }, actions.indexOf(prefs.gestureAction(g))) { d, which ->
+                d.dismiss()
+                val action = actions[which]
+                if (action == GestureAction.LAUNCH_APP) {
+                    pickGestureApp(g)
+                } else {
+                    prefs.setGesture(g, action)
+                    renderGestures()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Launch App: every app, A–Z; the gesture keeps the package so it survives app updates. */
+    private fun pickGestureApp(g: HomeGesture) {
+        val apps = app.apps.apps.filter { !it.isSelf }.distinctBy { it.packageName }
+        val current = prefs.gestureApp(g)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.gesture_pick_app)
+            .wrappingSingleChoice(apps.map { it.label }, apps.indexOfFirst { it.packageName == current }) { d, which ->
+                d.dismiss()
+                prefs.setGesture(g, GestureAction.LAUNCH_APP, apps[which].packageName)
+                renderGestures()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     // ------------------------------------------------------------------ favorites

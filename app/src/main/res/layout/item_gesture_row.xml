@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One home gesture in Settings: its name, its action, and what's missing for it to work. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    style="@style/SettingsRow">
+
+    <TextView android:id="@+id/title" style="@style/SettingsRowTitle" />
+    <TextView android:id="@+id/summary" style="@style/SettingsRowSummary" />
+
+    <LinearLayout
+        android:id="@+id/problem"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/problemText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption"
+            android:textColor="?android:attr/colorAccent"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/fix"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="@dimen/size_touch"
+            android:text="@string/gesture_open_accessibility"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
+    </LinearLayout>
+</LinearLayout>

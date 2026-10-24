@@ -12,6 +12,7 @@ import android.view.ViewConfiguration
 import android.view.ViewGroup
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.ui.Swipe
+import io.github.iamth3doctor.searchlight.ui.SwipeTracker
 import io.github.iamth3doctor.searchlight.ui.color
 import io.github.iamth3doctor.searchlight.ui.pxF
 import kotlin.math.abs
@@ -44,10 +45,11 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     /** A swipe up on empty space (outside edit mode): opens the app table. */
     var onSwipeUp: (() -> Unit)? = null
+    /** A swipe down, left or right on empty space (outside edit mode): the home gestures. */
+    var onSwipe: ((Swipe.Direction) -> Unit)? = null
+    private val swipe = SwipeTracker(context.pxF(R.dimen.size_swipe), context.pxF(R.dimen.size_gesture))
     private var swipeDownX = 0f
     private var swipeDownY = 0f
-    private var swiped = false
-    private val swipeDistance = context.pxF(R.dimen.size_swipe)
 
     var cols = 4
         private set
@@ -265,7 +267,7 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
         if (!editMode) {
-            detectSwipeUp(ev)
+            detectSwipe(ev)
             return super.onTouchEvent(ev)
         }
         when (ev.actionMasked) {
@@ -296,22 +298,25 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
         return true
     }
 
-    /** Empty space only: a touch that starts on a widget is the widget's. Long-press still enters edit mode. */
-    private fun detectSwipeUp(ev: MotionEvent) {
+    /**
+     * Empty space only: a touch that starts on a widget is the widget's. One swipe per touch:
+     * up opens the app table, down/left/right are the home gestures. Long-press still enters
+     * edit mode.
+     */
+    private fun detectSwipe(ev: MotionEvent) {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 swipeDownX = ev.x
                 swipeDownY = ev.y
-                swiped = false
+                swipe.down(ev.x, ev.y)
             }
             MotionEvent.ACTION_MOVE -> {
-                val dx = ev.x - swipeDownX
-                val dy = ev.y - swipeDownY
                 // A finger that's travelling isn't long-pressing.
-                if (abs(dx) > slop || abs(dy) > slop) cancelLongPress()
-                if (!swiped && Swipe.vertical(dx, dy, swipeDistance) == Swipe.Direction.UP) {
-                    swiped = true
-                    onSwipeUp?.invoke()
+                if (abs(ev.x - swipeDownX) > slop || abs(ev.y - swipeDownY) > slop) cancelLongPress()
+                when (val d = swipe.move(ev.x, ev.y)) {
+                    null -> Unit
+                    Swipe.Direction.UP -> onSwipeUp?.invoke()
+                    else -> onSwipe?.invoke(d)
                 }
             }
         }

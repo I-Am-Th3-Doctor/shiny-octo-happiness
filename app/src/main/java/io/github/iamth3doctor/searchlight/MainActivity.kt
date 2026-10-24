@@ -1,5 +1,6 @@
 package io.github.iamth3doctor.searchlight
 
+import android.accessibilityservice.AccessibilityService
 import android.app.Activity
 import android.app.WallpaperManager
 import android.appwidget.AppWidgetManager
@@ -53,6 +54,10 @@ import io.github.iamth3doctor.searchlight.ui.GlassTint
 import io.github.iamth3doctor.searchlight.ui.Posture
 import io.github.iamth3doctor.searchlight.ui.ResultsAdapter
 import io.github.iamth3doctor.searchlight.ui.Swipe
+import io.github.iamth3doctor.searchlight.ui.SwipeTracker
+import io.github.iamth3doctor.searchlight.gestures.GestureAction
+import io.github.iamth3doctor.searchlight.gestures.GestureService
+import io.github.iamth3doctor.searchlight.gestures.HomeGesture
 import io.github.iamth3doctor.searchlight.ui.WallpaperBlur
 import io.github.iamth3doctor.searchlight.ui.color
 import io.github.iamth3doctor.searchlight.ui.px
@@ -131,6 +136,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         setupWidgetPage()
         setupAppTable()
         setupRail()
+        setupHomeGestures()
         applyPosture(Posture.of(resources.configuration))
 
         placeRequestedWidget(intent)
@@ -694,6 +700,69 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun sortedApps(): List<AppEntry> {
         val collator = Collator.getInstance()
         return app.apps.apps.sortedWith { a, b -> collator.compare(a.label, b.label) }
+    }
+
+    // ------------------------------------------------------------------ home gestures
+
+    private var gestureToast: Toast? = null
+
+    /**
+     * Swipe down / left / right on empty home space runs the action chosen in Settings. Empty
+     * space is the widget canvas (it reports its own swipes: a touch on a widget is the widget's)
+     * plus any wallpaper outside it, e.g. beside the card when unfolded. Touches that start on the
+     * card, the search row, the results, the edit bar or the rail are never gestures.
+     */
+    @android.annotation.SuppressLint("ClickableViewAccessibility") // swipes only; taps fall through
+    private fun setupHomeGestures() {
+        binding.widgetGrid.onSwipe = ::onHomeSwipe
+        val tracker = SwipeTracker(pxF(R.dimen.size_swipe), pxF(R.dimen.size_gesture))
+        binding.root.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (onHomeChrome(e.rawX, e.rawY)) return@setOnTouchListener false
+                    tracker.down(e.x, e.y)
+                }
+                // Up stays the widget canvas's (the app table); out here only the home gestures.
+                MotionEvent.ACTION_MOVE -> tracker.move(e.x, e.y)?.takeIf { it != Swipe.Direction.UP }?.let(::onHomeSwipe)
+            }
+            true
+        }
+    }
+
+    /** Does a touch at this screen point start on the card, results, edit bar, rail or a panel? */
+    private fun onHomeChrome(x: Float, y: Float): Boolean {
+        val loc = IntArray(2)
+        return listOf(binding.homeCard, binding.resultsStack, binding.editBar, binding.rail, binding.allApps, binding.appTable)
+            .any { v ->
+                v.isShown && run {
+                    v.getLocationOnScreen(loc)
+                    x >= loc[0] && x < loc[0] + v.width && y >= loc[1] && y < loc[1] + v.height
+                }
+            }
+    }
+
+    private fun onHomeSwipe(direction: Swipe.Direction) {
+        val gesture = HomeGesture.of(direction) ?: return
+        // The app table and all-apps panel keep their own swipes; edit mode is for arranging.
+        if (binding.appTable.isVisible || binding.allApps.isVisible || binding.widgetGrid.editMode) return
+        when (prefs.gestureAction(gesture)) {
+            GestureAction.NONE -> Unit
+            GestureAction.NOTIFICATIONS -> globalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
+            GestureAction.QUICK_SETTINGS -> globalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)
+            GestureAction.LOCK_SCREEN -> globalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+            GestureAction.APP_DRAWER -> openAppTable()
+            GestureAction.SEARCH -> showKeyboard()
+            GestureAction.WIDGET_CENTER -> binding.widgetGrid.setEditMode(true)
+            // Uninstalled since it was chosen: nothing to open (Settings says "App not installed").
+            GestureAction.LAUNCH_APP -> prefs.gestureApp(gesture)?.let(app.apps::findByPackage)?.let { launchApp(it, null) }
+        }
+    }
+
+    /** Shade, quick settings, lock: only through our accessibility service. Says so when it's off. */
+    private fun globalAction(action: Int) {
+        if (GestureService.perform(action)) return
+        gestureToast?.cancel() // one message per swipe, never a stack of them
+        gestureToast = Toast.makeText(this, R.string.gesture_needs_accessibility_toast, Toast.LENGTH_LONG).also { it.show() }
     }
 
     private fun setupWidgetPage() {

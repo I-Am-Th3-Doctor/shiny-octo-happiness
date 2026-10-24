@@ -202,8 +202,31 @@
     <string name="perm_dnd_desc">Quick Actions: Do Not Disturb, and silent ringer mode</string>
     <string name="perm_brightness">Modify system settings</string>
     <string name="perm_brightness_desc">Quick Actions: brightness and rotation lock</string>
-    <string name="perm_accessibility">Accessibility (gestures, double-tap to lock)</string>
-    <string name="perm_accessibility_desc">Coming in Phase 4</string>
+    <string name="perm_accessibility">Accessibility (home gestures)</string>
+    <string name="perm_accessibility_desc">Lets swipes on the home screen open notifications and quick settings and lock the screen. Reads nothing on screen.</string>
+
+    <!-- Home gestures -->
+    <string name="settings_section_gestures">Gestures</string>
+    <string name="settings_gestures_help">Swipe on empty home-screen space (not on the card or a widget). Swipe up always opens the app drawer. Notifications, Quick Settings and Lock screen need accessibility access; if Android calls it a restricted setting, first open App info → ⋮ → Allow restricted settings.</string>
+    <string name="gesture_swipe_down">Swipe down</string>
+    <string name="gesture_swipe_left">Swipe left</string>
+    <string name="gesture_swipe_right">Swipe right</string>
+    <string name="gesture_action_none">None</string>
+    <string name="gesture_action_notifications">Notifications</string>
+    <string name="gesture_action_quick_settings">Quick Settings</string>
+    <string name="gesture_action_app_drawer">App Drawer</string>
+    <string name="gesture_action_search">Search</string>
+    <string name="gesture_action_widget_center">Widget Center</string>
+    <string name="gesture_action_lock_screen">Lock Screen</string>
+    <string name="gesture_action_launch_app">Launch App…</string>
+    <string name="gesture_launch_named">Launch %1$s</string>
+    <string name="gesture_pick_app">Choose an app</string>
+    <string name="gesture_needs_access">Needs accessibility access</string>
+    <string name="gesture_app_missing">App not installed</string>
+    <string name="gesture_open_accessibility">Open settings</string>
+    <string name="gesture_needs_accessibility_toast">This gesture needs accessibility access: turn on Searchlight gestures in Settings → Accessibility.</string>
+    <string name="gesture_service_label">Searchlight gestures</string>
+    <string name="gesture_service_desc">Lets Searchlight\'s home-screen swipes open the notification shade and quick settings and lock the screen. It doesn\'t read anything on your screen and listens to nothing else.</string>
     <string name="perm_granted_tap_to_change">Granted. Tap to change in Android settings.</string>
     <string name="index_status_none">Not indexed yet</string>
     <string name="index_status_scanning">Indexing… %1$s files so far</string>
