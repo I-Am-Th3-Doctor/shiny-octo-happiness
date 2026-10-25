@@ -8,6 +8,7 @@ import io.github.iamth3doctor.searchlight.apps.AutoFavorites
 import io.github.iamth3doctor.searchlight.contacts.ContactRepository
 import io.github.iamth3doctor.searchlight.data.Prefs
 import io.github.iamth3doctor.searchlight.files.FileSearch
+import io.github.iamth3doctor.searchlight.iconpack.IconPacks
 import io.github.iamth3doctor.searchlight.media.MediaRepository
 import io.github.iamth3doctor.searchlight.media.Thumbnails
 import io.github.iamth3doctor.searchlight.messages.MessageRepository
@@ -22,6 +23,8 @@ class SearchlightApp : Application() {
     lateinit var autoFavorites: AutoFavorites
         private set
     lateinit var shortcuts: AppShortcuts
+        private set
+    lateinit var iconPacks: IconPacks
         private set
     lateinit var contacts: ContactRepository
         private set
@@ -50,6 +53,8 @@ class SearchlightApp : Application() {
         thumbnails = Thumbnails(this)
         background = BackgroundSearch(files, media, messages)
         weather = WeatherRepository(this, prefs)
+        iconPacks = IconPacks(this, prefs, apps)
+        iconPacks.start()
         apps.start()
         shortcuts = AppShortcuts(this, apps, prefs)
         shortcuts.start()

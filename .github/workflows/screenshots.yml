@@ -36,7 +36,16 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Build APKs
-        run: ./gradlew assembleDebug assembleDebugAndroidTest
+        run: ./gradlew assembleDebug :app:assembleDebugAndroidTest
+
+      # A real third-party icon pack for the icon-pack tests: Arcticons, from F-Droid. Best effort:
+      # if F-Droid can't be reached the Arcticons test is skipped (the repo's test pack still runs).
+      - name: Download Arcticons (icon pack) from F-Droid
+        continue-on-error: true
+        run: |
+          VC=$(curl -fsS https://f-droid.org/api/v1/packages/com.donnnno.arcticons | python3 -c 'import json,sys; print(json.load(sys.stdin)["suggestedVersionCode"])')
+          curl -fsSL -o arcticons.apk "https://f-droid.org/repo/com.donnnno.arcticons_${VC}.apk"
+          ls -l arcticons.apk
 
       # Android 15 (edge-to-edge enforced). "Folded" is a phone-sized screen (411dp wide, like the
       # Razr's outer display); "unfolded" resizes the same emulator's display to a foldable inner
@@ -53,12 +62,15 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
             adb shell wm size
-            ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=folded
+            adb install -r testiconpack/build/outputs/apk/debug/testiconpack-debug.apk
+            adb push testiconpack/build/outputs/apk/debug/testiconpack-debug.apk /data/local/tmp/testiconpack.apk
+            if [ -f arcticons.apk ]; then adb install -r arcticons.apk || echo "Arcticons didn't install"; else echo "No Arcticons download"; fi
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=folded
             adb shell wm size 1840x2208
             adb shell wm density 420
             sleep 5
             adb shell wm size
-            ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded
             adb shell wm size reset
             adb shell wm density reset
             mkdir -p shots

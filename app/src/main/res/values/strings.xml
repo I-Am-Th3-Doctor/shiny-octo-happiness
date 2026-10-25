@@ -205,6 +205,14 @@
     <string name="perm_accessibility">Accessibility (home gestures)</string>
     <string name="perm_accessibility_desc">Lets swipes on the home screen open notifications and quick settings and lock the screen. Reads nothing on screen.</string>
 
+    <!-- Appearance: icon packs -->
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="icon_pack_title">Icon pack</string>
+    <string name="icon_pack_help">App icons everywhere in Searchlight. Apps a pack doesn\'t draw keep their own icon, in the pack\'s style when it has one.</string>
+    <string name="icon_pack_system">System default</string>
+    <string name="icon_pack_none_installed">No icon packs installed. Install one (they\'re apps) and it appears here.</string>
+    <string name="icon_pack_failed">%1$s couldn\'t be loaded, so your icons stay as they were.</string>
+
     <!-- Home gestures -->
     <string name="settings_section_gestures">Gestures</string>
     <string name="settings_gestures_help">Swipe on empty home-screen space (not on the card or a widget). Swipe up always opens the app drawer. Notifications, Quick Settings and Lock screen need accessibility access; if Android calls it a restricted setting, first open App info → ⋮ → Allow restricted settings.</string>

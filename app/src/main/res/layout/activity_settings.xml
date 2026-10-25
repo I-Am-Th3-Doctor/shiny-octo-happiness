@@ -61,6 +61,15 @@
             <TextView android:id="@+id/webEngineValue" style="@style/SettingsRowSummary" />
         </LinearLayout>
 
+        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_appearance" />
+
+        <LinearLayout
+            android:id="@+id/iconPackRow"
+            style="@style/SettingsRow">
+            <TextView style="@style/SettingsRowTitle" android:text="@string/icon_pack_title" />
+            <TextView android:id="@+id/iconPackValue" style="@style/SettingsRowSummary" />
+        </LinearLayout>
+
         <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_gestures" />
 
         <TextView

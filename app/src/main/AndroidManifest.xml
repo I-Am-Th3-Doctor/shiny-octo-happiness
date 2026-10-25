@@ -48,6 +48,13 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Icon packs: the two standard ways a pack announces itself. -->
+        <intent>
+            <action android:name="org.adw.launcher.THEMES" />
+        </intent>
+        <intent>
+            <action android:name="com.gau.go.launcherex.theme" />
+        </intent>
         <!-- Widget picker: see every app that provides home-screen widgets. -->
         <intent>
             <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -109,6 +116,12 @@
             android:name=".WidgetCenterActivity"
             android:exported="false"
             android:label="@string/widget_center"
+            android:theme="@style/Theme.Searchlight.Settings" />
+
+        <activity
+            android:name=".iconpack.IconPackActivity"
+            android:exported="false"
+            android:label="@string/icon_pack_title"
             android:theme="@style/Theme.Searchlight.Settings" />
 
         <activity

@@ -8,6 +8,7 @@ import android.content.pm.LauncherActivityInfo
 import android.content.pm.LauncherApps
 import android.graphics.Bitmap
 import android.graphics.Rect
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -22,6 +23,7 @@ import androidx.core.graphics.drawable.toBitmap
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.SettingsActivity
 import io.github.iamth3doctor.searchlight.data.Prefs
+import io.github.iamth3doctor.searchlight.iconpack.IconPack
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -181,6 +183,12 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
         iconCache.get(entry.key)?.let { return it }
         pendingIcons[entry.key]?.let { it += onReady; return null }
         pendingIcons[entry.key] = mutableListOf(onReady)
+        startRender(entry)
+        return null
+    }
+
+    private fun startRender(entry: AppEntry) {
+        val generation = iconGeneration
         iconLoader.execute {
             val bmp = try {
                 renderIcon(entry)
@@ -188,11 +196,28 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
                 null
             } ?: fallbackIcon()
             main.post {
+                // The icon pack changed while this was drawing: draw it again with the new one.
+                if (generation != iconGeneration) return@post startRender(entry)
                 iconCache.put(entry.key, bmp)
                 pendingIcons.remove(entry.key)?.forEach { it(bmp) }
             }
         }
-        return null
+    }
+
+    /** The chosen icon pack (null: the system's icons). Setting it redraws every icon. Main thread. */
+    @Volatile var iconPack: IconPack? = null
+        set(value) {
+            field = value
+            invalidateIcons()
+        }
+
+    private var iconGeneration = 0
+
+    /** Forget every drawn icon and tell the lists to draw them again. Main thread. */
+    fun invalidateIcons() {
+        iconGeneration++
+        iconCache.evictAll()
+        listeners.toList().forEach { it() }
     }
 
     private fun renderIcon(entry: AppEntry): Bitmap? {
@@ -200,8 +225,22 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(entry.component),
             entry.user,
         ) ?: return null
-        val drawable = info.getBadgedIcon(context.resources.displayMetrics.densityDpi)
-        return drawable.toBitmap(iconSizePx, iconSizePx)
+        val dpi = context.resources.displayMetrics.densityDpi
+        iconPack?.let { pack ->
+            val day = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+            val themed = try {
+                pack.render(entry.component.packageName, entry.component.className, day, iconSizePx, dpi) { info.getIcon(dpi) }
+            } catch (e: Exception) {
+                null // the system icon below, never a blank
+            }
+            if (themed != null) {
+                if (entry.user == Process.myUserHandle()) return themed
+                // Work apps keep their briefcase badge, as the system's icons have it.
+                return context.packageManager.getUserBadgedIcon(BitmapDrawable(context.resources, themed), entry.user)
+                    .toBitmap(iconSizePx, iconSizePx)
+            }
+        }
+        return info.getBadgedIcon(dpi).toBitmap(iconSizePx, iconSizePx)
     }
 
     private fun fallbackIcon(): Bitmap =

@@ -111,6 +111,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         refreshResults()
         if (posture == Posture.UNFOLDED) rail.render()
         if (binding.appTable.isVisible) appTable.submit(sortedApps())
+        if (binding.allApps.isVisible) allApps.submit(sortedApps()) // e.g. a new icon pack
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

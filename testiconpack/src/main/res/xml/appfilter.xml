@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Layers for apps this pack doesn't draw: a blue back, a mask that trims the corners,
+         a white dot on top, and the app's own icon at 70%. -->
+    <iconback img1="pack_back" />
+    <iconmask img1="pack_mask" />
+    <iconupon img1="pack_upon" />
+    <scale factor="0.7" />
+
+    <!-- (a) exact component -->
+    <item component="ComponentInfo{com.android.settings/com.android.settings.Settings}" drawable="themed_settings" />
+    <!-- an entry whose drawable doesn't exist: must fall through, never blank -->
+    <item component="ComponentInfo{com.google.android.youtube/com.google.android.youtube.app.honeycomb.Shell$HomeActivity}" drawable="no_such_drawable" />
+    <!-- calendar: today's icon is pack_cal_<day> -->
+    <calendar component="ComponentInfo{com.google.android.calendar/com.android.calendar.AllInOneActivity}" prefix="pack_cal_" />
+    <!-- (b) the Clock has no entry: its drawable is named after its package (com_google_android_deskclock) -->
+</resources>

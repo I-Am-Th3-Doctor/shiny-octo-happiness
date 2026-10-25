@@ -229,6 +229,11 @@ class Prefs(context: Context) {
     fun addFavoritesListener(l: () -> Unit) { favoriteListeners += l }
     fun removeFavoritesListener(l: () -> Unit) { favoriteListeners -= l }
 
+    /** The icon pack's package; null = the system's icons. */
+    var iconPack: String?
+        get() = sp.getString(KEY_ICON_PACK, null)
+        set(value) = sp.edit().putString(KEY_ICON_PACK, value).apply()
+
     // ---- Home gestures: one action per swipe, the same folded and unfolded ----
 
     fun gestureAction(g: HomeGesture): GestureAction =
@@ -257,6 +262,7 @@ class Prefs(context: Context) {
         const val MAX_FAVORITES = 6
         private const val KEY_FAVORITES = "favorites"
         private const val KEY_GESTURE = "gesture_"
+        private const val KEY_ICON_PACK = "icon_pack"
         private const val KEY_GESTURE_APP = "gesture_app_"
         private const val KEY_FAVORITES_MODE = "favorites_mode"
         private const val KEY_AUTO_FAVORITES = "auto_favorites"

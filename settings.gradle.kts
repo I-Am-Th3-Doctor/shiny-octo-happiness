@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "Searchlight"
 include(":app")
+include(":testiconpack")

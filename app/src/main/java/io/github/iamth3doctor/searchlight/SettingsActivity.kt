@@ -22,6 +22,7 @@ import io.github.iamth3doctor.searchlight.databinding.ItemGestureRowBinding
 import io.github.iamth3doctor.searchlight.gestures.GestureAction
 import io.github.iamth3doctor.searchlight.gestures.GestureService
 import io.github.iamth3doctor.searchlight.gestures.HomeGesture
+import io.github.iamth3doctor.searchlight.iconpack.IconPackActivity
 import io.github.iamth3doctor.searchlight.data.Prefs
 import io.github.iamth3doctor.searchlight.data.WebEngine
 import io.github.iamth3doctor.searchlight.media.MusicApps
@@ -59,6 +60,7 @@ class SettingsActivity : Activity() {
         binding.autoKeyboard.setOnCheckedChangeListener { _, checked -> prefs.autoOpenKeyboard = checked }
         binding.greetingRow.setOnClickListener { editGreeting() }
         binding.webEngineRow.setOnClickListener { pickWebEngine() }
+        binding.iconPackRow.setOnClickListener { startActivity(Intent(this, IconPackActivity::class.java)) }
         binding.favoritesModeRow.setOnClickListener { pickFavoritesMode() }
         binding.usageAccessRow.setOnClickListener { Permissions.openUsageAccessSettings(this) }
         binding.widgetCenterRow.setOnClickListener { startActivity(Intent(this, WidgetCenterActivity::class.java)) }
@@ -88,6 +90,9 @@ class SettingsActivity : Activity() {
         binding.setDefault.setText(if (isDefaultHome()) R.string.settings_is_default else R.string.settings_set_default)
         binding.greetingValue.text = prefs.greeting.ifEmpty { getString(R.string.settings_greeting_auto) }
         binding.webEngineValue.text = prefs.webEngine.label
+        binding.iconPackValue.text = app.iconPacks.selected
+            ?.let { pkg -> runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)) }.getOrNull() }
+            ?: getString(R.string.icon_pack_system)
 
         renderTileSettings()
         renderGestures()
