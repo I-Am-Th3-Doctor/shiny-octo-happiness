@@ -83,7 +83,7 @@ class IconPackDeviceTest {
             shell("screencap -p $dir/${prefix}_font1.0_16-$name-drawer.png")
             @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() }
             Thread.sleep(800)
-            home.onActivity { it.findViewById<EditText>(R.id.searchInput).setText("o") }
+            home.onActivity { it.findViewById<EditText>(R.id.searchInput).setText("g") } // Gmail, Google: app results
             Thread.sleep(2000)
             shell("screencap -p $dir/${prefix}_font1.0_17-$name-search.png")
             home.onActivity { it.findViewById<EditText>(R.id.searchInput).setText("") }
