@@ -1,21 +1,35 @@
 /**
- * Background (MV3 service worker on Chromium, event page on Firefox).
+ * Background (MV3 service worker in Brave, MV3 event page in Zen).
  *
  * The worker can be terminated at any moment, so nothing important lives only in memory:
- *   - account config, sync cursor and per-bookmark baselines → storage.local
- *   - the vault key → storage.session (RAM-only, wiped on browser exit, inaccessible to content scripts)
- *   - periodic sync → chrome.alarms (survives worker restarts)
+ *   - account config, sync cursor, bookmark baselines, encrypted password vault → storage.local
+ *   - the vault key and not-yet-saved captured logins → storage.session
+ *     (RAM-only, wiped on browser exit, not readable by content scripts)
+ *   - periodic sync → alarms (survive worker restarts)
  * Every listener is registered synchronously at top level so events wake the worker.
  */
 import * as oc from '@omnisync/crypto';
+import { MAX_WAIT_SECONDS } from '@omnisync/protocol';
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { signIn, signUp, unlock, type AccountConfig } from '../src/account.ts';
 import { ApiClient, ApiError } from '../src/api.ts';
 import { BookmarkAdapter, DIRTY_PREFIX, type BookmarksApi } from '../src/bookmarks/engine.ts';
 import { areaKV } from '../src/kv.ts';
-import type { Request, Response, Status } from '../src/messages.ts';
-import { MAX_WAIT_SECONDS } from '@omnisync/protocol';
+import type {
+  ContentRequest,
+  FillCommand,
+  LoginSummary,
+  PageRequest,
+  PendingAction,
+  PendingPrompt,
+  QueryResult,
+  Response,
+  Status,
+} from '../src/messages.ts';
+import { Mutex } from '../src/mutex.ts';
+import { type LoginEntry, loginKey, normalizeOrigin, originMatches } from '../src/passwords/model.ts';
+import { PasswordVault } from '../src/passwords/vault.ts';
 import { CURSOR_KEY, makeEnv, resetSyncState, runSync } from '../src/sync.ts';
 import type { CollectionAdapter } from '../src/sync-types.ts';
 
@@ -27,11 +41,37 @@ const DEBOUNCE_MS = 1000;
 const CONFIG_KEY = 'account';
 const STATUS_KEY = 'status';
 const VAULT_KEY = 'vaultKey';
+const PENDING_PREFIX = 'pwpending.';
+const PENDING_TTL_MS = 5 * 60_000;
+
+interface Pending {
+  origin: string;
+  username: string;
+  password: string;
+  at: number;
+}
+
+class LockedError extends Error {
+  constructor() {
+    super('OmniSync is locked');
+  }
+}
+
+const summary = ({ id, origin, username, title, notes, modifiedAt }: LoginEntry): LoginSummary => ({
+  id,
+  origin,
+  username,
+  modifiedAt,
+  ...(title && { title }),
+  ...(notes && { notes }),
+});
 
 export default defineBackground(() => {
   const local = areaKV(browser.storage.local);
   const session = areaKV(browser.storage.session);
-  const bookmarks = browser.bookmarks as unknown as BookmarksApi | undefined; // absent on Firefox for Android
+  const bookmarks = browser.bookmarks as unknown as BookmarksApi | undefined;
+  // Sync runs and vault writes both read-modify-write storage.local: one queue for all of them.
+  const mutex = new Mutex();
 
   let running: Promise<void> | null = null;
   let rerun = false;
@@ -42,22 +82,52 @@ export default defineBackground(() => {
     const k = await session.get<string>(VAULT_KEY);
     return k ? oc.fromB64(k) : undefined;
   };
+  const hasSiteAccess = () => browser.permissions.contains({ origins: ['<all_urls>'] }).catch(() => false);
+
+  async function state(): Promise<Status['state']> {
+    const [config, key] = await Promise.all([getConfig(), session.get<string>(VAULT_KEY)]);
+    return !config ? 'signed-out' : key ? 'ready' : 'locked';
+  }
 
   async function status(): Promise<Status> {
-    const [config, key, saved] = await Promise.all([getConfig(), session.get<string>(VAULT_KEY), local.get<Partial<Status>>(STATUS_KEY)]);
+    const [config, saved, st, siteAccess] = await Promise.all([getConfig(), local.get<Partial<Status>>(STATUS_KEY), state(), hasSiteAccess()]);
     return {
       ...saved,
-      state: !config ? 'signed-out' : key ? 'ready' : 'locked',
+      state: st,
       serverUrl: config?.serverUrl,
       username: config?.username,
       deviceId: config?.deviceId,
       bookmarksSupported: !!bookmarks,
       syncing: running !== null,
+      siteAccess,
     };
   }
 
-  function adapters(env: Awaited<ReturnType<typeof makeEnv>>['env']): CollectionAdapter<any>[] {
-    return bookmarks ? [new BookmarkAdapter(bookmarks, local, env)] : [];
+  function adapters(env: Awaited<ReturnType<typeof makeEnv>>['env'], vaultKey: Uint8Array): CollectionAdapter<any>[] {
+    const list: CollectionAdapter<any>[] = [new PasswordVault(local, env, vaultKey)];
+    if (bookmarks) {
+      // Brave (Chromium) and Zen (Firefox) disagree on how bookmarks.move() counts the target index.
+      list.unshift(new BookmarkAdapter(bookmarks, local, env, { moveIndexBeforeRemoval: !import.meta.env.FIREFOX }));
+    }
+    return list;
+  }
+
+  /** Run `fn` with an open vault. Throws LockedError when the vault key isn't in memory. */
+  function withVault<T>(fn: (v: PasswordVault) => Promise<T>): Promise<T> {
+    return mutex.run(async () => {
+      const config = await getConfig();
+      if (!config) throw new Error('Not signed in');
+      const key = await getVaultKey();
+      if (!key) throw new LockedError();
+      try {
+        const { env } = await makeEnv(local, key, config.deviceId);
+        const vault = new PasswordVault(local, env, key);
+        await vault.begin();
+        return await fn(vault);
+      } finally {
+        oc.wipe(key);
+      }
+    });
   }
 
   async function doSync() {
@@ -71,13 +141,13 @@ export default defineBackground(() => {
         kv: local,
         vaultKey,
         deviceId: config.deviceId,
-        adapters: adapters(clock.env),
+        adapters: adapters(clock.env, vaultKey),
         clock,
       });
       await local.set({ [STATUS_KEY]: { lastSyncAt: Date.now(), lastReport: report, lastError: undefined } });
     } catch (e) {
-      // Messages are ours or HTTP status text — never payload content.
-      const msg = e instanceof ApiError && e.status === 401 ? 'Session expired — sign in again' : e instanceof Error ? e.message : 'sync failed';
+      // Messages are ours or HTTP status text, never payload content.
+      const msg = e instanceof ApiError && e.status === 401 ? 'Session expired, sign in again' : e instanceof Error ? e.message : 'sync failed';
       await local.set({ [STATUS_KEY]: { ...(await local.get<object>(STATUS_KEY)), lastError: msg } });
     } finally {
       oc.wipe(vaultKey);
@@ -94,7 +164,7 @@ export default defineBackground(() => {
       await oc.ready();
       do {
         rerun = false;
-        await doSync();
+        await mutex.run(doSync);
       } while (rerun);
     })().finally(() => {
       running = null;
@@ -140,6 +210,43 @@ export default defineBackground(() => {
     if (!(await browser.alarms.get(ALARM))) await browser.alarms.create(ALARM, { periodInMinutes: PERIOD_MIN, delayInMinutes: PERIOD_MIN });
   }
 
+  // ---- captured logins waiting for "Save password?"
+
+  async function pendingPrompt(tabId: number): Promise<PendingPrompt | null> {
+    const key = PENDING_PREFIX + tabId;
+    const p = await session.get<Pending>(key);
+    if (!p) return null;
+    if (Date.now() - p.at > PENDING_TTL_MS) {
+      await session.remove(key);
+      return null;
+    }
+    if ((await state()) !== 'ready') return { origin: p.origin, username: p.username, kind: 'save', locked: true };
+    const verdict = await withVault(async (v) => {
+      if (await v.isNever(p.origin)) return 'drop' as const;
+      const existing = v.entries().find((e) => loginKey(e) === loginKey(p));
+      if (existing?.password === p.password) return 'drop' as const;
+      return existing ? ('update' as const) : ('save' as const);
+    });
+    if (verdict === 'drop') {
+      await session.remove(key);
+      return null;
+    }
+    return { origin: p.origin, username: p.username, kind: verdict, locked: false };
+  }
+
+  async function resolvePending(tabId: number, action: PendingAction) {
+    const key = PENDING_PREFIX + tabId;
+    const p = await session.get<Pending>(key);
+    if (!p) return;
+    if (action === 'save') {
+      await withVault((v) => v.upsert({ origin: p.origin, username: p.username, password: p.password }));
+      scheduleSync();
+    } else if (action === 'never') {
+      await withVault((v) => v.addNever(p.origin));
+    }
+    await session.remove(key);
+  }
+
   // ---- event wiring (synchronous, top level)
 
   if (bookmarks) {
@@ -156,6 +263,7 @@ export default defineBackground(() => {
     browser.bookmarks.onChildrenReordered?.addListener((id) => onLocalEdit(id));
   }
 
+  browser.tabs.onRemoved.addListener((tabId) => void session.remove(PENDING_PREFIX + tabId));
   browser.alarms.onAlarm.addListener((a) => {
     if (a.name === ALARM) void watchWindow();
   });
@@ -163,7 +271,9 @@ export default defineBackground(() => {
   browser.runtime.onStartup.addListener(() => void ensureAlarm());
   void ensureAlarm();
 
-  async function handle(msg: Request): Promise<Status> {
+  // ---- requests from our own extension pages (popup, vault)
+
+  async function handlePage(msg: PageRequest): Promise<unknown> {
     switch (msg.type) {
       case 'status':
         return status();
@@ -173,7 +283,7 @@ export default defineBackground(() => {
         const { config, vaultKey } = await (msg.type === 'signUp' ? signUp : signIn)(msg, {
           previousDeviceId: previous?.loginId === oc.deriveLoginId(msg.username) ? previous.deviceId : undefined,
         });
-        if (previous && previous.loginId !== config.loginId) await resetSyncState(local);
+        if (previous && previous.loginId !== config.loginId) await mutex.run(() => resetSyncState(local));
         await local.set({ [CONFIG_KEY]: config });
         await session.set({ [VAULT_KEY]: oc.toB64(vaultKey) });
         oc.wipe(vaultKey);
@@ -195,26 +305,103 @@ export default defineBackground(() => {
         return status();
       case 'signOut': {
         const config = await getConfig();
+        // Push anything unsynced first: signing out deletes the local (encrypted) vault copy.
+        if ((await state()) === 'ready') await syncNow();
+        const unsynced = Object.keys((await local.get<{ dirty: object }>('pw.state'))?.dirty ?? {}).length;
+        if (unsynced) throw new Error(`${unsynced} password change(s) haven't reached the server yet. Reconnect and try again.`);
         if (config) await new ApiClient(config.serverUrl, config.token).logout().catch(() => {});
         await session.remove(VAULT_KEY);
-        // Drop sync metadata (local bookmarks are kept). A later sign-in re-adopts them without duplicates.
-        await resetSyncState(local);
+        // Bookmarks stay in the browser; a later sign-in re-adopts them without duplicates.
+        await mutex.run(() => resetSyncState(local));
         await local.remove([CONFIG_KEY, STATUS_KEY]);
         return status();
       }
       case 'syncNow':
         await syncNow();
         return status();
+      case 'pw.list':
+        return withVault(async (v) => v.entries().map(summary));
+      case 'pw.reveal':
+        return withVault(async (v) => v.get(msg.id)?.password ?? null);
+      case 'pw.save': {
+        const r = await withVault((v) => v.upsert(msg.login));
+        scheduleSync();
+        return r;
+      }
+      case 'pw.delete':
+        await withVault((v) => v.remove(msg.id));
+        scheduleSync();
+        return null;
+      case 'pw.import': {
+        const r = await withVault((v) => v.importMany(msg.logins));
+        scheduleSync();
+        return r;
+      }
+      case 'pw.forTab': {
+        const tab = await browser.tabs.get(msg.tabId);
+        const pending = await pendingPrompt(msg.tabId);
+        if (!tab.url || !normalizeOrigin(tab.url) || (await state()) !== 'ready') return { logins: [], pending, url: tab.url ?? null };
+        const url = tab.url;
+        return { logins: await withVault(async (v) => v.forPage(url).map(summary)), pending, url };
+      }
+      case 'pw.fillTab': {
+        const tab = await browser.tabs.get(msg.tabId);
+        const entry = await withVault(async (v) => v.get(msg.id));
+        if (!entry || !tab.url || !originMatches(entry.origin, tab.url)) throw new Error('That login is not for this site');
+        const cmd: FillCommand = { type: 'cs.doFill', origin: entry.origin, username: entry.username, password: entry.password };
+        await browser.tabs.sendMessage(msg.tabId, cmd, { frameId: 0 });
+        return null;
+      }
+      case 'pw.resolvePending':
+        await resolvePending(msg.tabId, msg.action);
+        return null;
     }
   }
 
-  browser.runtime.onMessage.addListener((msg: Request, sender, sendResponse: (r: Response) => void) => {
-    // Only our own extension pages may drive the background (there are no content scripts in phase 1).
-    if (sender.id !== browser.runtime.id || !sender.url?.startsWith(browser.runtime.getURL('/'))) return false;
+  // ---- requests from content scripts inside web pages (narrow on purpose)
+
+  async function handleContent(msg: ContentRequest, pageUrl: string, tabId: number): Promise<unknown> {
+    switch (msg.type) {
+      case 'cs.query': {
+        const st = await state();
+        if (st !== 'ready') return { state: st, logins: [] } satisfies QueryResult;
+        const logins = await withVault(async (v) => v.forPage(pageUrl).map(({ id, username, title }) => ({ id, username, ...(title && { title }) })));
+        return { state: st, logins } satisfies QueryResult;
+      }
+      case 'cs.fill': {
+        // The site is the browser-reported URL of the frame that asked, so a page can only ever
+        // receive credentials saved for itself.
+        const entry = await withVault(async (v) => v.get(msg.id));
+        if (!entry || !originMatches(entry.origin, pageUrl)) throw new Error('That login is not for this site');
+        return { username: entry.username, password: entry.password };
+      }
+      case 'cs.captured': {
+        const origin = normalizeOrigin(pageUrl);
+        if (!origin || typeof msg.password !== 'string' || !msg.password || msg.password.length > 4096) return null;
+        const pending: Pending = { origin, username: String(msg.username ?? '').slice(0, 512), password: msg.password, at: Date.now() };
+        await session.set({ [PENDING_PREFIX + tabId]: pending });
+        return pendingPrompt(tabId);
+      }
+      case 'cs.pending':
+        return pendingPrompt(tabId);
+      case 'cs.resolvePending':
+        await resolvePending(tabId, msg.action);
+        return null;
+    }
+  }
+
+  browser.runtime.onMessage.addListener((msg: PageRequest | ContentRequest, sender, sendResponse: (r: Response) => void) => {
+    if (sender.id !== browser.runtime.id || typeof msg?.type !== 'string') return false;
+    const fromExtensionPage = !!sender.url?.startsWith(browser.runtime.getURL('/')) && !sender.tab?.url?.startsWith('http');
+    const fromContentScript = !!sender.tab?.id && /^https?:/.test(sender.url ?? '');
+    let work: () => Promise<unknown>;
+    if (fromExtensionPage && !msg.type.startsWith('cs.')) work = () => handlePage(msg as PageRequest);
+    else if (fromContentScript && msg.type.startsWith('cs.')) work = () => handleContent(msg as ContentRequest, sender.url!, sender.tab!.id!);
+    else return false;
     oc.ready()
-      .then(() => handle(msg))
+      .then(work)
       .then(
-        (status) => sendResponse({ ok: true, status }),
+        (data) => sendResponse({ ok: true, data }),
         (e: unknown) => sendResponse({ ok: false, error: e instanceof Error ? e.message : 'failed' }),
       );
     return true;

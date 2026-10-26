@@ -3,14 +3,19 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "dev:backend": "pnpm --filter @omnisync/backend dev",
-    "dev:extension": "pnpm --filter @omnisync/extension dev",
-    "build:extension": "pnpm --filter @omnisync/extension build",
-    "e2e": "pnpm --filter @omnisync/extension e2e"
+    "e2e": "pnpm --filter @omnisync/extension e2e",
+    "dev:brave": "pnpm --filter @omnisync/extension dev:brave",
+    "dev:zen": "pnpm --filter @omnisync/extension dev:zen",
+    "build:brave": "pnpm --filter @omnisync/extension build:brave",
+    "build:zen": "pnpm --filter @omnisync/extension build:zen",
+    "build": "pnpm --filter @omnisync/extension build"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

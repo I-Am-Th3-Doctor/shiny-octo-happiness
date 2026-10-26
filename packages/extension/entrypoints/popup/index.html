@@ -14,17 +14,17 @@
         <label>Sync server <input id="server" type="url" required value="http://localhost:8787" /></label>
         <label>Username <input id="username" required minlength="3" autocomplete="username" /></label>
         <label>Master password <input id="password" type="password" required minlength="8" autocomplete="current-password" /></label>
-        <label>This device <input id="device-name" required /></label>
+        <label>This browser <input id="device-name" required /></label>
         <div class="row">
           <button id="sign-in" type="submit">Sign in</button>
           <button id="sign-up" type="button" class="secondary">Create account</button>
         </div>
-        <p class="hint">Your master password never leaves this device. If you forget it, your data cannot be recovered.</p>
+        <p class="hint">Use the same username and master password in Zen and in Brave. The master password never leaves this device. If you forget it, your data can't be recovered.</p>
       </form>
     </section>
 
     <section id="view-locked" hidden>
-      <p>Locked. Enter your master password to resume syncing.</p>
+      <p>Locked. Enter your master password to resume syncing and autofill.</p>
       <form id="unlock-form">
         <input id="unlock-password" type="password" required autocomplete="current-password" placeholder="Master password" />
         <div class="row">
@@ -35,14 +35,34 @@
     </section>
 
     <section id="view-ready" hidden>
+      <div id="site-access" class="notice" hidden>
+        Password autofill needs permission to run on websites.
+        <button id="grant-access" class="small">Allow on all sites</button>
+      </div>
+
+      <div id="pending" class="notice" hidden>
+        <div id="pending-text"></div>
+        <div class="row">
+          <button id="pending-save">Save</button>
+          <button id="pending-never" class="secondary">Never for this site</button>
+          <button id="pending-dismiss" class="secondary">Not now</button>
+        </div>
+      </div>
+
+      <h2>Logins for this site</h2>
+      <ul id="site-logins" class="logins"></ul>
+      <p id="site-empty" class="hint" hidden>No saved logins for this site.</p>
+
+      <h2>Sync</h2>
       <dl>
         <dt>Account</dt><dd id="who"></dd>
         <dt>Server</dt><dd id="where"></dd>
         <dt>Last sync</dt><dd id="last-sync">never</dd>
       </dl>
-      <p id="unsupported" class="warn" hidden>This browser has no bookmarks API (e.g. Firefox for Android). Bookmark sync is unavailable here.</p>
+      <p id="unsupported" class="warn" hidden>This browser has no bookmarks API, so bookmark sync is off here.</p>
       <div class="row">
         <button id="sync-now">Sync now</button>
+        <button id="open-vault" class="secondary">Password vault</button>
         <button id="lock" class="secondary">Lock</button>
         <button id="sign-out" class="secondary">Sign out</button>
       </div>

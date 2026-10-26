@@ -11,8 +11,12 @@
  * (b) schedule a sync. Missing either is harmless: the diff still catches the change.
  *
  * Each bookmark/folder has a random sync id (local ids differ per browser).
- * The built-in roots map to fixed ids so Chromium's "Bookmarks bar" and
- * Firefox's "Bookmarks Toolbar" are the same folder.
+ * The built-in roots map to fixed ids so Brave's "Bookmarks bar" and
+ * Zen's/Firefox's "Bookmarks Toolbar" are the same folder.
+ *
+ * Duplicates: two bookmarks with the identical URL in the same folder are
+ * collapsed to one before every push. The survivor is chosen the same way on
+ * every device (lowest sync id), so both browsers converge on the same item.
  */
 import { compareVersions } from '@omnisync/protocol';
 import type { KV } from '../kv.ts';
@@ -124,16 +128,28 @@ function indexTree(tree: BmNode[]): LocalIndex {
   return { nodes, children, roots, rootLocal: new Map([...roots].map(([l, r]) => [r, l])) };
 }
 
+export interface BookmarkAdapterOptions {
+  /**
+   * Chromium's bookmarks.move() takes the destination index as counted *before* the node is
+   * removed from its old position, so moving an item down within its own folder needs index+1.
+   * Firefox (and so Zen) takes the final index. True for Chromium-based browsers (Brave).
+   */
+  moveIndexBeforeRemoval?: boolean;
+}
+
 export class BookmarkAdapter implements CollectionAdapter<BmPayload> {
   readonly collection = 'bookmarks' as const;
   private state: State = emptyState();
   private applied = new Set<string>();
   private diffStartedAt = 0;
+  /** Local duplicates removed by the last collectChanges (for the sync report). */
+  dedupedCount = 0;
 
   constructor(
     private readonly api: BookmarksApi,
     private readonly kv: KV,
     private readonly env: SyncEnv,
+    private readonly opts: BookmarkAdapterOptions = {},
   ) {}
 
   async begin(): Promise<void> {
@@ -288,12 +304,16 @@ export class BookmarkAdapter implements CollectionAdapter<BmPayload> {
     let localId = existing;
 
     if (!localId) {
-      // Adopt an identical unmapped local node (first sync on a browser that already has the same bookmarks).
+      // Adopt a matching unmapped local node instead of creating a duplicate (first sync on a
+      // browser that already has the same bookmarks). Bookmarks match by URL within the folder
+      // (an exact title match is preferred); folders match by name.
       const mapped = new Set(Object.keys(this.state.local2sync));
-      localId = siblings.find((sid) => {
+      const candidates = siblings.filter((sid) => {
         const n = idx.nodes.get(sid)!;
-        return !mapped.has(sid) && n.title === p.title && (n.url ?? undefined) === (p.kind === 'bookmark' ? p.url : undefined);
+        if (mapped.has(sid)) return false;
+        return p.kind === 'bookmark' ? n.url === p.url : n.url === undefined && n.title === p.title;
       });
+      localId = candidates.find((sid) => idx.nodes.get(sid)!.title === p.title) ?? candidates[0];
     }
 
     if (localId) {
@@ -307,7 +327,11 @@ export class BookmarkAdapter implements CollectionAdapter<BmPayload> {
       const curParent = n.parentId!;
       const curIndex = (idx.children.get(curParent) ?? []).indexOf(localId);
       if (curParent !== parentLocal || curIndex !== index) {
-        await this.api.move(localId, { parentId: parentLocal, index });
+        const sameFolderDown = curParent === parentLocal && index > curIndex;
+        await this.api.move(localId, {
+          parentId: parentLocal,
+          index: sameFolderDown && this.opts.moveIndexBeforeRemoval ? index + 1 : index,
+        });
         idx.children.set(curParent, (idx.children.get(curParent) ?? []).filter((x) => x !== localId));
         const dest = idx.children.get(parentLocal) ?? [];
         dest.splice(Math.min(index, dest.length), 0, localId);
@@ -334,9 +358,38 @@ export class BookmarkAdapter implements CollectionAdapter<BmPayload> {
   // -------------------------------------------------------------------------
   // 2. Local → outgoing
 
+  /**
+   * Collapse bookmarks with an identical URL inside the same folder. Already-synced copies win
+   * over never-synced ones; among synced copies the lowest sync id wins, which every device
+   * computes identically. Removed copies that were synced turn into tombstones in the diff below.
+   */
+  private async dedupe(idx: LocalIndex): Promise<number> {
+    let removed = 0;
+    for (const kids of idx.children.values()) {
+      const byUrl = new Map<string, string[]>();
+      for (const id of kids) {
+        const url = idx.nodes.get(id)?.url;
+        if (url !== undefined) byUrl.set(url, [...(byUrl.get(url) ?? []), id]);
+      }
+      for (const group of byUrl.values()) {
+        if (group.length < 2) continue;
+        const rank = (id: string) => this.state.local2sync[id] ?? '\uffff'; // unsynced sorts last
+        const keep = [...group].sort((a, b) => (rank(a) < rank(b) ? -1 : rank(a) > rank(b) ? 1 : group.indexOf(a) - group.indexOf(b)))[0];
+        for (const id of group) {
+          if (id === keep) continue;
+          await this.api.removeTree(id).catch(() => {});
+          removed++;
+        }
+      }
+    }
+    return removed;
+  }
+
   async collectChanges(): Promise<Outgoing<BmPayload>[]> {
     this.diffStartedAt = this.env.now();
-    const idx = indexTree(await this.api.getTree());
+    let idx = indexTree(await this.api.getTree());
+    this.dedupedCount = await this.dedupe(idx);
+    if (this.dedupedCount) idx = indexTree(await this.api.getTree());
     const dirty = await this.dirtyTimes();
     const out: Outgoing<BmPayload>[] = [];
     const present = new Set<string>();

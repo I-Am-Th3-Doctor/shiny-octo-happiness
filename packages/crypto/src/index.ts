@@ -1,20 +1,63 @@
 /**
- * @omnisync/crypto — the only place OmniSync touches key material.
+ * @omnisync/crypto — the only place OmniSync touches keys. Everything else in OmniSync handles
+ * either ciphertext or, inside the unlocked extension, plaintext it got from here.
  *
- * Key hierarchy
- * -------------
- *   master password ──Argon2id(salt = H(username))──▶ masterKey (32B, never stored)
- *     ├─ KDF(ctx "os-auth_", 1) ─▶ authKey  → sent to the server as a login credential
- *     └─ KDF(ctx "os-kek__", 2) ─▶ kek      → wraps/unwraps the vault key, never leaves the client
- *   vaultKey (32B random, generated once per account)
- *     └─ encrypts every record with XChaCha20-Poly1305; stored on the server only wrapped by kek
+ * WHAT HAPPENS, IN PLAIN LANGUAGE
+ * ===============================
  *
- * The server learns authKey (a one-way function of the password, useless for
- * decryption because kek is an independent KDF output) and ciphertext. Nothing else.
+ * 1. Your master password is stretched into keys on your device (Argon2id).
+ *    A password is easy to guess compared to a random key. If someone steals the server's database
+ *    they will try billions of guesses. Argon2id makes every single guess deliberately expensive:
+ *    each one needs 64 MiB of memory and several passes over it, so it takes about half a second to a second on a laptop.
+ *    Fast for you once at sign-in; ruinous for someone trying a billion passwords, because memory
+ *    can't be cheaply parallelised on GPUs or custom chips the way plain hashing can. Argon2id
+ *    won the Password Hashing Competition and is what OWASP recommends today.
  *
- * Envelope format: "v1." + base64url(nonce[24] || ciphertext+tag)
- * Record AAD binds ciphertext to (collection, id, modifiedAt, deviceId), so the
- * server cannot swap blobs between records or rewrite their LWW metadata.
+ * 2. The "salt" is derived from your username.
+ *    A salt makes the same password produce different keys for different people, so an attacker
+ *    can't precompute one giant table for everyone. Deriving it from the username means Zen and
+ *    Brave can both compute it without asking the server first.
+ *
+ * 3. The stretched secret is split into two unrelated keys.
+ *      authKey  — proves to the server that you know the password (like a login token).
+ *      kek      — "key-encryption key"; it never leaves your device.
+ *    They come from the same secret through a one-way split (BLAKE2b-based KDF), so knowing one
+ *    tells you nothing about the other. The server sees authKey but can't use it to decrypt.
+ *
+ * 4. Your data is encrypted with a random "vault key", not with the password directly.
+ *    The vault key is 32 random bytes made once when you create the account. The server stores
+ *    it only locked ("wrapped") with your kek. Why the extra layer: changing your password later
+ *    only means re-locking this one small key, not re-encrypting every bookmark and password.
+ *
+ * 5. Each item is sealed with XChaCha20-Poly1305.
+ *    This is "authenticated encryption": it hides the content AND detects any tampering. If the
+ *    server (or anyone in between) flips a single bit, decryption fails loudly instead of handing
+ *    you corrupted or attacker-chosen data. ChaCha20 is fast in software everywhere (no special
+ *    CPU instructions needed, unlike AES), which matters in browser WebAssembly and on phones.
+ *    The "X" variant uses a 24-byte random nonce (a never-repeat number used once per message).
+ *    That's long enough that picking it at random is safe forever; shorter nonces need careful
+ *    counters across devices, which is exactly the kind of thing that goes wrong in sync systems.
+ *
+ * 6. Each sealed item is bound to its label (associated data).
+ *    The record's type, id, timestamp and device are mixed into the authentication check without
+ *    being encrypted. So the server can't move your bank password into another record's slot, or
+ *    change a timestamp to make an old version "win" a conflict: any such change breaks the seal.
+ *
+ * 7. Content is padded to a multiple of 128 bytes before sealing.
+ *    Encryption hides content but not length. Padding stops the server from telling a short URL
+ *    from a long one, or guessing a password's length.
+ *
+ * 8. Keys are wiped from memory as soon as an operation is done (sodium.memzero), and the code is
+ *    libsodium, a widely audited library, rather than anything hand-written.
+ *
+ * TECHNICAL SUMMARY
+ * -----------------
+ *   master password ──Argon2id(t=3, m=64 MiB, salt = BLAKE2b(username))──▶ masterKey (never stored)
+ *     ├─ crypto_kdf(ctx "os-auth_", 1) ─▶ authKey  → sent to the server as a login credential
+ *     └─ crypto_kdf(ctx "os-kek__", 2) ─▶ kek      → wraps/unwraps the vault key, never leaves the client
+ *   vaultKey (32 B random) ──XChaCha20-Poly1305 under kek──▶ stored on the server
+ *   record ──pad(128)──XChaCha20-Poly1305 under vaultKey, AAD = collection‖id‖modifiedAt‖deviceId──▶
+ *     envelope "v1." + base64url(nonce[24] ‖ ciphertext ‖ tag[16])
  */
 import sodium from 'libsodium-wrappers-sumo';
 

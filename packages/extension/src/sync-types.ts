@@ -5,6 +5,8 @@ export interface DecryptedRecord<P> {
   modifiedAt: number;
   deviceId: string;
   payload: P;
+  /** The envelope as received, for adapters that keep an encrypted local replica (passwords). */
+  ciphertext?: string;
 }
 
 export interface Outgoing<P> {
@@ -13,6 +15,8 @@ export interface Outgoing<P> {
   payload: P;
   /** Fingerprint to record as the new baseline once the server accepts this write. */
   fp: string;
+  /** Already-encrypted envelope (same id/modifiedAt/deviceId). If absent, the orchestrator encrypts `payload`. */
+  ciphertext?: string;
 }
 
 /** What an adapter needs from its environment; all of it is injectable for tests. */

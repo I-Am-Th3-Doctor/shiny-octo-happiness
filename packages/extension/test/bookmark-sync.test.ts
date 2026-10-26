@@ -53,7 +53,7 @@ class Browser {
   async sync() {
     const localNow = () => Date.now() + this.clockSkew;
     const clock = await makeEnv(this.kv, this.vaultKey, this.config.deviceId, localNow);
-    const adapter = new BookmarkAdapter(this.bm, this.kv, clock.env);
+    const adapter = new BookmarkAdapter(this.bm, this.kv, clock.env, { moveIndexBeforeRemoval: this.bm.flavor === 'chromium' });
     return runSync({
       api: new ApiClient(SERVER, this.config.token, fetchImpl),
       kv: this.kv,
@@ -72,216 +72,359 @@ class Browser {
 }
 
 async function pair() {
-  const chrome = await new Browser('chromium').connect('signUp');
-  const firefox = await new Browser('firefox').connect('signIn');
-  return { chrome, firefox };
+  const brave = await new Browser('chromium').connect('signUp');
+  const zen = await new Browser('firefox').connect('signIn');
+  return { brave, zen };
 }
 
-describe('bookmark sync, Chromium <-> Firefox', () => {
+describe('bookmark sync, Zen (Firefox engine) <-> Brave (Chromium engine)', () => {
   it('syncs a new bookmark and nested folder, mapping the toolbar root across browsers', async () => {
-    const { chrome, firefox } = await pair();
-    const folder = await chrome.bm.add(chrome.bm.roots.toolbar!, 'Work');
-    await chrome.bm.add(folder.id, 'Tracker', 'https://tracker.example/board');
-    await chrome.bm.add(chrome.bm.roots.toolbar!, 'News', 'https://news.example');
-    await chrome.bm.add(chrome.bm.roots.other!, 'Recipes', 'https://food.example');
+    const { brave, zen } = await pair();
+    const folder = await brave.bm.add(brave.bm.roots.toolbar!, 'Work');
+    await brave.bm.add(folder.id, 'Tracker', 'https://tracker.example/board');
+    await brave.bm.add(brave.bm.roots.toolbar!, 'News', 'https://news.example');
+    await brave.bm.add(brave.bm.roots.other!, 'Recipes', 'https://food.example');
 
-    expect(await chrome.sync()).toMatchObject({ pushed: 4, conflicts: 0 });
-    expect(await firefox.sync()).toMatchObject({ pulled: 4, pushed: 0 });
+    expect(await brave.sync()).toMatchObject({ pushed: 4, conflicts: 0 });
+    expect(await zen.sync()).toMatchObject({ pulled: 4, pushed: 0 });
 
-    expect(firefox.bm.outline(firefox.bm.roots.toolbar!)).toEqual([
+    expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual([
       'Work/',
       'Work/Tracker -> https://tracker.example/board',
       'News -> https://news.example',
     ]);
-    expect(firefox.bm.outline(firefox.bm.roots.other!)).toEqual(['Recipes -> https://food.example']);
+    expect(zen.bm.outline(zen.bm.roots.other!)).toEqual(['Recipes -> https://food.example']);
   });
 
   it('is quiescent: repeated syncs push nothing and do not duplicate', async () => {
-    const { chrome, firefox } = await pair();
-    await chrome.bm.add(chrome.bm.roots.toolbar!, 'A', 'https://a.example');
-    await chrome.sync();
-    await firefox.sync();
+    const { brave, zen } = await pair();
+    await brave.bm.add(brave.bm.roots.toolbar!, 'A', 'https://a.example');
+    await brave.sync();
+    await zen.sync();
     for (let i = 0; i < 3; i++) {
-      expect(await chrome.sync()).toMatchObject({ pulled: 0, pushed: 0 });
-      expect(await firefox.sync()).toMatchObject({ pulled: 0, pushed: 0 });
+      expect(await brave.sync()).toMatchObject({ pulled: 0, pushed: 0 });
+      expect(await zen.sync()).toMatchObject({ pulled: 0, pushed: 0 });
     }
-    expect(chrome.bm.outline(chrome.bm.roots.toolbar!)).toEqual(['A -> https://a.example']);
-    expect(firefox.bm.outline(firefox.bm.roots.toolbar!)).toEqual(['A -> https://a.example']);
+    expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual(['A -> https://a.example']);
+    expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual(['A -> https://a.example']);
   });
 
   it('propagates edits, moves and deletions in both directions', async () => {
-    const { chrome, firefox } = await pair();
-    const f = await chrome.bm.add(chrome.bm.roots.toolbar!, 'Folder');
-    await chrome.bm.add(f.id, 'Inside', 'https://inside.example');
-    await chrome.bm.add(chrome.bm.roots.toolbar!, 'Loose', 'https://loose.example');
-    await chrome.sync();
-    await firefox.sync();
+    const { brave, zen } = await pair();
+    const f = await brave.bm.add(brave.bm.roots.toolbar!, 'Folder');
+    await brave.bm.add(f.id, 'Inside', 'https://inside.example');
+    await brave.bm.add(brave.bm.roots.toolbar!, 'Loose', 'https://loose.example');
+    await brave.sync();
+    await zen.sync();
 
     // Firefox renames and moves.
-    const loose = firefox.bm.find('Loose');
-    await firefox.bm.update(loose, { title: 'Loose (renamed)', url: 'https://loose.example/v2' });
-    await firefox.bm.move(loose, { parentId: firefox.bm.find('Folder'), index: 0 });
-    await firefox.sync();
-    await chrome.sync();
-    expect(chrome.bm.outline(chrome.bm.roots.toolbar!)).toEqual([
+    const loose = zen.bm.find('Loose');
+    await zen.bm.update(loose, { title: 'Loose (renamed)', url: 'https://loose.example/v2' });
+    await zen.bm.move(loose, { parentId: zen.bm.find('Folder'), index: 0 });
+    await zen.sync();
+    await brave.sync();
+    expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual([
       'Folder/',
       'Folder/Loose (renamed) -> https://loose.example/v2',
       'Folder/Inside -> https://inside.example',
     ]);
 
     // Chrome deletes the whole folder.
-    await chrome.bm.removeTree(chrome.bm.find('Folder'));
-    expect((await chrome.sync()).pushed).toBe(3); // folder + both children tombstoned
-    await firefox.sync();
-    expect(firefox.bm.outline(firefox.bm.roots.toolbar!)).toEqual([]);
+    await brave.bm.removeTree(brave.bm.find('Folder'));
+    expect((await brave.sync()).pushed).toBe(3); // folder + both children tombstoned
+    await zen.sync();
+    expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual([]);
   });
 
   it('first sync adopts identical existing bookmarks instead of duplicating them', async () => {
-    const chrome = await new Browser('chromium').connect('signUp');
-    const firefox = new Browser('firefox');
-    await chrome.bm.add(chrome.bm.roots.toolbar!, 'Shared', 'https://shared.example');
-    await firefox.bm.add(firefox.bm.roots.toolbar!, 'Shared', 'https://shared.example');
-    await firefox.bm.add(firefox.bm.roots.toolbar!, 'Only on Firefox', 'https://ff.example');
-    await chrome.sync();
-    await firefox.connect('signIn');
-    await firefox.sync();
-    await chrome.sync();
+    const brave = await new Browser('chromium').connect('signUp');
+    const zen = new Browser('firefox');
+    await brave.bm.add(brave.bm.roots.toolbar!, 'Shared', 'https://shared.example');
+    await zen.bm.add(zen.bm.roots.toolbar!, 'Shared', 'https://shared.example');
+    await zen.bm.add(zen.bm.roots.toolbar!, 'Only on Firefox', 'https://ff.example');
+    await brave.sync();
+    await zen.connect('signIn');
+    await zen.sync();
+    await brave.sync();
     const expected = ['Shared -> https://shared.example', 'Only on Firefox -> https://ff.example'];
-    expect(firefox.bm.outline(firefox.bm.roots.toolbar!)).toEqual(expected);
-    expect(chrome.bm.outline(chrome.bm.roots.toolbar!)).toEqual(expected);
+    expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual(expected);
+    expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual(expected);
   });
 
   it('places items from a root the other browser lacks (Firefox menu) into Other bookmarks', async () => {
-    const { chrome, firefox } = await pair();
-    await firefox.bm.add(firefox.bm.roots.menu!, 'From menu', 'https://menu.example');
-    await firefox.sync();
-    await chrome.sync();
-    expect(chrome.bm.outline(chrome.bm.roots.other!)).toEqual(['From menu -> https://menu.example']);
+    const { brave, zen } = await pair();
+    await zen.bm.add(zen.bm.roots.menu!, 'From menu', 'https://menu.example');
+    await zen.sync();
+    await brave.sync();
+    expect(brave.bm.outline(brave.bm.roots.other!)).toEqual(['From menu -> https://menu.example']);
     // ...and Chrome doesn't push it back as a move.
-    expect((await chrome.sync()).pushed).toBe(0);
+    expect((await brave.sync()).pushed).toBe(0);
   });
 
   describe('conflicts (last-write-wins per record)', () => {
     async function setup() {
       const p = await pair();
-      await p.chrome.bm.add(p.chrome.bm.roots.toolbar!, 'Doc', 'https://doc.example');
-      await p.chrome.sync();
-      await p.firefox.sync();
+      await p.brave.bm.add(p.brave.bm.roots.toolbar!, 'Doc', 'https://doc.example');
+      await p.brave.sync();
+      await p.zen.sync();
       return p;
     }
 
     it('later edit wins even when it syncs second', async () => {
-      const { chrome, firefox } = await setup();
+      const { brave, zen } = await setup();
       const t = Date.now();
-      const c = chrome.bm.find('Doc');
-      await chrome.bm.update(c, { title: 'Chrome edit' });
-      await chrome.touch(c, t);
-      const f = firefox.bm.find('Doc');
-      await firefox.bm.update(f, { title: 'Firefox edit (later)' });
-      await firefox.touch(f, t + 50);
+      const c = brave.bm.find('Doc');
+      await brave.bm.update(c, { title: 'Chrome edit' });
+      await brave.touch(c, t);
+      const f = zen.bm.find('Doc');
+      await zen.bm.update(f, { title: 'Firefox edit (later)' });
+      await zen.touch(f, t + 50);
 
-      await chrome.sync();
-      const r = await firefox.sync(); // sees chrome's older edit, keeps its own, pushes
+      await brave.sync();
+      const r = await zen.sync(); // sees chrome's older edit, keeps its own, pushes
       expect(r.pushed).toBe(1);
-      await chrome.sync();
-      expect(chrome.bm.outline(chrome.bm.roots.toolbar!)).toEqual(['Firefox edit (later) -> https://doc.example']);
-      expect(firefox.bm.outline(firefox.bm.roots.toolbar!)).toEqual(['Firefox edit (later) -> https://doc.example']);
+      await brave.sync();
+      expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual(['Firefox edit (later) -> https://doc.example']);
+      expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual(['Firefox edit (later) -> https://doc.example']);
     });
 
     it('later edit wins when it syncs first', async () => {
-      const { chrome, firefox } = await setup();
+      const { brave, zen } = await setup();
       const t = Date.now();
-      const c = chrome.bm.find('Doc');
-      await chrome.bm.update(c, { title: 'Chrome edit (later)' });
-      await chrome.touch(c, t + 50);
-      const f = firefox.bm.find('Doc');
-      await firefox.bm.update(f, { title: 'Firefox edit' });
-      await firefox.touch(f, t);
+      const c = brave.bm.find('Doc');
+      await brave.bm.update(c, { title: 'Chrome edit (later)' });
+      await brave.touch(c, t + 50);
+      const f = zen.bm.find('Doc');
+      await zen.bm.update(f, { title: 'Firefox edit' });
+      await zen.touch(f, t);
 
-      await chrome.sync();
-      await firefox.sync(); // its own edit is older: remote wins locally
-      await chrome.sync();
-      expect(chrome.bm.outline(chrome.bm.roots.toolbar!)).toEqual(['Chrome edit (later) -> https://doc.example']);
-      expect(firefox.bm.outline(firefox.bm.roots.toolbar!)).toEqual(['Chrome edit (later) -> https://doc.example']);
+      await brave.sync();
+      await zen.sync(); // its own edit is older: remote wins locally
+      await brave.sync();
+      expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual(['Chrome edit (later) -> https://doc.example']);
+      expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual(['Chrome edit (later) -> https://doc.example']);
     });
 
     it('an edit newer than a remote delete resurrects the bookmark', async () => {
-      const { chrome, firefox } = await setup();
+      const { brave, zen } = await setup();
       const t = Date.now();
-      const c = chrome.bm.find('Doc');
-      await chrome.bm.removeTree(c);
-      await chrome.touch(c, t);
-      const f = firefox.bm.find('Doc');
-      await firefox.bm.update(f, { title: 'Still needed' });
-      await firefox.touch(f, t + 50);
-      await chrome.sync();
-      await firefox.sync();
-      await chrome.sync();
-      expect(chrome.bm.outline(chrome.bm.roots.toolbar!)).toEqual(['Still needed -> https://doc.example']);
+      const c = brave.bm.find('Doc');
+      await brave.bm.removeTree(c);
+      await brave.touch(c, t);
+      const f = zen.bm.find('Doc');
+      await zen.bm.update(f, { title: 'Still needed' });
+      await zen.touch(f, t + 50);
+      await brave.sync();
+      await zen.sync();
+      await brave.sync();
+      expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual(['Still needed -> https://doc.example']);
     });
 
     it("corrects a device's skewed clock using server time", async () => {
-      const { chrome, firefox } = await setup();
-      chrome.clockSkew = 8 * 60_000; // 8 minutes fast: within server tolerance, but would win every conflict
-      await chrome.sync(); // learns the offset
-      const c = chrome.bm.find('Doc');
-      await chrome.bm.update(c, { title: 'skewed' });
-      await chrome.sync();
-      const f = firefox.bm.find('Doc');
-      await firefox.bm.update(f, { title: 'honest, later' });
-      await firefox.touch(f, Date.now() + 10);
-      await firefox.sync();
-      await chrome.sync();
-      expect(chrome.bm.outline(chrome.bm.roots.toolbar!)).toEqual(['honest, later -> https://doc.example']);
+      const { brave, zen } = await setup();
+      brave.clockSkew = 8 * 60_000; // 8 minutes fast: within server tolerance, but would win every conflict
+      await brave.sync(); // learns the offset
+      const c = brave.bm.find('Doc');
+      await brave.bm.update(c, { title: 'skewed' });
+      await brave.sync();
+      const f = zen.bm.find('Doc');
+      await zen.bm.update(f, { title: 'honest, later' });
+      await zen.touch(f, Date.now() + 10);
+      await zen.sync();
+      await brave.sync();
+      expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual(['honest, later -> https://doc.example']);
+    });
+  });
+
+  describe('moves within a folder (order preserved exactly)', () => {
+    async function folderOf(b: Browser, names: string[]) {
+      const f = await b.bm.add(b.bm.roots.toolbar!, 'Ordered');
+      for (const n of names) await b.bm.add(f.id, n, `https://${n.toLowerCase()}.example`);
+      return f.id;
+    }
+    const order = (b: Browser) => b.bm.outline(b.bm.find('Ordered')).map((l) => l.split(' ->')[0]);
+
+    it('moving an item down in Zen lands in the same slot in Brave (Chromium index quirk)', async () => {
+      const { brave, zen } = await pair();
+      await folderOf(brave, ['A', 'B', 'C', 'D']);
+      await brave.sync();
+      await zen.sync();
+      await zen.bm.move(zen.bm.find('A'), { index: 2 }); // B C A D
+      await zen.sync();
+      await brave.sync();
+      expect(order(brave)).toEqual(['B', 'C', 'A', 'D']);
+      expect(order(zen)).toEqual(['B', 'C', 'A', 'D']);
+    });
+
+    it('a lone downward move is applied at the exact index on Chromium', async () => {
+      // Real reorders usually resolve as upward moves because siblings are applied in index
+      // order, so drive the adapter directly with a single record that moves A down two slots.
+      const { brave } = await pair();
+      const f = await folderOf(brave, ['A', 'B', 'C', 'D']);
+      await brave.sync();
+      const state = (await brave.kv.get<{ local2sync: Record<string, string> }>('bm.state'))!;
+      const aId = state.local2sync[brave.bm.find('A')]!;
+      const parent = state.local2sync[f]!;
+      const clock = await makeEnv(brave.kv, brave.vaultKey, brave.config.deviceId);
+      const adapter = new BookmarkAdapter(brave.bm, brave.kv, clock.env, { moveIndexBeforeRemoval: true });
+      await adapter.begin();
+      await adapter.applyRemote([
+        { id: aId, modifiedAt: Date.now() + 1000, deviceId: 'zzz', payload: { kind: 'bookmark', title: 'A', url: 'https://a.example', parent, index: 2 } },
+      ]);
+      expect(order(brave)).toEqual(['B', 'C', 'A', 'D']);
+    });
+
+    it('without the Chromium index compensation the same move lands one slot too high', async () => {
+      const { brave } = await pair();
+      const f = await folderOf(brave, ['A', 'B', 'C', 'D']);
+      await brave.sync();
+      const state = (await brave.kv.get<{ local2sync: Record<string, string> }>('bm.state'))!;
+      const clock = await makeEnv(brave.kv, brave.vaultKey, brave.config.deviceId);
+      const adapter = new BookmarkAdapter(brave.bm, brave.kv, clock.env, { moveIndexBeforeRemoval: false });
+      await adapter.begin();
+      await adapter.applyRemote([
+        {
+          id: state.local2sync[brave.bm.find('A')]!,
+          modifiedAt: Date.now() + 1000,
+          deviceId: 'zzz',
+          payload: { kind: 'bookmark', title: 'A', url: 'https://a.example', parent: state.local2sync[f]!, index: 2 },
+        },
+      ]);
+      expect(order(brave)).toEqual(['B', 'A', 'C', 'D']); // proves the fake reproduces Chromium's behaviour
+    });
+
+    it('moving an item up in Brave lands in the same slot in Zen', async () => {
+      const { brave, zen } = await pair();
+      await folderOf(brave, ['A', 'B', 'C', 'D']);
+      await brave.sync();
+      await zen.sync();
+      await brave.bm.move(brave.bm.find('D'), { index: 1 }); // A D B C
+      await brave.sync();
+      await zen.sync();
+      expect(order(zen)).toEqual(['A', 'D', 'B', 'C']);
+      expect((await brave.sync()).pushed).toBe(0);
+    });
+
+    it('moves a bookmark between nested folders', async () => {
+      const { brave, zen } = await pair();
+      const outer = await zen.bm.add(zen.bm.roots.toolbar!, 'Outer');
+      const inner = await zen.bm.add(outer.id, 'Inner');
+      const bm = await zen.bm.add(zen.bm.roots.other!, 'Mover', 'https://mover.example');
+      await zen.sync();
+      await brave.sync();
+      await zen.bm.move(bm.id, { parentId: inner.id });
+      await zen.sync();
+      await brave.sync();
+      expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual(['Outer/', 'Outer/Inner/', 'Outer/Inner/Mover -> https://mover.example']);
+      expect(brave.bm.outline(brave.bm.roots.other!)).toEqual([]);
+    });
+  });
+
+  describe('duplicate URLs within a folder', () => {
+    it('first sync adopts a same-URL bookmark even when the titles differ', async () => {
+      const brave = await new Browser('chromium').connect('signUp');
+      await brave.bm.add(brave.bm.roots.toolbar!, 'GitHub', 'https://github.com/');
+      await brave.sync();
+      const zen = new Browser('firefox');
+      await zen.bm.add(zen.bm.roots.toolbar!, 'GitHub - Home', 'https://github.com/');
+      await zen.connect('signIn');
+      await zen.sync();
+      await brave.sync();
+      expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual(['GitHub -> https://github.com/']);
+      expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual(['GitHub -> https://github.com/']);
+    });
+
+    it('the same URL added in both browsers before syncing ends up once in both', async () => {
+      const { brave, zen } = await pair();
+      await brave.bm.add(brave.bm.roots.toolbar!, 'Docs (brave)', 'https://docs.example');
+      await zen.bm.add(zen.bm.roots.toolbar!, 'Docs (zen)', 'https://docs.example');
+      for (let i = 0; i < 2; i++) {
+        await brave.sync();
+        await zen.sync();
+      }
+      const b = brave.bm.outline(brave.bm.roots.toolbar!);
+      const z = zen.bm.outline(zen.bm.roots.toolbar!);
+      expect(b).toHaveLength(1);
+      expect(z).toEqual(b);
+      expect((await brave.sync()).pushed).toBe(0);
+      expect((await zen.sync()).pushed).toBe(0);
+    });
+
+    it('collapses local duplicates in one folder but keeps the same URL in different folders', async () => {
+      const { brave, zen } = await pair();
+      const f = await brave.bm.add(brave.bm.roots.other!, 'Reading');
+      await brave.bm.add(f.id, 'Article', 'https://a.example/post');
+      await brave.bm.add(f.id, 'Article again', 'https://a.example/post');
+      await brave.bm.add(brave.bm.roots.toolbar!, 'Article', 'https://a.example/post');
+      await brave.sync();
+      await zen.sync();
+      const expected = ['Reading/', 'Reading/Article -> https://a.example/post'];
+      expect(brave.bm.outline(brave.bm.roots.other!)).toEqual(expected);
+      expect(zen.bm.outline(zen.bm.roots.other!)).toEqual(expected);
+      expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual(['Article -> https://a.example/post']);
+    });
+
+    it('a duplicate created by a move is collapsed on both sides', async () => {
+      const { brave, zen } = await pair();
+      const f = await zen.bm.add(zen.bm.roots.toolbar!, 'F');
+      await zen.bm.add(f.id, 'One', 'https://dup.example');
+      const loose = await zen.bm.add(zen.bm.roots.toolbar!, 'Two', 'https://dup.example');
+      await zen.sync();
+      await brave.sync();
+      await zen.bm.move(loose.id, { parentId: f.id });
+      await zen.sync();
+      await brave.sync();
+      expect(zen.bm.outline(zen.bm.roots.toolbar!)).toHaveLength(2);
+      expect(brave.bm.outline(brave.bm.roots.toolbar!)).toEqual(zen.bm.outline(zen.bm.roots.toolbar!));
     });
   });
 
   it('ignores records the server tampered with', async () => {
-    const { chrome, firefox } = await pair();
-    await chrome.bm.add(chrome.bm.roots.toolbar!, 'Real', 'https://real.example');
-    await chrome.sync();
+    const { brave, zen } = await pair();
+    await brave.bm.add(brave.bm.roots.toolbar!, 'Real', 'https://real.example');
+    await brave.sync();
     await db.query(`update records set ciphertext = 'v1.' || substr(ciphertext, 5) || 'AA'`);
-    const r = await firefox.sync();
+    const r = await zen.sync();
     expect(r).toMatchObject({ pulled: 0, undecryptable: 1 });
-    expect(firefox.bm.outline(firefox.bm.roots.toolbar!)).toEqual([]);
+    expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual([]);
   });
 
   it('server-side swap of two ciphertexts is detected (AAD binds record id)', async () => {
-    const { chrome, firefox } = await pair();
-    await chrome.bm.add(chrome.bm.roots.toolbar!, 'One', 'https://1.example');
-    await chrome.bm.add(chrome.bm.roots.toolbar!, 'Two', 'https://2.example');
-    await chrome.sync();
+    const { brave, zen } = await pair();
+    await brave.bm.add(brave.bm.roots.toolbar!, 'One', 'https://1.example');
+    await brave.bm.add(brave.bm.roots.toolbar!, 'Two', 'https://2.example');
+    await brave.sync();
     await db.query(`
       with r as (select id, ciphertext, row_number() over (order by seq) n from records)
       update records set ciphertext = (select ciphertext from r where r.n = 3 - (select n from r r2 where r2.id = records.id))`);
-    expect((await firefox.sync()).undecryptable).toBe(2);
+    expect((await zen.sync()).undecryptable).toBe(2);
   });
 
   it('sign-out and back in re-syncs without duplicates', async () => {
-    const { chrome, firefox } = await pair();
-    await chrome.bm.add(chrome.bm.roots.toolbar!, 'Keep', 'https://keep.example');
-    await chrome.sync();
-    await firefox.sync();
-    await resetSyncState(firefox.kv);
-    await firefox.connect('signIn');
-    expect((await firefox.sync()).pushed).toBe(0);
-    expect(firefox.bm.outline(firefox.bm.roots.toolbar!)).toEqual(['Keep -> https://keep.example']);
-    expect(await chrome.sync()).toMatchObject({ pulled: 0, pushed: 0 }); // no echo of its own write either
+    const { brave, zen } = await pair();
+    await brave.bm.add(brave.bm.roots.toolbar!, 'Keep', 'https://keep.example');
+    await brave.sync();
+    await zen.sync();
+    await resetSyncState(zen.kv);
+    await zen.connect('signIn');
+    expect((await zen.sync()).pushed).toBe(0);
+    expect(zen.bm.outline(zen.bm.roots.toolbar!)).toEqual(['Keep -> https://keep.example']);
+    expect(await brave.sync()).toMatchObject({ pulled: 0, pushed: 0 }); // no echo of its own write either
   });
 
   it('unlock re-derives the vault key offline and rejects a wrong password', async () => {
-    const { chrome } = await pair();
-    expect(oc.toB64(await unlock(chrome.config, 'correct horse battery staple'))).toBe(oc.toB64(chrome.vaultKey));
-    await expect(unlock(chrome.config, 'nope nope nope')).rejects.toThrow('Wrong master password');
+    const { brave } = await pair();
+    expect(oc.toB64(await unlock(brave.config, 'correct horse battery staple'))).toBe(oc.toB64(brave.vaultKey));
+    await expect(unlock(brave.config, 'nope nope nope')).rejects.toThrow('Wrong master password');
   });
 
   it('handles many bookmarks across multiple pull pages and push chunks', async () => {
-    const { chrome, firefox } = await pair();
-    const f = await chrome.bm.add(chrome.bm.roots.other!, 'Bulk');
-    for (let i = 0; i < 650; i++) await chrome.bm.add(f.id, `b${i}`, `https://bulk.example/${i}`);
-    expect((await chrome.sync()).pushed).toBe(651);
-    expect((await firefox.sync()).pulled).toBe(651);
-    const out = firefox.bm.outline(firefox.bm.roots.other!);
+    const { brave, zen } = await pair();
+    const f = await brave.bm.add(brave.bm.roots.other!, 'Bulk');
+    for (let i = 0; i < 650; i++) await brave.bm.add(f.id, `b${i}`, `https://bulk.example/${i}`);
+    expect((await brave.sync()).pushed).toBe(651);
+    expect((await zen.sync()).pulled).toBe(651);
+    const out = zen.bm.outline(zen.bm.roots.other!);
     expect(out).toHaveLength(651);
     expect(out[1]).toBe('Bulk/b0 -> https://bulk.example/0');
     expect(out[650]).toBe('Bulk/b649 -> https://bulk.example/649');

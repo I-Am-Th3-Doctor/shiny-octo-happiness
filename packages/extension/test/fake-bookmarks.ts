@@ -70,9 +70,13 @@ export class FakeBookmarks implements BookmarksApi {
   async move(id: string, dest: { parentId?: string; index?: number }) {
     const n = this.nodes.get(id)!;
     const from = this.nodes.get(n.parentId!)!;
-    from.children!.splice(from.children!.indexOf(id), 1);
+    const oldIndex = from.children!.indexOf(id);
+    from.children!.splice(oldIndex, 1);
     const to = this.nodes.get(dest.parentId ?? n.parentId!)!;
-    to.children!.splice(Math.min(dest.index ?? to.children!.length, to.children!.length), 0, id);
+    let index = dest.index ?? to.children!.length;
+    // Chromium counts the destination index before removing the node from its old slot.
+    if (this.flavor === 'chromium' && to === from && dest.index !== undefined && index > oldIndex) index -= 1;
+    to.children!.splice(Math.min(index, to.children!.length), 0, id);
     n.parentId = to.id;
     return this.toNode(id, false);
   }

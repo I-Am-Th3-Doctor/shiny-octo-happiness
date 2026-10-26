@@ -8,7 +8,7 @@ export const CURSOR_KEY = 'sync.cursor';
 const OFFSET_KEY = 'sync.clockOffset';
 const PUSH_CHUNK = 200;
 /** Every adapter keeps its local metadata under one of these prefixes. */
-const SYNC_KEY_PREFIXES = ['sync.', 'bm.'];
+const SYNC_KEY_PREFIXES = ['sync.', 'bm.', 'pw.'];
 
 export interface SyncReport {
   pulled: number;
@@ -50,7 +50,14 @@ function decryptAll(vaultKey: Uint8Array, records: WireRecord[]) {
   let bad = 0;
   for (const r of records) {
     try {
-      ok.push({ collection: r.collection, id: r.id, modifiedAt: r.modifiedAt, deviceId: r.deviceId, payload: oc.decryptRecord(vaultKey, r, r.ciphertext) });
+      ok.push({
+        collection: r.collection,
+        id: r.id,
+        modifiedAt: r.modifiedAt,
+        deviceId: r.deviceId,
+        payload: oc.decryptRecord(vaultKey, r, r.ciphertext),
+        ciphertext: r.ciphertext,
+      });
     } catch {
       bad++; // tampered or foreign ciphertext: never applied, never logged
     }
@@ -103,7 +110,9 @@ export async function runSync(deps: SyncDeps): Promise<SyncReport> {
           collection: a.collection,
           id: o.id,
           modifiedAt: o.modifiedAt,
-          ciphertext: oc.encryptRecord(vaultKey, { collection: a.collection, id: o.id, modifiedAt: o.modifiedAt, deviceId }, o.payload),
+          ciphertext:
+            o.ciphertext ??
+            oc.encryptRecord(vaultKey, { collection: a.collection, id: o.id, modifiedAt: o.modifiedAt, deviceId }, o.payload),
         }));
         const sentAt = localNow();
         const res = await api.push(wire);

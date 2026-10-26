@@ -6,66 +6,15 @@
  *
  * Usage: pnpm e2e   (builds first). Env: CHROMIUM_PATH to override the browser binary, HEADED=1 to watch.
  */
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { serve } from '@hono/node-server';
-import { chromium, type BrowserContext, type Page } from 'playwright-core';
-import { createApp } from '@omnisync/backend';
-import { createPgliteDb, migrate } from '@omnisync/backend/db';
+import { authenticate, closeProfile, launchProfile, log, openExtensionPage, startBackend, waitFor } from './helpers.ts';
 
-const EXT = resolve(import.meta.dirname, '../.output/chrome-mv3');
 const DEADLINE_MS = 30_000;
 const URL_UNDER_TEST = `https://example.org/omnisync-e2e-${Date.now()}`;
 const TITLE = 'OmniSync E2E bookmark';
 
-function chromiumPath() {
-  const candidates = [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'];
-  return candidates.find((p) => p && existsSync(p));
-}
-
-async function launchProfile(name: string): Promise<{ ctx: BrowserContext; extId: string; dir: string }> {
-  const dir = mkdtempSync(join(tmpdir(), `omnisync-${name}-`));
-  const ctx = await chromium.launchPersistentContext(dir, {
-    executablePath: chromiumPath(),
-    headless: process.env.HEADED !== '1',
-    args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-  });
-  const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'));
-  return { ctx, extId: new URL(sw.url()).host, dir };
-}
-
-async function openPopup(ctx: BrowserContext, extId: string): Promise<Page> {
-  const page = await ctx.newPage();
-  await page.goto(`chrome-extension://${extId}/popup.html`);
-  return page;
-}
-
-async function authenticate(page: Page, server: string, mode: 'sign-up' | 'sign-in', device: string) {
-  await page.waitForSelector('#view-signed-out:not([hidden])');
-  await page.fill('#server', server);
-  await page.fill('#username', 'e2e-user@example.com');
-  await page.fill('#password', 'a long and correct master password');
-  await page.fill('#device-name', device);
-  const t0 = Date.now();
-  await page.click(`#${mode}`);
-  await page.waitForSelector('#view-ready:not([hidden])', { timeout: 60_000 });
-  return Date.now() - t0;
-}
-
-const log = (s: string) => console.log(`[e2e] ${s}`);
-
 async function main() {
-  if (!existsSync(join(EXT, 'manifest.json'))) throw new Error('Build the extension first (pnpm build)');
-
-  const db = await createPgliteDb();
-  await migrate(db);
-  const app = createApp({ db });
-  const server = await new Promise<ReturnType<typeof serve>>((res) => {
-    const s = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, () => res(s));
-  });
-  const addr = server.address();
-  const serverUrl = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
+  const backend = await startBackend();
+  const { db, url: serverUrl } = backend;
   log(`backend on ${serverUrl}`);
 
   const a = await launchProfile('profile-a');
@@ -73,9 +22,9 @@ async function main() {
   log(`extension loaded in two profiles (id ${a.extId})`);
 
   try {
-    const popupA = await openPopup(a.ctx, a.extId);
+    const popupA = await openExtensionPage(a, 'popup.html');
     log(`profile A: account created in ${await authenticate(popupA, serverUrl, 'sign-up', 'Profile A')} ms (Argon2id 64 MiB in the service worker)`);
-    const popupB = await openPopup(b.ctx, b.extId);
+    const popupB = await openExtensionPage(b, 'popup.html');
     log(`profile B: signed in in ${await authenticate(popupB, serverUrl, 'sign-in', 'Profile B')} ms`);
     // Let both finish their initial sync so the timer below measures only propagation.
     await new Promise((r) => setTimeout(r, 3000));
@@ -111,6 +60,37 @@ async function main() {
     if (!renamed) throw new Error('rename did not propagate B → A');
     log(`profile A: rename from B arrived after ${((Date.now() - t1) / 1000).toFixed(1)} s`);
 
+    // Folder structure, moves and in-folder order.
+    const titlesIn = (p: typeof popupA, folder: string) =>
+      p.evaluate(async (name) => {
+        const [f] = (await chrome.bookmarks.search({ title: name })).filter((n) => !n.url);
+        return f ? (await chrome.bookmarks.getChildren(f.id)).map((n) => n.title).join(',') : null;
+      }, folder);
+    await popupA.evaluate(async () => {
+      const f = await chrome.bookmarks.create({ parentId: '1', title: 'Ordered' });
+      const sub = await chrome.bookmarks.create({ parentId: f.id, title: 'Sub' });
+      for (const t of ['A', 'B', 'C', 'D']) await chrome.bookmarks.create({ parentId: f.id, title: t, url: `https://${t.toLowerCase()}.example/` });
+      await chrome.bookmarks.create({ parentId: sub.id, title: 'Deep', url: 'https://deep.example/' });
+    });
+    await waitFor('folder tree in B', async () => (await titlesIn(popupB, 'Ordered')) === 'Sub,A,B,C,D' && (await titlesIn(popupB, 'Sub')) === 'Deep');
+    log('profile B: nested folder structure arrived intact');
+    await popupB.evaluate(async () => {
+      const [a] = await chrome.bookmarks.search({ url: 'https://a.example/' });
+      await chrome.bookmarks.move(a!.id, { parentId: a!.parentId, index: 4 }); // Chromium: lands at 3 → Sub,B,C,A,D
+      const [deep] = await chrome.bookmarks.search({ url: 'https://deep.example/' });
+      await chrome.bookmarks.move(deep!.id, { parentId: '2' }); // out of the folder into Other bookmarks
+    });
+    await waitFor('reorder + move in A', async () => (await titlesIn(popupA, 'Ordered')) === 'Sub,B,C,A,D' && (await titlesIn(popupA, 'Sub')) === '');
+    log('profile A: in-folder reorder and cross-folder move from B arrived in the exact order');
+
+    // Duplicate URL in the same folder collapses to one, in both profiles.
+    await popupA.evaluate(async () => {
+      const [b] = await chrome.bookmarks.search({ url: 'https://b.example/' });
+      await chrome.bookmarks.create({ parentId: b!.parentId, title: 'B again', url: 'https://b.example/' });
+    });
+    await waitFor('dedupe in both', async () => (await titlesIn(popupA, 'Ordered')) === 'Sub,B,C,A,D' && (await titlesIn(popupB, 'Ordered')) === 'Sub,B,C,A,D');
+    log('duplicate URL added in the same folder was collapsed to one in both profiles');
+
     // Steady state: idle past the post-sign-in window so only alarm-driven windows are active,
     // then delete in A and expect it gone from B.
     log('idling 40 s so both service workers fall back to alarm-driven sync…');
@@ -138,12 +118,9 @@ async function main() {
     log(`server database holds ${n} records, all ciphertext (no URL, title, or username found)`);
     log('PASS');
   } finally {
-    await a.ctx.close();
-    await b.ctx.close();
-    server.close();
-    await db.close();
-    rmSync(a.dir, { recursive: true, force: true });
-    rmSync(b.dir, { recursive: true, force: true });
+    await closeProfile(a);
+    await closeProfile(b);
+    await backend.close();
   }
 }
 

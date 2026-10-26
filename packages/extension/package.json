@@ -3,17 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "OmniSync browser extension (Chromium MV3 + Firefox) built with WXT.",
+  "description": "OmniSync browser extension: one WXT codebase built for Brave (Chromium MV3) and Zen (Firefox MV3).",
   "scripts": {
-    "dev": "wxt",
-    "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
-    "zip": "wxt zip && wxt zip -b firefox",
+    "dev:brave": "wxt -b chrome",
+    "dev:zen": "wxt -b firefox --mv3",
+    "build": "pnpm build:brave && pnpm build:zen",
+    "build:brave": "wxt build -b chrome",
+    "build:zen": "wxt build -b firefox --mv3",
+    "zip": "wxt zip -b chrome && wxt zip -b firefox --mv3",
     "postinstall": "wxt prepare",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "e2e": "wxt build && tsx e2e/two-profiles.ts"
+    "e2e": "wxt build -b chrome && tsx e2e/two-profiles.ts && tsx e2e/passwords.ts"
   },
   "dependencies": {
     "@omnisync/crypto": "workspace:*",
