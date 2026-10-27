@@ -35,17 +35,26 @@ export class ApiClient {
   }
 
   private async call<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-    const res = await this.fetchImpl(this.baseUrl.replace(/\/+$/, '') + path, {
-      method,
-      headers: {
-        ...(body !== undefined && { 'content-type': 'application/json' }),
-        ...(this.token && { authorization: `Bearer ${this.token}` }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: 'omit',
-      cache: 'no-store',
-      signal,
-    });
+    let res: Response;
+    try {
+      res = await this.fetchImpl(this.baseUrl.replace(/\/+$/, '') + path, {
+        method,
+        headers: {
+          ...(body !== undefined && { 'content-type': 'application/json' }),
+          ...(this.token && { authorization: `Bearer ${this.token}` }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        credentials: 'omit',
+        cache: 'no-store',
+        signal,
+      });
+    } catch (e) {
+      // fetch() rejects with a bare TypeError ("Failed to fetch") when nothing answers at all.
+      if (e instanceof TypeError) {
+        throw new ApiError(0, `Can't reach the OmniSync server at ${this.baseUrl}. Check that it's running (pnpm dev:backend) and the address is right.`);
+      }
+      throw e;
+    }
     if (!res.ok) {
       const err = (await res.json().catch(() => null)) as { error?: string } | null;
       throw new ApiError(res.status, err?.error ?? `HTTP ${res.status}`);
@@ -53,6 +62,7 @@ export class ApiClient {
     return (res.status === 204 ? undefined : await res.json()) as T;
   }
 
+  health = () => this.call<{ ok: boolean }>('GET', '/health');
   register = (b: RegisterRequest) => this.call<RegisterResponse>('POST', '/v1/accounts', b);
   login = (b: LoginRequest) => this.call<LoginResponse>('POST', '/v1/sessions', b);
   logout = () => this.call<void>('DELETE', '/v1/sessions/current');

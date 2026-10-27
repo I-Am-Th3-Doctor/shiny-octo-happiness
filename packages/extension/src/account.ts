@@ -35,6 +35,7 @@ export async function signIn(c: Credentials, opts: AuthOptions = {}): Promise<{ 
   await oc.ready();
   const kdf = opts.kdf ?? oc.KDF_PARAMS_V1;
   const api = new ApiClient(c.serverUrl, null, opts.fetch);
+  await api.health(); // fail fast, before the ~1 s key derivation, if the server is unreachable
   const loginId = oc.deriveLoginId(c.username);
   const keys = derive(c, kdf);
   try {
@@ -66,6 +67,7 @@ export async function signUp(c: Credentials, opts: AuthOptions = {}) {
   await oc.ready();
   const kdf = opts.kdf ?? oc.KDF_PARAMS_V1;
   const api = new ApiClient(c.serverUrl, null, opts.fetch);
+  await api.health();
   const keys = derive(c, kdf);
   const vaultKey = oc.generateVaultKey();
   try {

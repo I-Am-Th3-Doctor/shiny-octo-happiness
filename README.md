@@ -28,6 +28,7 @@ The two builds are `wxt build -b chrome` for Brave and `wxt build -b firefox --m
 
 **First run:**
 
+0. **Start the relay server and leave it running** (`pnpm dev:backend`). The extension can't create an account or sync without it. The popup's server address defaults to `http://127.0.0.1:8787`, which is where it listens. If you see *"Can't reach the OmniSync server"*, the server isn't running or the address doesn't match.
 1. In either browser, click the OmniSync toolbar button and choose **Create account**. Pick a username and a strong master password.
 2. In the other browser, choose **Sign in** with the same username and master password.
 3. **Zen only:** Firefox-based browsers make "access to all websites" opt-in. Click **Allow on all sites** in the OmniSync popup. Without it, password capture and autofill can't run on pages.

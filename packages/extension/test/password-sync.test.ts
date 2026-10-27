@@ -189,7 +189,7 @@ describe('password vault sync', () => {
     fetchImpl = async () => {
       throw new TypeError('network down');
     };
-    await expect(zen.sync()).rejects.toThrow('network down');
+    await expect(zen.sync()).rejects.toThrow(/Can't reach the OmniSync server/);
     fetchImpl = realFetch;
     expect((await zen.sync()).pushed).toBe(1);
     await brave.sync();
