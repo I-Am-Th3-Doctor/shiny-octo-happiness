@@ -71,6 +71,7 @@
     <dimen name="size_menu_icon">28dp</dimen>       <!-- shortcut / action icons in that menu -->
     <dimen name="size_menu_min_width">200dp</dimen>
     <dimen name="size_menu_max_width">300dp</dimen>
+    <dimen name="space_menu_margin">12dp</dimen>     <!-- the menu's clearance from the screen's safe edges -->
     <dimen name="blur_radius">24dp</dimen>         <!-- backdrop blur behind glass surfaces -->
     <dimen name="stroke_dash">4dp</dimen>
     <dimen name="elevation_raised">8dp</dimen>

@@ -113,7 +113,7 @@ class AppMenuDeviceTest {
 
             // Every shortcut row comes before App info.
             home.onActivity { a ->
-                val rows = a.appMenu.contentView as ViewGroup
+                val rows = a.appMenu.rowsView!!
                 val texts = (0 until rows.childCount).mapNotNull { i ->
                     val row = rows.getChildAt(i) as? ViewGroup ?: return@mapNotNull null // the hairline
                     (0 until row.childCount).map(row::getChildAt).filterIsInstance<TextView>().firstOrNull()?.text?.toString()
