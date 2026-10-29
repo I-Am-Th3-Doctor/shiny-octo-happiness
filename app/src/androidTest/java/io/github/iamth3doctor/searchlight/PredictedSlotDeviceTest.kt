@@ -148,7 +148,8 @@ class PredictedSlotDeviceTest {
             s = slots()
             assertEquals(predicted to FavoriteSlots.Kind.SLOT6_FIXED, s[5])
             assertEquals(manual.take(5) + predicted, app.prefs.manualFavorites)
-            main { app.prefs.savePredictions(listOf(key("com.android.settings")), System.currentTimeMillis()) }
+            val other = key("com.android.settings") // (key() hops to the main thread itself)
+            main { app.prefs.savePredictions(listOf(other), System.currentTimeMillis()) }
             assertEquals("a pinned slot stays put", predicted, slots()[5].first)
 
             // Long-press it again: Unpin, and the slot predicts again.

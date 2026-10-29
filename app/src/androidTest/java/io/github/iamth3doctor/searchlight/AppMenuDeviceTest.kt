@@ -89,7 +89,9 @@ class AppMenuDeviceTest {
         // makes it register its own if nothing has yet. Prefer one that also has widgets.
         fun withShortcuts(): List<AppEntry> {
             var found = emptyList<AppEntry>()
-            main { found = app.apps.apps.filter { !it.isSelf && app.shortcuts.menuFor(it).shortcuts.isNotEmpty() } }
+            // Not the icon packs the icon-pack tests install: their shortcuts open other apps' screens.
+            val packs = app.iconPacks.installedPacks().map { it.packageName }.toSet()
+            main { found = app.apps.apps.filter { !it.isSelf && it.packageName !in packs && app.shortcuts.menuFor(it).shortcuts.isNotEmpty() } }
             return found
         }
         var candidates = withShortcuts()
