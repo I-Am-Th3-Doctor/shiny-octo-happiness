@@ -41,10 +41,9 @@ class PredictedSlotDeviceTest {
 
     private fun waitFor(what: String, timeoutMs: Long = 10_000, check: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
+        // Checks run here, on the test thread (the ones that touch views hop to the main thread themselves).
         while (System.currentTimeMillis() < deadline) {
-            var ok = false
-            main { ok = check() }
-            if (ok) return
+            if (check()) return
             Thread.sleep(200)
         }
         throw AssertionError("timed out: $what")
