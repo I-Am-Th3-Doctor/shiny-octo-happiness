@@ -29,4 +29,24 @@ class AutoFavoritesTest {
         val events = (1..20).flatMap { i -> List(i) { listOf("p$i" to i.toLong(), "home" to 0L) }.flatten() }
         assertEquals((20 downTo 9).map { "k$it" }, AutoFavorites.rank(events, many))
     }
+
+    @Test fun predictionFavoursAppsUsedAtThisTimeOfDay() {
+        val utc = java.util.TimeZone.getTimeZone("UTC")
+        val h = 60L * 60 * 1000
+        val day = 24 * h
+        // Maps: three launches a day at 8:00. Music: five launches, all at 20:00.
+        val events = (0 until 3).flatMap { d -> listOf("maps" to d * day + 8 * h, "home" to d * day + 8 * h + 1) } +
+            (0 until 5).flatMap { d -> listOf("music" to d * day + 20 * h, "home" to d * day + 20 * h + 1) }
+        val sorted = events.sortedBy { it.second }
+        val morning = AutoFavorites.predict(sorted, apps, now = 10 * day + 8 * h, zone = utc)
+        val evening = AutoFavorites.predict(sorted, apps, now = 10 * day + 20 * h, zone = utc)
+        assertEquals("0/maps/.Main", morning.first())
+        assertEquals("0/music/.Main", evening.first())
+    }
+
+    @Test fun predictionCountsLaunchesNotScreensAndSkipsNonCandidates() {
+        val utc = java.util.TimeZone.getTimeZone("UTC")
+        val events = listOf("chat" to 1L, "chat" to 2L, "chat" to 3L, "home" to 4L, "gone" to 5L, "home" to 6L, "gone" to 7L)
+        assertEquals(listOf("0/chat/.Main"), AutoFavorites.predict(events, apps, now = 10L, zone = utc))
+    }
 }

@@ -62,6 +62,13 @@ class SettingsActivity : Activity() {
         binding.webEngineRow.setOnClickListener { pickWebEngine() }
         binding.iconPackRow.setOnClickListener { startActivity(Intent(this, IconPackActivity::class.java)) }
         binding.favoritesModeRow.setOnClickListener { pickFavoritesMode() }
+        binding.predictedSlotSwitch.setOnCheckedChangeListener { _, on ->
+            if (on == prefs.predictedSlot) return@setOnCheckedChangeListener
+            prefs.predictedSlot = on
+            if (on) {
+                if (app.autoFavorites.hasAccess()) app.autoFavorites.refreshPrediction() else askUsageAccess(R.string.usage_access_prompt_predicted)
+            }
+        }
         binding.usageAccessRow.setOnClickListener { Permissions.openUsageAccessSettings(this) }
         binding.widgetCenterRow.setOnClickListener { startActivity(Intent(this, WidgetCenterActivity::class.java)) }
         binding.reindex.setOnClickListener { app.files.rescan() }
@@ -418,10 +425,10 @@ class SettingsActivity : Activity() {
             .show()
     }
 
-    private fun askUsageAccess() {
+    private fun askUsageAccess(message: Int = R.string.usage_access_prompt) {
         AlertDialog.Builder(this)
             .setTitle(R.string.usage_access_prompt_title)
-            .setMessage(R.string.usage_access_prompt)
+            .setMessage(message)
             .setPositiveButton(R.string.usage_access_open) { _, _ -> Permissions.openUsageAccessSettings(this) }
             .setNegativeButton(R.string.not_now, null)
             .show()
@@ -430,8 +437,14 @@ class SettingsActivity : Activity() {
     private fun renderFavorites() {
         val automatic = prefs.favoritesMode == FavoritesMode.AUTOMATIC
         binding.favoritesModeValue.setText(if (automatic) R.string.favorites_mode_automatic else R.string.favorites_mode_manual)
+        // The predicted slot is Manual mode's: hidden in Automatic, where all six come from usage.
+        val predictedRow = if (automatic) android.view.View.GONE else android.view.View.VISIBLE
+        binding.predictedSlotSwitch.visibility = predictedRow
+        binding.predictedSlotDesc.visibility = predictedRow
+        binding.predictedSlotSwitch.isChecked = prefs.predictedSlot
+        val needsUsage = automatic || prefs.predictedSlotActive
         binding.usageAccessRow.visibility =
-            if (automatic && !app.autoFavorites.hasAccess()) android.view.View.VISIBLE else android.view.View.GONE
+            if (needsUsage && !app.autoFavorites.hasAccess()) android.view.View.VISIBLE else android.view.View.GONE
         binding.favoritesHelp.setText(if (prefs.autoFavoritesActive) R.string.settings_favorites_help_auto else R.string.settings_favorites_help)
 
         val list = binding.favoritesList

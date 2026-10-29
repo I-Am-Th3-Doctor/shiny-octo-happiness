@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The predicted favorite's mark: a small sparkle on an accent dot with a white ring. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp" android:height="16dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M12,0a12,12 0,1 1,0 24a12,12 0,1 1,0 -24z" />
+    <path android:fillColor="@color/accent" android:pathData="M12,2a10,10 0,1 1,0 20a10,10 0,1 1,0 -20z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M12,5.5l1.6,4.9l4.9,1.6l-4.9,1.6l-1.6,4.9l-1.6,-4.9l-4.9,-1.6l4.9,-1.6z" />
+</vector>

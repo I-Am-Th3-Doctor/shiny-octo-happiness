@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drawn over a predicted favorite's icon: the badge in its top-end corner. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="16dp"
+        android:height="16dp"
+        android:gravity="top|end"
+        android:drawable="@drawable/ic_predicted_badge" />
+</layer-list>

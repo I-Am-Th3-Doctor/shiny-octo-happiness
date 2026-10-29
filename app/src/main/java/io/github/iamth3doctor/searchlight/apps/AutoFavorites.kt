@@ -63,6 +63,38 @@ class AutoFavorites(private val context: Context, private val prefs: Prefs, priv
         }
     }
 
+    private var predicting = false
+
+    /**
+     * The predicted 6th favorite (Manual mode, setting on): worked out again when it's older
+     * than [PREDICTION_MAX_AGE_MS], called when the favorites row opens and on returning home,
+     * so it follows the time of day and is never more than a day old. Without usage access the
+     * predictions are cleared and slot 6 shows the manual 6th pick. Main thread.
+     */
+    fun refreshPrediction() {
+        if (!prefs.predictedSlotActive || predicting) return
+        if (!hasAccess()) {
+            if (prefs.predictionsAt != 0L || prefs.predictions.isNotEmpty()) prefs.savePredictions(emptyList(), 0)
+            return
+        }
+        if (System.currentTimeMillis() - prefs.predictionsAt < PREDICTION_MAX_AGE_MS) return
+        predicting = true
+        val apps = repo.apps
+        worker.execute {
+            val now = System.currentTimeMillis()
+            val keys = try {
+                predict(launches(now - WINDOW_MS, now), candidates(apps), now, java.util.TimeZone.getDefault())
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't read usage stats", e)
+                null
+            }
+            main.post {
+                predicting = false
+                if (keys != null && prefs.predictedSlotActive) prefs.savePredictions(keys, now)
+            }
+        }
+    }
+
     /** package -> app key: the first launcher activity of each personal-profile app, never Searchlight. */
     private fun candidates(apps: List<AppEntry>): Map<String, String> {
         val me = Process.myUserHandle()
@@ -89,8 +121,43 @@ class AutoFavorites(private val context: Context, private val prefs: Prefs, priv
         private const val TAG = "AutoFavorites"
         const val WINDOW_MS = 30L * 24 * 60 * 60 * 1000
         const val MAX_AGE_MS = 24L * 60 * 60 * 1000
+        /** The prediction follows the time of day: worked out again after this long. */
+        const val PREDICTION_MAX_AGE_MS = 15L * 60 * 1000
         /** Kept beyond six so an uninstall doesn't leave a gap before the next re-rank. */
         private const val KEEP = 12
+
+        private const val HOUR_MS = 60L * 60 * 1000
+        private const val DAY_MS = 24 * HOUR_MS
+
+        /**
+         * The predicted 6th favorite, best first: launches like [rank], but each launch counts more
+         * the closer its time of day is to [now]'s (up to 4x within the hour, back to 1x two hours
+         * away), so the app you open every morning wins in the morning. Ties: most recent.
+         */
+        fun predict(
+            foreground: List<Pair<String, Long>>,
+            candidates: Map<String, String>,
+            now: Long,
+            zone: java.util.TimeZone,
+        ): List<String> {
+            fun hourOfDay(t: Long) = Math.floorMod(t + zone.getOffset(t), DAY_MS).toDouble() / HOUR_MS
+            val nowHour = hourOfDay(now)
+            val score = HashMap<String, Double>()
+            val last = HashMap<String, Long>()
+            var previous: String? = null
+            for ((pkg, time) in foreground) {
+                if (pkg != previous) {
+                    val apart = Math.abs(hourOfDay(time) - nowHour).let { minOf(it, 24 - it) }
+                    score[pkg] = (score[pkg] ?: 0.0) + 1 + 3 * maxOf(0.0, 1 - apart / 2)
+                }
+                last[pkg] = time
+                previous = pkg
+            }
+            return score.keys.filter { it in candidates }
+                .sortedWith(compareByDescending<String> { score[it] }.thenByDescending { last[it] })
+                .take(KEEP)
+                .map { candidates.getValue(it) }
+        }
 
         /**
          * App keys, most launches first (ties: most recent). A launch is coming to the foreground

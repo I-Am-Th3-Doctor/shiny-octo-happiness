@@ -27,35 +27,45 @@ class FavoritesPopup(
     private val repo: AppRepository,
     private val prefs: Prefs,
     private val onLaunch: (AppEntry, View) -> Unit,
-    private val onLongPress: (AppEntry, View) -> Unit,
+    /** The last flag: the press was on the predicted (6th) slot, so it can be pinned or unpinned. */
+    private val onLongPress: (AppEntry, View, Boolean) -> Unit,
 ) {
     private var window: PopupWindow? = null
     private var anchor: View? = null
 
     val isShowing get() = window?.isShowing == true
 
+    /** The open row's six cells, in order (for tests). */
+    internal var cells: List<View> = emptyList()
+        private set
+
     fun show(above: View) {
         dismiss()
         val b = PopupFavoritesBinding.inflate(LayoutInflater.from(activity))
-        val favorites = prefs.favorites.mapNotNull(repo::find)
+        val favorites = homeFavorites(prefs, repo)
         val emptyHint = if (prefs.autoFavoritesActive) R.string.favorites_auto_empty_hint else R.string.favorites_empty_hint
         val inflater = LayoutInflater.from(activity)
         val iconPx = iconSize(above.width - b.root.paddingLeft - b.root.paddingRight)
+        val shown = ArrayList<View>()
 
         for (i in 0 until Prefs.MAX_FAVORITES) {
             val cell = ItemGridCellBinding.inflate(inflater, b.row, false)
             cell.icon.layoutParams = cell.icon.layoutParams.apply { width = iconPx; height = iconPx }
-            val entry = favorites.getOrNull(i)
-            if (entry != null) {
+            val fav = favorites.getOrNull(i)
+            if (fav != null) {
+                val entry = fav.entry
                 cell.label.text = entry.label
                 cell.icon.setImageBitmap(repo.icon(entry) { cell.icon.setImageBitmap(it) })
-                cell.root.contentDescription = entry.label
+                // The predicted slot can change: a small mark says so.
+                if (fav.predicted) cell.icon.foreground = activity.getDrawable(R.drawable.fg_predicted)
+                cell.root.contentDescription =
+                    if (fav.predicted) activity.getString(R.string.favorite_predicted, entry.label) else entry.label
                 cell.root.setOnClickListener { v ->
                     dismiss()
                     onLaunch(entry, v)
                 }
                 cell.root.setOnLongClickListener { v ->
-                    onLongPress(entry, v)
+                    onLongPress(entry, v, isPredictedSlot(prefs, i))
                     true
                 }
             } else {
@@ -68,9 +78,10 @@ class FavoritesPopup(
                 }
             }
             b.row.addView(cell.root)
+            shown += cell.root
         }
         b.hint.setText(emptyHint)
-        b.hint.visibility = if (favorites.isEmpty()) View.VISIBLE else View.GONE
+        b.hint.visibility = if (favorites.all { it == null }) View.VISIBLE else View.GONE
 
         val popup = PopupWindow(b.root, above.width, ViewGroup.LayoutParams.WRAP_CONTENT, false)
         popup.setBackgroundDrawable(ColorDrawable(0))
@@ -88,6 +99,7 @@ class FavoritesPopup(
         popup.showAsDropDown(above, 0, -(above.height + b.root.measuredHeight + gap), Gravity.START)
         window = popup
         anchor = above
+        cells = shown
     }
 
     /** Redraws the open popup in place, e.g. when the automatic ranking changes under it. */

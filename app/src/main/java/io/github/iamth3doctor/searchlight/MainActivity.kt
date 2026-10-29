@@ -80,7 +80,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private lateinit var binding: ActivityMainBinding
     private lateinit var engine: SearchEngine
     private lateinit var adapter: ResultsAdapter
-    private lateinit var favoritesPopup: FavoritesPopup
+    internal lateinit var favoritesPopup: FavoritesPopup // internal: the device tests long-press its cells
     private lateinit var widgets: WidgetController
     private lateinit var appTable: AppTableAdapter
 
@@ -122,7 +122,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
         engine = SearchEngine(prefs, app.apps, app.contacts)
         adapter = ResultsAdapter(app.apps, app.contacts, app.thumbnails, this)
-        favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp, ::showAppMenu)
+        favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp) { e, v, slot6 -> showAppMenu(e, v, slot6) }
         widgets = WidgetController(this, binding.widgetGrid, prefs) { editing -> binding.editBar.isVisible = editing }
         savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
         widgets.cleanUpOrphans()
@@ -181,6 +181,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
         app.shortcuts.refreshIfAccessChanged() // e.g. just made the default home: shortcuts become readable
         app.autoFavorites.refreshIfStale() // daily, and picks up usage access granted (or revoked) in Settings
+        app.autoFavorites.refreshPrediction() // the predicted 6th favorite follows the time of day
         cards.forEach { it.render() } // e.g. °F/°C changed in the Widget Center
         WallpaperBlur.retryIfUnavailable() // photo access may have been granted in Settings
         binding.searchInput.hint = greeting()
@@ -450,6 +451,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         // Hold the magnifier for the favorites: 250ms, quicker than the system long-press.
         binding.searchIcon.setOnHoldListener(FAVORITES_HOLD_MS) {
             app.autoFavorites.refreshIfStale()
+            app.autoFavorites.refreshPrediction()
             favoritesPopup.show(binding.homeCard)
         }
     }
@@ -550,7 +552,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * long-press) and all apps, which slides in a two-column panel of every app.
      */
     private fun setupRail() {
-        rail = FavoritesRail(this, app.apps, prefs, binding.railFavorites, ::launchApp, ::showAppMenu)
+        rail = FavoritesRail(this, app.apps, prefs, binding.railFavorites, ::launchApp) { e, v, slot6 -> showAppMenu(e, v, slot6) }
         binding.rail.background = frosted(binding.rail, R.dimen.radius_pill)
         binding.rail.clipToOutline = true
         binding.railSearch.setOnClickListener { showKeyboard() }
@@ -1022,9 +1024,17 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * apps), and add/remove favorite, the only way to set favorites (not while automatic
      * favorites are showing: the manual six are hidden then, so editing them would look like a no-op).
      */
-    private fun showAppMenu(entry: AppEntry, anchor: View) {
+    private fun showAppMenu(entry: AppEntry, anchor: View, predictedSlot: Boolean = false) {
         val cached = app.shortcuts.menuFor(entry)
-        val shortcuts = cached.shortcuts.map { s ->
+        // The predicted 6th favorite: Pin prediction (or Unpin, once pinned) before everything else.
+        val pin = if (!predictedSlot || !prefs.predictedSlotActive) null
+        else if (prefs.predictionPinned) AppMenu.Item(getString(R.string.menu_unpin_prediction), iconRes = R.drawable.ic_pin) {
+            prefs.unpinPrediction()
+            app.autoFavorites.refreshPrediction()
+        } else AppMenu.Item(getString(R.string.menu_pin_prediction), iconRes = R.drawable.ic_pin) {
+            prefs.pinPrediction(entry.key)
+        }
+        val shortcuts = listOfNotNull(pin) + cached.shortcuts.map { s ->
             AppMenu.Item(s.label, bitmap = s.icon ?: app.apps.icon(entry) {}) {
                 favoritesPopup.dismiss()
                 launchedSomething = true

@@ -200,6 +200,60 @@ class Prefs(context: Context) {
 
     fun isFavorite(key: String) = key in manualFavorites
 
+    // ---- Predicted 6th slot (Manual mode): five picks plus a predicted app ----
+
+    /** The setting. Only does anything in Manual mode (see [predictedSlotActive]). */
+    var predictedSlot: Boolean
+        get() = sp.getBoolean(KEY_PREDICTED_SLOT, false)
+        set(value) {
+            // Turning it on (or off) starts unpinned: the slot predicts again.
+            sp.edit().putBoolean(KEY_PREDICTED_SLOT, value).putBoolean(KEY_PREDICTION_PINNED, false).apply()
+            favoriteListeners.toList().forEach { it() }
+        }
+
+    val predictedSlotActive: Boolean get() = predictedSlot && favoritesMode == FavoritesMode.MANUAL
+
+    /** Slot 6 pinned: it shows the manual 6th pick and stops rotating. */
+    val predictionPinned: Boolean get() = sp.getBoolean(KEY_PREDICTION_PINNED, false)
+
+    /** Best predictions first, as last worked out; empty without usage access or history. */
+    val predictions: List<String>
+        get() = sp.getString(KEY_PREDICTIONS, "").orEmpty().split('\n').filter { it.isNotEmpty() }
+
+    val predictionsAt: Long get() = sp.getLong(KEY_PREDICTIONS_AT, 0)
+
+    fun savePredictions(keys: List<String>, at: Long) {
+        if (keys == predictions && at != 0L && predictionsAt != 0L) {
+            sp.edit().putLong(KEY_PREDICTIONS_AT, at).apply() // same answer: nothing to redraw
+            return
+        }
+        sp.edit().putString(KEY_PREDICTIONS, keys.joinToString("\n")).putLong(KEY_PREDICTIONS_AT, at).apply()
+        favoriteListeners.toList().forEach { it() }
+    }
+
+    /**
+     * Pin prediction: [key] becomes the manual 6th pick (replacing the old one) and slot 6 stays
+     * put. With fewer than five picks there's no 6th place yet: it just joins them, and slot 6
+     * goes on predicting.
+     */
+    fun pinPrediction(key: String) {
+        val list = (manualFavorites - key).toMutableList()
+        val pinned = list.size >= MAX_FAVORITES - 1
+        when {
+            list.size >= MAX_FAVORITES -> list[MAX_FAVORITES - 1] = key
+            else -> list += key
+        }
+        sp.edit().putString(KEY_FAVORITES, list.take(MAX_FAVORITES).joinToString("\n"))
+            .putBoolean(KEY_PREDICTION_PINNED, pinned).apply()
+        favoriteListeners.toList().forEach { it() }
+    }
+
+    /** Unpin: slot 6 predicts again (the pinned app stays as the manual 6th pick for when it's off). */
+    fun unpinPrediction() {
+        sp.edit().putBoolean(KEY_PREDICTION_PINNED, false).apply()
+        favoriteListeners.toList().forEach { it() }
+    }
+
     /** @return false if the list is already full. */
     fun addFavorite(key: String): Boolean {
         val list = manualFavorites
@@ -265,6 +319,10 @@ class Prefs(context: Context) {
         private const val KEY_ICON_PACK = "icon_pack"
         private const val KEY_GESTURE_APP = "gesture_app_"
         private const val KEY_FAVORITES_MODE = "favorites_mode"
+        private const val KEY_PREDICTED_SLOT = "predicted_slot"
+        private const val KEY_PREDICTION_PINNED = "prediction_pinned"
+        private const val KEY_PREDICTIONS = "predictions"
+        private const val KEY_PREDICTIONS_AT = "predictions_at"
         private const val KEY_AUTO_FAVORITES = "auto_favorites"
         private const val KEY_AUTO_FAVORITES_AT = "auto_favorites_at"
         private const val KEY_AUTO_KEYBOARD = "auto_keyboard_v2"

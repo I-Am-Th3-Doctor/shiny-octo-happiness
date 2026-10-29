@@ -22,16 +22,17 @@ class FavoritesRail(
     private val prefs: Prefs,
     private val container: LinearLayout,
     private val onLaunch: (AppEntry, View) -> Unit,
-    private val onLongPress: (AppEntry, View) -> Unit,
+    /** The last flag: the press was on the predicted (6th) slot, so it can be pinned or unpinned. */
+    private val onLongPress: (AppEntry, View, Boolean) -> Unit,
 ) {
     fun render() {
         container.removeAllViews()
-        val favorites = prefs.favorites.mapNotNull(repo::find)
+        val favorites = homeFavorites(prefs, repo)
         val emptyHint = if (prefs.autoFavoritesActive) R.string.favorites_auto_empty_hint else R.string.favorites_empty_hint
         val cell = activity.px(R.dimen.size_rail_cell)
         val icon = activity.px(R.dimen.size_rail_icon)
         for (i in 0 until Prefs.MAX_FAVORITES) {
-            val entry = favorites.getOrNull(i)
+            val fav = favorites.getOrNull(i)
             val image = ImageView(activity).apply {
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -40,13 +41,17 @@ class FavoritesRail(
                 setBackgroundResource(resolveBorderless())
                 addView(image, FrameLayout.LayoutParams(icon, icon).apply { gravity = Gravity.CENTER })
             }
-            if (entry != null) {
+            if (fav != null) {
+                val entry = fav.entry
                 image.setImageBitmap(repo.icon(entry) { image.setImageBitmap(it) })
-                slot.contentDescription = entry.label
-                slot.tooltipText = entry.label
+                // The predicted slot can change: a small mark says so.
+                if (fav.predicted) image.foreground = activity.getDrawable(R.drawable.fg_predicted)
+                slot.contentDescription =
+                    if (fav.predicted) activity.getString(R.string.favorite_predicted, entry.label) else entry.label
+                slot.tooltipText = slot.contentDescription
                 slot.setOnClickListener { onLaunch(entry, it) }
                 slot.setOnLongClickListener {
-                    onLongPress(entry, it)
+                    onLongPress(entry, it, isPredictedSlot(prefs, i))
                     true
                 }
             } else {
