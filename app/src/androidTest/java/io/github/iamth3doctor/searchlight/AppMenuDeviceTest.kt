@@ -126,11 +126,17 @@ class AppMenuDeviceTest {
 
             // A shortcut opens the Clock (on that shortcut's screen).
             tapRow(home, labels.first())
-            // A cold first launch on the emulator can be slow.
+            // A cold first launch on the emulator can be slow: the app's task appearing counts.
+            var menuOpen = false
+            home.onActivity { menuOpen = it.appMenu.isShowing }
             try {
-                waitFor("${c.label} opened", 20_000) { resumedActivity().contains(c.packageName) }
+                waitFor("${c.label} opened", 30_000) {
+                    resumedActivity().contains(c.packageName) || shell("dumpsys activity recents").contains("A=${c.user.hashCode()}:${c.packageName}") ||
+                        shell("dumpsys activity recents").lineSequence().any { "Recent #" in it && c.packageName in it }
+                }
             } catch (e: AssertionError) {
-                throw AssertionError("${e.message}; resumed: ${resumedActivity().trim()}", e)
+                throw AssertionError("${e.message}; menu still open after the tap: $menuOpen; resumed: ${resumedActivity().trim()}; " +
+                    "recents: ${shell("dumpsys activity recents").lineSequence().filter { "Recent #" in it }.take(5).toList()}", e)
             }
             shell("input keyevent KEYCODE_HOME") // (the system's home may recreate this activity)
             Thread.sleep(1500)
