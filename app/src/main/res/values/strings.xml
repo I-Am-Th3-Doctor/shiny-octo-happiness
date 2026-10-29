@@ -257,10 +257,10 @@
     <string name="usage_access_prompt_title">Allow usage access?</string>
     <string name="usage_access_prompt">To pick your favorites automatically, Searchlight counts how often you open each app (over the last 30 days). It stays on this phone. Until you allow it, your manual six stay.</string>
     <string name="usage_access_open">Open settings</string>
-    <string name="usage_access_prompt_predicted">To predict your 6th favorite, Searchlight looks at how often, and at what time of day, you open each app (over the last 30 days). It stays on this phone. Until you allow it, slot 6 shows your own 6th pick.</string>
+    <string name="usage_access_prompt_predicted">To predict your 6th favorite, Searchlight looks at which apps you\'ve opened recently (and, to fill gaps, over the last 30 days). It stays on this phone. Until you allow it, slot 6 shows your own 6th pick.</string>
     <string name="not_now">Not now</string>
     <string name="settings_predicted_slot">Predicted app in 6th slot</string>
-    <string name="settings_predicted_slot_desc">Slot 6 shows an app picked from your usage and the time of day (marked with a small sparkle). Your own 6th pick is kept for when you turn this off. Long-press the predicted app to pin it.</string>
+    <string name="settings_predicted_slot_desc">Slot 6 shows the app you\'ve been using most in the last couple of hours (marked with a small sparkle). Your own 6th pick is kept for when you turn this off. Long-press the predicted app to pin it.</string>
     <string name="favorites_auto_empty_hint">Fills in as you use your apps</string>
     <string name="settings_section_about">About</string>
     <string name="settings_about">Version %1$s\nNo ads, no analytics, no tracking. Nothing leaves this phone.</string>

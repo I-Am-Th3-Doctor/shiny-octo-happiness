@@ -68,7 +68,7 @@ class AutoFavorites(private val context: Context, private val prefs: Prefs, priv
     /**
      * The predicted 6th favorite (Manual mode, setting on): worked out again when it's older
      * than [PREDICTION_MAX_AGE_MS], called when the favorites row opens and on returning home,
-     * so it follows the time of day and is never more than a day old. Without usage access the
+     * so it tracks what you're using now and is never more than a day old. Without usage access the
      * predictions are cleared and slot 6 shows the manual 6th pick. Main thread.
      */
     fun refreshPrediction() {
@@ -121,43 +121,103 @@ class AutoFavorites(private val context: Context, private val prefs: Prefs, priv
         private const val TAG = "AutoFavorites"
         const val WINDOW_MS = 30L * 24 * 60 * 60 * 1000
         const val MAX_AGE_MS = 24L * 60 * 60 * 1000
-        /** The prediction follows the time of day: worked out again after this long. */
-        const val PREDICTION_MAX_AGE_MS = 15L * 60 * 1000
+        /** The prediction follows what you're doing now: worked out again after this long. */
+        const val PREDICTION_MAX_AGE_MS = 5L * 60 * 1000
         /** Kept beyond six so an uninstall doesn't leave a gap before the next re-rank. */
         private const val KEEP = 12
 
-        private const val HOUR_MS = 60L * 60 * 1000
+        private const val MINUTE_MS = 60L * 1000
+        private const val HOUR_MS = 60 * MINUTE_MS
         private const val DAY_MS = 24 * HOUR_MS
 
         /**
-         * The predicted 6th favorite, best first: launches like [rank], but each launch counts more
-         * the closer its time of day is to [now]'s (up to 4x within the hour, back to 1x two hours
-         * away), so the app you open every morning wins in the morning. Ties: most recent.
+         * The predicted 6th favorite's candidates, best first: what you're using now, then what
+         * you've used today, then the long-run habit for this time of day. Slot 6 takes the first
+         * that isn't one of slots 1-5, so when the recent apps are all favorites already, it
+         * falls through to today's, then to the habit; with nothing at all, the manual 6th pick.
          */
         fun predict(
             foreground: List<Pair<String, Long>>,
             candidates: Map<String, String>,
             now: Long,
             zone: java.util.TimeZone,
-        ): List<String> {
+        ): List<String> = (
+            recentRanking(foreground, candidates, now) +
+                todayRanking(foreground, candidates, now, zone) +
+                timeOfDayRanking(foreground, candidates, now, zone)
+            ).distinct().take(3 * KEEP)
+
+        /**
+         * How much a launch [ageMs] ago counts toward "what you're using now": 1 within the last
+         * 30 minutes, 0.5 within the hour, 0.25 within two hours, nothing older.
+         */
+        fun recencyWeight(ageMs: Long): Double = when {
+            ageMs <= 30 * MINUTE_MS -> 1.0 // (a launch stamped a moment "ahead" of now counts as now)
+            ageMs <= HOUR_MS -> 0.5
+            ageMs <= 2 * HOUR_MS -> 0.25
+            else -> 0.0
+        }
+
+        /** Apps launched in the last two hours, by [recencyWeight] summed (ties: most recent). */
+        fun recentRanking(foreground: List<Pair<String, Long>>, candidates: Map<String, String>, now: Long): List<String> {
+            val score = HashMap<String, Double>()
+            val last = HashMap<String, Long>()
+            for ((pkg, time) in launches(foreground)) {
+                val w = recencyWeight(now - time)
+                if (w == 0.0) continue
+                score[pkg] = (score[pkg] ?: 0.0) + w
+                last[pkg] = maxOf(last[pkg] ?: 0L, time)
+            }
+            return best(score, last, candidates)
+        }
+
+        /** Apps launched since local midnight, most launches first (ties: most recent). */
+        fun todayRanking(foreground: List<Pair<String, Long>>, candidates: Map<String, String>, now: Long, zone: java.util.TimeZone): List<String> {
+            val midnight = now - Math.floorMod(now + zone.getOffset(now), DAY_MS)
+            val score = HashMap<String, Double>()
+            val last = HashMap<String, Long>()
+            for ((pkg, time) in launches(foreground)) {
+                if (time < midnight) continue
+                score[pkg] = (score[pkg] ?: 0.0) + 1
+                last[pkg] = maxOf(last[pkg] ?: 0L, time)
+            }
+            return best(score, last, candidates)
+        }
+
+        /**
+         * The long-run habit: launches over the whole window, each counting more the closer its
+         * time of day is to [now]'s (up to 4x within the hour, back to 1x two hours away), so the
+         * app you open every morning ranks high in the morning. Ties: most recent.
+         */
+        fun timeOfDayRanking(foreground: List<Pair<String, Long>>, candidates: Map<String, String>, now: Long, zone: java.util.TimeZone): List<String> {
             fun hourOfDay(t: Long) = Math.floorMod(t + zone.getOffset(t), DAY_MS).toDouble() / HOUR_MS
             val nowHour = hourOfDay(now)
             val score = HashMap<String, Double>()
             val last = HashMap<String, Long>()
+            for ((pkg, time) in launches(foreground)) {
+                val apart = Math.abs(hourOfDay(time) - nowHour).let { minOf(it, 24 - it) }
+                score[pkg] = (score[pkg] ?: 0.0) + 1 + 3 * maxOf(0.0, 1 - apart / 2)
+                last[pkg] = maxOf(last[pkg] ?: 0L, time)
+            }
+            return best(score, last, candidates)
+        }
+
+        /** One (package, time) per launch: coming to the foreground from a different app. */
+        private fun launches(foreground: List<Pair<String, Long>>): List<Pair<String, Long>> {
+            val out = ArrayList<Pair<String, Long>>()
             var previous: String? = null
             for ((pkg, time) in foreground) {
-                if (pkg != previous) {
-                    val apart = Math.abs(hourOfDay(time) - nowHour).let { minOf(it, 24 - it) }
-                    score[pkg] = (score[pkg] ?: 0.0) + 1 + 3 * maxOf(0.0, 1 - apart / 2)
-                }
-                last[pkg] = time
+                if (pkg != previous) out += pkg to time
                 previous = pkg
             }
-            return score.keys.filter { it in candidates }
+            return out
+        }
+
+        private fun best(score: Map<String, Double>, last: Map<String, Long>, candidates: Map<String, String>): List<String> =
+            score.keys.filter { it in candidates && (score[it] ?: 0.0) > 0.0 }
                 .sortedWith(compareByDescending<String> { score[it] }.thenByDescending { last[it] })
                 .take(KEEP)
                 .map { candidates.getValue(it) }
-        }
 
         /**
          * App keys, most launches first (ties: most recent). A launch is coming to the foreground
