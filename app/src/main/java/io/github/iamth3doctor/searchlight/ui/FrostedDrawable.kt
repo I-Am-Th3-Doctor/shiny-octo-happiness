@@ -19,6 +19,9 @@ import androidx.annotation.ColorInt
  *
  * With an [adaptive] layer the tint takes the wallpaper's own hue ([GlassTint]) instead of
  * [tint], which then only applies if the wallpaper's color couldn't be sampled.
+ *
+ * Without [wallpaper] (a screen with its own opaque background) it's always the [fallbackTint]
+ * over whatever the page draws: the same glass look, nothing sampled.
  */
 class FrostedDrawable(
     private val host: View,
@@ -28,6 +31,7 @@ class FrostedDrawable(
     @ColorInt border: Int = 0,
     borderWidth: Float = 0f,
     private val adaptive: GlassTint.Layer? = null,
+    private val wallpaper: Boolean = true,
 ) : Drawable() {
 
     private val fixedTint = tint
@@ -50,7 +54,7 @@ class FrostedDrawable(
         rect.set(bounds)
         val r = minOf(radius, rect.height() / 2, rect.width() / 2)
         val root = host.rootView
-        val blur = WallpaperBlur.get(host.context, root.width, root.height) { host.invalidate() }
+        val blur = if (wallpaper) WallpaperBlur.get(host.context, root.width, root.height) { host.invalidate() } else null
         if (blur == null) {
             canvas.drawRoundRect(rect, r, r, fallbackPaint)
             drawBorder(canvas, r)

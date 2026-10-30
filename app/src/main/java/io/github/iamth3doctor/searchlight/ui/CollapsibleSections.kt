@@ -106,7 +106,7 @@ object CollapsibleSections {
         }
     }
 
-    /** A menu entry's card: the home card's frosted glass, light or dark with the theme. */
+    /** A menu entry's card: frosted glass over the page, light or dark with the theme. */
     private fun glassCard(column: LinearLayout, key: String, top: Int): LinearLayout {
         val ctx = column.context
         val light = ctx.isLightTheme()
@@ -120,6 +120,7 @@ object CollapsibleSections {
                 ctx.getColor(if (light) R.color.settings_glass_light_fallback else R.color.glass_card_fallback),
                 ctx.getColor(if (light) R.color.settings_glass_border_light else R.color.glass_border),
                 ctx.pxF(R.dimen.stroke_glass),
+                wallpaper = false, // the page's own gradient is behind it, not the wallpaper
             )
             clipToOutline = true // the header's tap ripple follows the corners
             setPadding(pad, 0, pad, ctx.px(R.dimen.space_s))
