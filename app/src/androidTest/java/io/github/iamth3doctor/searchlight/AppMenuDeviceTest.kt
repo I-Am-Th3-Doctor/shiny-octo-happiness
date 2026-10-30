@@ -76,6 +76,16 @@ class AppMenuDeviceTest {
         shell("input tap $x $y")
     }
 
+    /** A home screen for [block]; closed afterwards even when an app launch already took it away. */
+    private fun withHome(block: (ActivityScenario<MainActivity>) -> Unit) {
+        val home = ActivityScenario.launch(MainActivity::class.java)
+        try {
+            block(home)
+        } finally {
+            runCatching { home.close() }
+        }
+    }
+
     @Test fun shortcutsFirstAndWidgetsFiltered() {
         // The default home (only it may read other apps' shortcuts).
         shell("mkdir -p $dir") // this test can run before any other has made it
@@ -108,7 +118,7 @@ class AppMenuDeviceTest {
         main { app.shortcuts.menuFor(c).let { m -> labels = m.shortcuts.map { it.label.toString() }; hasWidgets = m.hasWidgets } }
         android.util.Log.i("AppMenuDeviceTest", "${c.label} shortcuts: $labels, widgets: $hasWidgets")
 
-        ActivityScenario.launch(MainActivity::class.java).use { home ->
+        withHome { home -> // (the shortcut launch replaces this screen: closing it mustn't fail the test)
             Thread.sleep(1500)
             openMenu(home, c)
             shell("screencap -p $dir/${prefix}_font1.0_13-app-menu.png")
