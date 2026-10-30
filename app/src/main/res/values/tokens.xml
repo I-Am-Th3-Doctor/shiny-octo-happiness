@@ -98,6 +98,9 @@
     <color name="surface_inset">#1FFFFFFF</color>   <!-- the search row inside the card -->
     <color name="control_off">#33FFFFFF</color>     <!-- off toggles, empty art, tracks -->
 
+    <!-- The launcher icon's background layer: the tile's deep blue. -->
+    <color name="ic_launcher_background">#FF1C2F5A</color>
+
     <!-- The predicted 6th favorite's halo: warm gold, about 60% at the icon's edge, fading out. -->
     <color name="predicted_glow">#99FFC93C</color>
 
