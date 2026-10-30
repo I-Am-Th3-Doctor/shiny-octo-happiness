@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Slim chevron (points right; turned down when its section is open). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M9.47,6.47a0.75,0.75 0,0 1,1.06 0l5,5a0.75,0.75 0,0 1,0 1.06l-5,5a0.75,0.75 0,0 1,-1.06 -1.06L13.94,12 9.47,7.53a0.75,0.75 0,0 1,0 -1.06z" />
+</vector>

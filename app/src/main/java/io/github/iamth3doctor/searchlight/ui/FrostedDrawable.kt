@@ -22,7 +22,7 @@ import androidx.annotation.ColorInt
  */
 class FrostedDrawable(
     private val host: View,
-    private val radius: Float,
+    val radius: Float,
     @ColorInt tint: Int,
     @ColorInt fallbackTint: Int,
     @ColorInt border: Int = 0,

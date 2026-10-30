@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.iamth3doctor.searchlight.data.FavoritesMode
 import io.github.iamth3doctor.searchlight.ui.CollapsibleSections
+import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,6 +30,20 @@ class SettingsSectionsDeviceTest {
     private val dir = "/sdcard/Download/searchlight-shots"
     private val settingsKeys = listOf("home", "appearance", "gestures", "permissions", "favorites", "about")
     private val widgetCenterKeys = listOf("cards", "idle", "weather")
+    private val settingsRows = listOf(
+        Triple("home", "Home", "Layout, tiles and search bar"),
+        Triple("appearance", "Appearance", "Theme, icon packs and fonts"),
+        Triple("gestures", "Gestures", "Swipes, taps and shortcuts"),
+        Triple("permissions", "Permissions", "Access and privacy"),
+        Triple("favorites", "Favorites (up to 6)", "Your six quick apps"),
+        Triple("about", "About", "Version and details"),
+    )
+
+    private fun textsIn(v: View): List<String> = when (v) {
+        is android.widget.TextView -> listOf(v.text.toString())
+        is android.view.ViewGroup -> (0 until v.childCount).flatMap { textsIn(v.getChildAt(it)) }
+        else -> emptyList()
+    }
 
     private fun shell(cmd: String) = instrumentation.uiAutomation.executeShellCommand(cmd).close()
 
@@ -67,12 +82,14 @@ class SettingsSectionsDeviceTest {
             Thread.sleep(1000)
             // Every section has a header; first open, the rest closed.
             assertEquals(listOf(true, false, false, false, false, false), open(s))
-            // Each section in its own card, 28dp corners.
+            // Each section in its own frosted card, 28dp corners, its title over its subtitle.
             s.onActivity { a ->
                 val r = a.resources.getDimension(R.dimen.radius_card)
-                for (k in settingsKeys) {
-                    val bg = CollapsibleSections.cardOf(a.window.decorView, k)!!.background as android.graphics.drawable.GradientDrawable
-                    assertEquals("$k card corners", r, bg.cornerRadius, 0.5f)
+                for ((k, title, subtitle) in settingsRows) {
+                    val bg = CollapsibleSections.cardOf(a.window.decorView, k)!!.background as FrostedDrawable
+                    assertEquals("$k card corners", r, bg.radius, 0.5f)
+                    val texts = textsIn(CollapsibleSections.headerOf(a.window.decorView, k)!!)
+                    assertEquals("$k row", listOf(title, subtitle), texts)
                 }
             }
             shell("screencap -p $dir/${prefix}_font1.0_26-settings-sections.png")

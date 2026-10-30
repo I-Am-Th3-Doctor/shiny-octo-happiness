@@ -206,6 +206,12 @@
     <string name="perm_accessibility">Accessibility (home gestures)</string>
     <string name="perm_accessibility_desc">Lets swipes on the home screen open notifications and quick settings and lock the screen. Reads nothing on screen.</string>
 
+    <string name="settings_sub_home">Layout, tiles and search bar</string>
+    <string name="settings_sub_appearance">Theme, icon packs and fonts</string>
+    <string name="settings_sub_gestures">Swipes, taps and shortcuts</string>
+    <string name="settings_sub_permissions">Access and privacy</string>
+    <string name="settings_sub_favorites">Your six quick apps</string>
+    <string name="settings_sub_about">Version and details</string>
     <string name="section_expanded">Expanded</string>
     <string name="section_collapsed">Collapsed</string>
 

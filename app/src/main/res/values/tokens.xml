@@ -74,6 +74,8 @@
     <dimen name="size_menu_max_width">300dp</dimen>
     <dimen name="size_predicted_glow">9dp</dimen>     <!-- how far the predicted favorite's halo reaches past its icon -->
     <dimen name="size_chevron">20dp</dimen>          <!-- settings section headers -->
+    <dimen name="size_settings_chip">40dp</dimen>     <!-- the top-level Settings menu's icon chips -->
+    <dimen name="size_settings_menu_row">72dp</dimen> <!-- ...and its two-line rows -->
     <dimen name="space_menu_margin">12dp</dimen>     <!-- the menu's clearance from the screen's safe edges -->
     <dimen name="blur_radius">24dp</dimen>         <!-- backdrop blur behind glass surfaces -->
     <dimen name="stroke_dash">4dp</dimen>
@@ -99,6 +101,17 @@
     <color name="glass_border">#26FFFFFF</color>    <!-- 15% white hairline round the glass -->
     <color name="surface_inset">#1FFFFFFF</color>   <!-- the search row inside the card -->
     <color name="control_off">#33FFFFFF</color>     <!-- off toggles, empty art, tracks -->
+
+    <!-- The top-level Settings menu: frosted cards over a faint page gradient, terracotta chips. -->
+    <color name="settings_glass_light">#B8FFFFFF</color>          <!-- 72% white over the blur -->
+    <color name="settings_glass_light_fallback">#E6FFFFFF</color> <!-- no blur: near-solid white -->
+    <color name="settings_glass_border_light">#1F000000</color>   <!-- hairline on a light page -->
+    <color name="settings_glass_dark">#990B0B0D</color>           <!-- 60% near-black over the blur -->
+    <color name="settings_chip">#B5674C</color>                   <!-- muted terracotta -->
+    <color name="settings_page_light_top">#FFF6F4F8</color>
+    <color name="settings_page_light_bottom">#FFEAE7EF</color>
+    <color name="settings_page_dark_top">#FF121215</color>
+    <color name="settings_page_dark_bottom">#FF1B1920</color>
 
     <!-- The launcher icon's background layer: the tile's deep blue. -->
     <color name="ic_launcher_background">#FF1C2F5A</color>

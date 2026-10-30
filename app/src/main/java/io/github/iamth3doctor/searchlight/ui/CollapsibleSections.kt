@@ -35,7 +35,13 @@ object CollapsibleSections {
     fun bodyOf(root: View, key: String): View? = root.findViewWithTag("sectionBody:$key")
     fun cardOf(root: View, key: String): View? = root.findViewWithTag("sectionCard:$key")
 
-    fun apply(column: LinearLayout, screen: String, prefs: Prefs) {
+    /**
+     * A section shown as a menu entry (the top-level Settings page): a frosted glass card, a
+     * round [icon] chip, the title with a [subtitle] under it, a slim gray chevron.
+     */
+    class Menu(val icon: Int, val subtitle: Int)
+
+    fun apply(column: LinearLayout, screen: String, prefs: Prefs, menu: Map<String, Menu> = emptyMap()) {
         val children = (0 until column.childCount).map(column::getChildAt)
         val firstHeader = children.indexOfFirst { isHeader(it) }
         if (firstHeader < 0) return
@@ -54,12 +60,21 @@ object CollapsibleSections {
                 children.subList(i + 1, j).forEach { addView(it) }
             }
             val open = prefs.sectionExpanded(screen, key, default = first)
+            val entry = menu[key]
+            val save = { expanded: Boolean -> prefs.setSectionExpanded(screen, key, expanded) }
+            if (entry != null) {
+                val card = glassCard(column, key, top = ctxPx(column, if (first) R.dimen.space_xs else R.dimen.space_m))
+                card.addView(menuHeader(card, title, entry, key, body, open, save))
+                body.visibility = if (open) View.VISIBLE else View.GONE
+                card.addView(body, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                first = false
+                i = j
+                continue
+            }
             val card = card(column, key, top = if (first) ctxPx(column, R.dimen.space_xs) else ctxPx(column, R.dimen.space_s))
             // Inside a card the title needs only a little room above it, not the page's section gap.
             title.setPadding(title.paddingLeft, ctxPx(column, R.dimen.space_m), title.paddingRight, title.paddingBottom)
-            card.addView(header(column, title, key, body, open) { expanded ->
-                prefs.setSectionExpanded(screen, key, expanded)
-            })
+            card.addView(header(column, title, key, body, open, save))
             body.visibility = if (open) View.VISIBLE else View.GONE
             card.addView(body, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             first = false
@@ -88,6 +103,110 @@ object CollapsibleSections {
             column.addView(this, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = top
             })
+        }
+    }
+
+    /** A menu entry's card: the home card's frosted glass, light or dark with the theme. */
+    private fun glassCard(column: LinearLayout, key: String, top: Int): LinearLayout {
+        val ctx = column.context
+        val light = ctx.isLightTheme()
+        val pad = ctx.px(R.dimen.space_m)
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            tag = "sectionCard:$key"
+            background = FrostedDrawable(
+                this, ctx.pxF(R.dimen.radius_card),
+                ctx.getColor(if (light) R.color.settings_glass_light else R.color.settings_glass_dark),
+                ctx.getColor(if (light) R.color.settings_glass_light_fallback else R.color.glass_card_fallback),
+                ctx.getColor(if (light) R.color.settings_glass_border_light else R.color.glass_border),
+                ctx.pxF(R.dimen.stroke_glass),
+            )
+            clipToOutline = true // the header's tap ripple follows the corners
+            setPadding(pad, 0, pad, ctx.px(R.dimen.space_s))
+            column.addView(this, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = top
+            })
+        }
+    }
+
+    /** A menu entry's header: icon chip, title over subtitle, slim gray chevron. Presses ease in. */
+    @android.annotation.SuppressLint("ClickableViewAccessibility") // the press look only; clicks go through
+    private fun menuHeader(card: View, title: TextView, entry: Menu, key: String, body: View, open: Boolean, onToggle: (Boolean) -> Unit): View {
+        val ctx = card.context
+        val gray = ctx.secondaryText()
+        val chip = ImageView(ctx).apply {
+            setImageResource(entry.icon)
+            imageTintList = ColorStateList.valueOf(ctx.getColor(R.color.on_accent))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(ctx.getColor(R.color.settings_chip))
+            }
+            val inset = ctx.px(R.dimen.space_s) + ctx.px(R.dimen.stroke_glass)
+            setPadding(inset, inset, inset, inset)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        // The title loses its section-label look: the theme's main text color, body size.
+        title.tag = null
+        title.isAllCaps = false
+        title.type(Type.BODY)
+        title.setTextColor(ctx.primaryText())
+        title.setTypeface(title.typeface, android.graphics.Typeface.BOLD)
+        title.setPadding(0, 0, 0, 0)
+        val subtitle = TextView(ctx).apply {
+            setText(entry.subtitle)
+            type(Type.CAPTION)
+            setTextColor(gray)
+        }
+        val texts = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(title)
+            addView(subtitle)
+        }
+        val chevron = ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_chevron_slim)
+            imageTintList = gray
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            rotation = if (open) 90f else 0f
+        }
+        val chipSize = ctx.px(R.dimen.size_settings_chip)
+        val chevronSize = ctx.px(R.dimen.size_chevron)
+        val v = ctx.px(R.dimen.space_m)
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = ctx.px(R.dimen.size_settings_menu_row)
+            setPadding(0, v, 0, v)
+            tag = "sectionHeader:$key"
+            isClickable = true
+            isFocusable = true
+            val a = ctx.obtainStyledAttributes(intArrayOf(android.R.attr.selectableItemBackground))
+            background = a.getDrawable(0)
+            a.recycle()
+            contentDescription = "${title.text}. ${subtitle.text}"
+            describe(this, open)
+            addView(chip, LinearLayout.LayoutParams(chipSize, chipSize))
+            addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = ctx.px(R.dimen.space_m)
+                marginEnd = ctx.px(R.dimen.space_s)
+            })
+            addView(chevron, LinearLayout.LayoutParams(chevronSize, chevronSize))
+            // A soft press: the card eases down a touch and dims, then back.
+            setOnTouchListener { _, e ->
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN ->
+                        card.animate().scaleX(PRESS_SCALE).scaleY(PRESS_SCALE).alpha(PRESS_ALPHA).setDuration(PRESS_MS).start()
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                        card.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(RELEASE_MS).start()
+                }
+                false
+            }
+            setOnClickListener {
+                val expand = body.visibility != View.VISIBLE
+                animate(body, expand)
+                chevron.animate().rotation(if (expand) 90f else 0f).setDuration(ANIM_MS).start()
+                describe(this, expand)
+                onToggle(expand)
+            }
         }
     }
 
@@ -169,6 +288,10 @@ object CollapsibleSections {
     }
 
     private const val ANIM_MS = 220L
+    private const val PRESS_SCALE = 0.98f
+    private const val PRESS_ALPHA = 0.88f
+    private const val PRESS_MS = 90L
+    private const val RELEASE_MS = 160L
     /** The card's fill: the text color at ~6%. */
     private const val CARD_TINT = 0x10000000
 }

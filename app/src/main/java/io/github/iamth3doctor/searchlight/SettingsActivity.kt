@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.role.RoleManager
 import android.content.Intent
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -56,7 +57,11 @@ class SettingsActivity : Activity() {
         edgeToEdge(lightBackground = isLightTheme())
         binding.scroll.padForSystemBars()
         // Each section (Home, Appearance, Gestures, ...) folds open and shut under its title.
-        CollapsibleSections.apply(binding.scroll.getChildAt(0) as LinearLayout, SCREEN, prefs)
+        // The six top-level entries are frosted cards: an icon chip, the title over a subtitle.
+        CollapsibleSections.apply(binding.scroll.getChildAt(0) as LinearLayout, SCREEN, prefs, MENU)
+        binding.scroll.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            if (isLightTheme()) intArrayOf(getColor(R.color.settings_page_light_top), getColor(R.color.settings_page_light_bottom))
+            else intArrayOf(getColor(R.color.settings_page_dark_top), getColor(R.color.settings_page_dark_bottom)))
 
         binding.setDefault.setOnClickListener { requestDefaultHome() }
         binding.autoKeyboard.isChecked = prefs.autoOpenKeyboard
@@ -523,6 +528,14 @@ class SettingsActivity : Activity() {
 
     private companion object {
         const val SCREEN = "settings"
+        private val MENU = mapOf(
+            "home" to CollapsibleSections.Menu(R.drawable.ic_home, R.string.settings_sub_home),
+            "appearance" to CollapsibleSections.Menu(R.drawable.ic_palette, R.string.settings_sub_appearance),
+            "gestures" to CollapsibleSections.Menu(R.drawable.ic_gesture_hand, R.string.settings_sub_gestures),
+            "permissions" to CollapsibleSections.Menu(R.drawable.ic_shield, R.string.settings_sub_permissions),
+            "favorites" to CollapsibleSections.Menu(R.drawable.ic_star, R.string.settings_sub_favorites),
+            "about" to CollapsibleSections.Menu(R.drawable.ic_info, R.string.settings_sub_about),
+        )
         const val REQUEST_HOME_ROLE = 1
         const val REQUEST_RUNTIME = 2
     }
