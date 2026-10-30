@@ -15,10 +15,6 @@ fun homeFavorites(prefs: Prefs, repo: AppRepository): List<HomeFavorite?> =
     FavoriteSlots.compose(
         favorites = prefs.favorites,
         predictedSlot = prefs.predictedSlotActive,
-        pinned = prefs.predictionPinned,
         predictions = prefs.predictions,
         installed = { key -> repo.find(key)?.isSelf == false },
     ).map { slot -> slot?.let { s -> repo.find(s.key)?.let { HomeFavorite(it, s.kind) } } }
-
-/** Is slot [index] the predicted slot (predicting or pinned) right now? */
-fun isPredictedSlot(prefs: Prefs, index: Int) = prefs.predictedSlotActive && index == FavoriteSlots.COUNT - 1

@@ -15,9 +15,17 @@ import kotlin.math.abs
  *
  * Also registered as the view's long-click action, so TalkBack (and performLongClick) still
  * open it.
+ *
+ * After it fires, the same finger's moves go to [onHeldMove] and its lift (or a cancel) to
+ * [onHeldEnd], both with screen coordinates: what lets you slide on into what the hold opened.
  */
 @SuppressLint("ClickableViewAccessibility") // clicks still go through the view's own handling
-fun View.setOnHoldListener(delayMs: Long, onHold: (View) -> Unit) {
+fun View.setOnHoldListener(
+    delayMs: Long,
+    onHold: (View) -> Unit,
+    onHeldMove: ((rawX: Float, rawY: Float) -> Unit)? = null,
+    onHeldEnd: ((rawX: Float, rawY: Float, cancelled: Boolean) -> Unit)? = null,
+) {
     val slop = ViewConfiguration.get(context).scaledTouchSlop
     var downX = 0f
     var downY = 0f
@@ -38,8 +46,12 @@ fun View.setOnHoldListener(delayMs: Long, onHold: (View) -> Unit) {
                 v.postDelayed(fire, delayMs)
             }
             MotionEvent.ACTION_MOVE ->
-                if (abs(e.x - downX) > slop || abs(e.y - downY) > slop) v.removeCallbacks(fire)
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> v.removeCallbacks(fire)
+                if (fired) onHeldMove?.invoke(e.rawX, e.rawY)
+                else if (abs(e.x - downX) > slop || abs(e.y - downY) > slop) v.removeCallbacks(fire)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                v.removeCallbacks(fire)
+                if (fired) onHeldEnd?.invoke(e.rawX, e.rawY, e.actionMasked == MotionEvent.ACTION_CANCEL)
+            }
         }
         fired
     }

@@ -118,7 +118,7 @@ class AutoFavoritesTest {
         val predictions = AutoFavorites.predict(events(recent, today), apps, now, utc)
         val slots = FavoriteSlots.compose(
             favorites = listOf("0/chat/.Main", "a", "b", "c", "d", "manual6"),
-            predictedSlot = true, pinned = false, predictions = predictions, installed = { true },
+            predictedSlot = true, predictions = predictions, installed = { true },
         )
         assertEquals("0/music/.Main", slots[5]!!.key)
         assertEquals(FavoriteSlots.Kind.PREDICTED, slots[5]!!.kind)
@@ -127,9 +127,9 @@ class AutoFavoritesTest {
     @Test fun noPredictionAtAllLeavesTheManualSixth() {
         val slots = FavoriteSlots.compose(
             favorites = listOf("a", "b", "c", "d", "e", "manual6"),
-            predictedSlot = true, pinned = false, predictions = AutoFavorites.predict(emptyList(), apps, now, utc), installed = { true },
+            predictedSlot = true, predictions = AutoFavorites.predict(emptyList(), apps, now, utc), installed = { true },
         )
         assertEquals("manual6", slots[5]!!.key)
-        assertEquals(FavoriteSlots.Kind.SLOT6_FIXED, slots[5]!!.kind)
+        assertEquals(FavoriteSlots.Kind.MANUAL_SIXTH, slots[5]!!.kind)
     }
 }

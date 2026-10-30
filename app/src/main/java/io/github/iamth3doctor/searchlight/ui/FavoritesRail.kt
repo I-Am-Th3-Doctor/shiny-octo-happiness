@@ -22,11 +22,11 @@ class FavoritesRail(
     private val prefs: Prefs,
     private val container: LinearLayout,
     private val onLaunch: (AppEntry, View) -> Unit,
-    /** The last flag: the press was on the predicted (6th) slot, so it can be pinned or unpinned. */
-    private val onLongPress: (AppEntry, View, Boolean) -> Unit,
+    private val onLongPress: (AppEntry, View) -> Unit,
 ) {
     fun render() {
         container.removeAllViews()
+        container.clipChildren = false // the predicted slot's halo reaches a little past its slot
         val favorites = homeFavorites(prefs, repo)
         val emptyHint = if (prefs.autoFavoritesActive) R.string.favorites_auto_empty_hint else R.string.favorites_empty_hint
         val cell = activity.px(R.dimen.size_rail_cell)
@@ -44,14 +44,14 @@ class FavoritesRail(
             if (fav != null) {
                 val entry = fav.entry
                 image.setImageBitmap(repo.icon(entry) { image.setImageBitmap(it) })
-                // The predicted slot can change: a small mark says so.
-                if (fav.predicted) image.foreground = activity.getDrawable(R.drawable.fg_predicted)
+                // The predicted slot changes with what you use: a soft gold halo says so.
+                if (fav.predicted) PredictedGlow.apply(slot, image)
                 slot.contentDescription =
                     if (fav.predicted) activity.getString(R.string.favorite_predicted, entry.label) else entry.label
                 slot.tooltipText = slot.contentDescription
                 slot.setOnClickListener { onLaunch(entry, it) }
                 slot.setOnLongClickListener {
-                    onLongPress(entry, it, isPredictedSlot(prefs, i))
+                    onLongPress(entry, it)
                     true
                 }
             } else {

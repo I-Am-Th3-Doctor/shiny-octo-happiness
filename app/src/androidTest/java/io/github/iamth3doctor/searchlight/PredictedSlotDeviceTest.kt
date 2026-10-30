@@ -9,6 +9,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.iamth3doctor.searchlight.apps.FavoriteSlots
 import io.github.iamth3doctor.searchlight.data.FavoritesMode
+import io.github.iamth3doctor.searchlight.ui.PredictedGlow
 import io.github.iamth3doctor.searchlight.ui.homeFavorites
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -20,9 +21,9 @@ import org.junit.runner.RunWith
 
 /**
  * The predicted 6th favorite against real usage stats and the real favorites row: off is the six
- * picks; on, slot 6 is predicted (never one of slots 1-5) and marked; Pin prediction from its
- * long-press menu fixes it, Unpin brings the prediction back; turning it off restores the 6th
- * pick; no usage access falls back to it; Automatic mode ignores the setting.
+ * picks; on, slot 6 is the live prediction (never one of slots 1-5), glowing, with the usual
+ * menu (no Pin / Unpin); turning it off restores the 6th pick; no usage access falls back to
+ * it; Automatic mode ignores the setting.
  */
 @RunWith(AndroidJUnit4::class)
 class PredictedSlotDeviceTest {
@@ -123,54 +124,39 @@ class PredictedSlotDeviceTest {
             home.onActivity { it.findViewById<View>(R.id.searchIcon).performLongClick() }
             waitFor("favorites row") { var ok = false; home.onActivity { ok = it.favoritesPopup.isShowing }; ok }
             Thread.sleep(800)
-            // The predicted slot carries the mark; the others don't.
+            // The predicted slot glows (no sparkle); the others don't.
             home.onActivity { a ->
                 val cells = a.favoritesPopup.cells
                 fun icon(v: View) = v.findViewById<ImageView>(R.id.icon)
-                assertNotNull("slot 6 has no mark", icon(cells[5]).foreground)
-                assertTrue("slot 1 is marked", icon(cells[0]).foreground == null)
+                assertTrue("slot 6 has no glow", PredictedGlow.isOn(cells[5]))
+                assertTrue("slot 6 still has a sparkle", icon(cells[5]).foreground == null)
+                for (n in 0..4) assertFalse("slot ${n + 1} glows", PredictedGlow.isOn(cells[n]))
+                assertTrue(cells[5].contentDescription.toString().contains("predicted"))
             }
             shell("screencap -p $dir/${prefix}_font1.0_20-predicted-slot.png")
 
-            // Long-press slot 6: Pin prediction comes first.
+            // Long-press slot 6: the usual menu, no Pin or Unpin.
             home.onActivity { it.favoritesPopup.cells[5].performLongClick() }
             waitFor("menu") { var ok = false; home.onActivity { ok = it.appMenu.isShowing }; ok }
             Thread.sleep(500)
             home.onActivity { a ->
-                val first = a.appMenu.rowsView!!.getChildAt(0)
-                assertEquals(a.getString(R.string.menu_pin_prediction), text(first))
+                val rows = a.appMenu.rowsView!!
+                val labels = (0 until rows.childCount).mapNotNull { text(rows.getChildAt(it)) }
+                assertFalse("menu: $labels", labels.any { it.contains("Pin", ignoreCase = true) })
+                assertTrue("menu: $labels", a.getString(R.string.menu_app_info) in labels)
             }
-            shell("screencap -p $dir/${prefix}_font1.0_21-pin-prediction.png")
-            home.onActivity { it.appMenu.rowsView!!.getChildAt(0).performClick() }
-            waitFor("pinned") { app.prefs.predictionPinned }
+            shell("screencap -p $dir/${prefix}_font1.0_21-predicted-menu.png")
+            home.onActivity { it.appMenu.dismiss() }
 
-            // Pinned: slot 6 is that app, fixed, and it's the manual 6th pick now.
-            s = slots()
-            assertEquals(predicted to FavoriteSlots.Kind.SLOT6_FIXED, s[5])
-            assertEquals(manual.take(5) + predicted, app.prefs.manualFavorites)
+            // A new prediction moves slot 6 with it: there's no pin to hold it.
             val other = key("com.android.settings") // (key() hops to the main thread itself)
             main { app.prefs.savePredictions(listOf(other), System.currentTimeMillis()) }
-            assertEquals("a pinned slot stays put", predicted, slots()[5].first)
-
-            // Long-press it again: Unpin, and the slot predicts again.
-            home.onActivity { it.favoritesPopup.dismiss() }
-            home.onActivity { it.findViewById<View>(R.id.searchIcon).performLongClick() }
-            waitFor("favorites row again") { var ok = false; home.onActivity { ok = it.favoritesPopup.isShowing }; ok }
-            Thread.sleep(500)
-            home.onActivity { it.favoritesPopup.cells[5].performLongClick() }
-            waitFor("menu again") { var ok = false; home.onActivity { ok = it.appMenu.isShowing }; ok }
-            home.onActivity { a ->
-                assertEquals(a.getString(R.string.menu_unpin_prediction), text(a.appMenu.rowsView!!.getChildAt(0)))
-                a.appMenu.rowsView!!.getChildAt(0).performClick()
-            }
-            waitFor("unpinned") { !app.prefs.predictionPinned }
-            predictNow()
-            assertEquals(FavoriteSlots.Kind.PREDICTED, slots()[5].second)
+            assertEquals(other to FavoriteSlots.Kind.PREDICTED, slots()[5])
         }
 
-        // Off again: the six picks, the 6th being the pinned app (pinning replaced the old 6th).
+        // Off again: the six picks, the manual 6th back.
         main { app.prefs.predictedSlot = false }
-        assertEquals(manual.take(5) + predicted, slots().map { it.first })
+        assertEquals(manual, slots().map { it.first })
         assertTrue(slots().all { it.second == FavoriteSlots.Kind.FAVORITE })
 
         // No usage access: slot 6 is the 6th pick, never empty.
@@ -179,11 +165,11 @@ class PredictedSlotDeviceTest {
         shell("appops set $pkg GET_USAGE_STATS ignore")
         main { app.autoFavorites.refreshPrediction() }
         waitFor("predictions cleared") { app.prefs.predictions.isEmpty() }
-        assertEquals(manual[5] to FavoriteSlots.Kind.SLOT6_FIXED, slots()[5])
+        assertEquals(manual[5] to FavoriteSlots.Kind.MANUAL_SIXTH, slots()[5])
 
         // Automatic mode: the setting does nothing there.
         main { app.prefs.favoritesMode = FavoritesMode.AUTOMATIC }
         assertFalse(app.prefs.predictedSlotActive)
-        assertTrue(slots().none { it.second == FavoriteSlots.Kind.PREDICTED || it.second == FavoriteSlots.Kind.SLOT6_FIXED })
+        assertTrue(slots().none { it.second == FavoriteSlots.Kind.PREDICTED || it.second == FavoriteSlots.Kind.MANUAL_SIXTH })
     }
 }

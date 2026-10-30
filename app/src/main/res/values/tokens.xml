@@ -71,6 +71,7 @@
     <dimen name="size_menu_icon">28dp</dimen>       <!-- shortcut / action icons in that menu -->
     <dimen name="size_menu_min_width">200dp</dimen>
     <dimen name="size_menu_max_width">300dp</dimen>
+    <dimen name="size_predicted_glow">9dp</dimen>     <!-- how far the predicted favorite's halo reaches past its icon -->
     <dimen name="space_menu_margin">12dp</dimen>     <!-- the menu's clearance from the screen's safe edges -->
     <dimen name="blur_radius">24dp</dimen>         <!-- backdrop blur behind glass surfaces -->
     <dimen name="stroke_dash">4dp</dimen>
@@ -96,6 +97,9 @@
     <color name="glass_border">#26FFFFFF</color>    <!-- 15% white hairline round the glass -->
     <color name="surface_inset">#1FFFFFFF</color>   <!-- the search row inside the card -->
     <color name="control_off">#33FFFFFF</color>     <!-- off toggles, empty art, tracks -->
+
+    <!-- The predicted 6th favorite's halo: warm gold, about 60% at the icon's edge, fading out. -->
+    <color name="predicted_glow">#99FFC93C</color>
 
     <!-- The app long-press menu: near-solid so its text reads over any wallpaper. -->
     <color name="menu_surface">#F21C1C1F</color>

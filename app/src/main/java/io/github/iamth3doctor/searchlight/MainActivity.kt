@@ -47,6 +47,7 @@ import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.AppTableAdapter
 import io.github.iamth3doctor.searchlight.ui.AppMenu
+import io.github.iamth3doctor.searchlight.ui.AppMenuRows
 import io.github.iamth3doctor.searchlight.ui.FavoritesPopup
 import io.github.iamth3doctor.searchlight.ui.FavoritesRail
 import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
@@ -122,7 +123,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
         engine = SearchEngine(prefs, app.apps, app.contacts)
         adapter = ResultsAdapter(app.apps, app.contacts, app.thumbnails, this)
-        favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp) { e, v, slot6 -> showAppMenu(e, v, slot6) }
+        favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp, ::showAppMenu)
         widgets = WidgetController(this, binding.widgetGrid, prefs) { editing -> binding.editBar.isVisible = editing }
         savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
         widgets.cleanUpOrphans()
@@ -449,11 +450,17 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.settingsButton.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         binding.searchIcon.setOnClickListener { showKeyboard() }
         // Hold the magnifier for the favorites: 250ms, quicker than the system long-press.
-        binding.searchIcon.setOnHoldListener(FAVORITES_HOLD_MS) {
-            app.autoFavorites.refreshIfStale()
-            app.autoFavorites.refreshPrediction()
-            favoritesPopup.show(binding.homeCard)
-        }
+        // Hold the magnifier: the favorites row; keep the finger down and slide along it to launch.
+        binding.searchIcon.setOnHoldListener(
+            FAVORITES_HOLD_MS,
+            onHold = {
+                app.autoFavorites.refreshIfStale()
+                app.autoFavorites.refreshPrediction()
+                favoritesPopup.show(binding.homeCard)
+            },
+            onHeldMove = favoritesPopup::slideMove,
+            onHeldEnd = favoritesPopup::slideEnd,
+        )
     }
 
     /** Edit mode (long-press a widget or empty space) shows a small bar: add, settings, done. */
@@ -552,7 +559,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * long-press) and all apps, which slides in a two-column panel of every app.
      */
     private fun setupRail() {
-        rail = FavoritesRail(this, app.apps, prefs, binding.railFavorites, ::launchApp) { e, v, slot6 -> showAppMenu(e, v, slot6) }
+        rail = FavoritesRail(this, app.apps, prefs, binding.railFavorites, ::launchApp, ::showAppMenu)
         binding.rail.background = frosted(binding.rail, R.dimen.radius_pill)
         binding.rail.clipToOutline = true
         binding.railSearch.setOnClickListener { showKeyboard() }
@@ -1024,45 +1031,41 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * apps), and add/remove favorite, the only way to set favorites (not while automatic
      * favorites are showing: the manual six are hidden then, so editing them would look like a no-op).
      */
-    private fun showAppMenu(entry: AppEntry, anchor: View, predictedSlot: Boolean = false) {
+    private fun showAppMenu(entry: AppEntry, anchor: View) {
         val cached = app.shortcuts.menuFor(entry)
-        // The predicted 6th favorite: Pin prediction (or Unpin, once pinned) before everything else.
-        val pin = if (!predictedSlot || !prefs.predictedSlotActive) null
-        else if (prefs.predictionPinned) AppMenu.Item(getString(R.string.menu_unpin_prediction), iconRes = R.drawable.ic_pin) {
-            prefs.unpinPrediction()
-            app.autoFavorites.refreshPrediction()
-        } else AppMenu.Item(getString(R.string.menu_pin_prediction), iconRes = R.drawable.ic_pin) {
-            prefs.pinPrediction(entry.key)
-        }
-        val shortcuts = listOfNotNull(pin) + cached.shortcuts.map { s ->
+        val shortcuts = cached.shortcuts.map { s ->
             AppMenu.Item(s.label, bitmap = s.icon ?: app.apps.icon(entry) {}) {
                 favoritesPopup.dismiss()
                 launchedSomething = true
                 app.shortcuts.launch(entry, s, anchor)
             }
         }
-        val actions = ArrayList<AppMenu.Item>()
-        actions += AppMenu.Item(getString(R.string.menu_app_info), iconRes = R.drawable.ic_info) {
-            favoritesPopup.dismiss()
-            app.apps.openAppInfo(entry, anchor)
-        }
-        if (cached.hasWidgets) actions += AppMenu.Item(getString(R.string.menu_widgets), iconRes = R.drawable.ic_widgets) {
-            favoritesPopup.dismiss()
-            resetHome() // the widget lands on the home grid, so that's where you come back to
-            widgets.beginAdd(entry.packageName, entry.user)
-        }
-        if (app.apps.canUninstall(entry)) actions += AppMenu.Item(getString(R.string.menu_uninstall), iconRes = R.drawable.ic_delete) {
-            favoritesPopup.dismiss()
-            app.apps.uninstall(entry, this@MainActivity)
-        }
-        if (!prefs.autoFavoritesActive) {
-            actions += if (prefs.isFavorite(entry.key)) {
-                AppMenu.Item(getString(R.string.menu_remove_favorite), iconRes = R.drawable.ic_close) {
+        val rows = AppMenuRows.actions(
+            hasWidgets = cached.hasWidgets,
+            canUninstall = app.apps.canUninstall(entry),
+            autoFavoritesActive = prefs.autoFavoritesActive,
+            isFavorite = prefs.isFavorite(entry.key),
+        )
+        val actions = rows.map { row ->
+            when (row) {
+                AppMenuRows.Action.APP_INFO -> AppMenu.Item(getString(R.string.menu_app_info), iconRes = R.drawable.ic_info) {
+                    favoritesPopup.dismiss()
+                    app.apps.openAppInfo(entry, anchor)
+                }
+                AppMenuRows.Action.WIDGETS -> AppMenu.Item(getString(R.string.menu_widgets), iconRes = R.drawable.ic_widgets) {
+                    favoritesPopup.dismiss()
+                    resetHome() // the widget lands on the home grid, so that's where you come back to
+                    widgets.beginAdd(entry.packageName, entry.user)
+                }
+                AppMenuRows.Action.UNINSTALL -> AppMenu.Item(getString(R.string.menu_uninstall), iconRes = R.drawable.ic_delete) {
+                    favoritesPopup.dismiss()
+                    app.apps.uninstall(entry, this@MainActivity)
+                }
+                AppMenuRows.Action.REMOVE_FAVORITE -> AppMenu.Item(getString(R.string.menu_remove_favorite), iconRes = R.drawable.ic_close) {
                     favoritesPopup.dismiss()
                     prefs.removeFavorite(entry.key)
                 }
-            } else {
-                AppMenu.Item(getString(R.string.menu_add_favorite), iconRes = R.drawable.ic_star) {
+                AppMenuRows.Action.ADD_FAVORITE -> AppMenu.Item(getString(R.string.menu_add_favorite), iconRes = R.drawable.ic_star) {
                     if (prefs.addFavorite(entry.key)) {
                         Toast.makeText(this, getString(R.string.favorite_added, entry.label), Toast.LENGTH_SHORT).show()
                     } else {

@@ -14,46 +14,55 @@ class FavoriteSlotsTest {
     private fun kinds(s: List<FavoriteSlots.Slot?>) = s.map { it?.kind }
 
     @Test fun offIsTheSixManualPicks() {
-        val s = FavoriteSlots.compose(manual, predictedSlot = false, pinned = false, predictions = listOf("x"), installed = all)
+        val s = FavoriteSlots.compose(manual, predictedSlot = false, predictions = listOf("x"), installed = all)
         assertEquals(manual, keys(s))
         assertEquals(List(6) { Kind.FAVORITE }, kinds(s))
     }
 
     @Test fun onPredictsTheSixthNeverRepeatingTheFirstFive() {
-        val s = FavoriteSlots.compose(manual, true, false, predictions = listOf("b", "e", "x", "y"), installed = all)
+        val s = FavoriteSlots.compose(manual, true, predictions = listOf("b", "e", "x", "y"), installed = all)
         assertEquals(listOf("a", "b", "c", "d", "e", "x"), keys(s))
         assertEquals(Kind.PREDICTED, s[5]!!.kind)
     }
 
     @Test fun theManualSixthCanBePredicted() {
         // Predicting the user's own 6th pick is fine: it isn't in slots 1-5.
-        val s = FavoriteSlots.compose(manual, true, false, predictions = listOf("f"), installed = all)
+        val s = FavoriteSlots.compose(manual, true, predictions = listOf("f"), installed = all)
         assertEquals("f", s[5]!!.key)
         assertEquals(Kind.PREDICTED, s[5]!!.kind)
     }
 
     @Test fun noPredictionFallsBackToTheManualSixth() {
-        val s = FavoriteSlots.compose(manual, true, false, predictions = emptyList(), installed = all)
+        val s = FavoriteSlots.compose(manual, true, predictions = emptyList(), installed = all)
         assertEquals("f", s[5]!!.key)
-        assertEquals(Kind.SLOT6_FIXED, s[5]!!.kind)
+        assertEquals(Kind.MANUAL_SIXTH, s[5]!!.kind)
         // Only predictions that are taken or uninstalled: same.
-        val t = FavoriteSlots.compose(manual, true, false, predictions = listOf("a", "gone"), installed = { it != "gone" })
+        val t = FavoriteSlots.compose(manual, true, predictions = listOf("a", "gone"), installed = { it != "gone" })
         assertEquals("f", t[5]!!.key)
     }
 
-    @Test fun pinnedShowsTheManualSixthAndStopsRotating() {
-        val s = FavoriteSlots.compose(manual, true, pinned = true, predictions = listOf("x"), installed = all)
-        assertEquals("f", s[5]!!.key)
-        assertEquals(Kind.SLOT6_FIXED, s[5]!!.kind)
+    @Test fun slotSixAlwaysPredictsWhileOnEvenWhereAPinUsedToBe() {
+        // An app pinned before (stored as the manual 6th pick) no longer holds the slot.
+        val s = FavoriteSlots.compose(manual, true, predictions = listOf("x"), installed = all)
+        assertEquals("x", s[5]!!.key)
+        assertEquals(Kind.PREDICTED, s[5]!!.kind)
+    }
+
+    @Test fun turningItOffRestoresTheManualSixth() {
+        val on = FavoriteSlots.compose(manual, true, predictions = listOf("x"), installed = all)
+        assertEquals("x", on[5]!!.key)
+        val off = FavoriteSlots.compose(manual, false, predictions = listOf("x"), installed = all)
+        assertEquals(manual, keys(off))
+        assertEquals(Kind.FAVORITE, off[5]!!.kind)
     }
 
     @Test fun fewerThanFiveManualKeepsSlotSixForThePrediction() {
-        val s = FavoriteSlots.compose(listOf("a", "b"), true, false, predictions = listOf("a", "x"), installed = all)
+        val s = FavoriteSlots.compose(listOf("a", "b"), true, predictions = listOf("a", "x"), installed = all)
         assertEquals(listOf("a", "b", null, null, null, "x"), keys(s))
     }
 
     @Test fun nothingAnywhereLeavesTheUsualEmptySlot() {
-        val s = FavoriteSlots.compose(listOf("a"), true, false, predictions = emptyList(), installed = all)
+        val s = FavoriteSlots.compose(listOf("a"), true, predictions = emptyList(), installed = all)
         assertNull(s[5])
     }
 }
