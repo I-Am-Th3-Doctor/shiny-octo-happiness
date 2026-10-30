@@ -125,7 +125,9 @@ class AppMenuDeviceTest {
             }
 
             // A shortcut opens the Clock (on that shortcut's screen).
-            tapRow(home, labels.first())
+            // The shortcut row's own click (real taps on menu rows: MenuPlacementDeviceTest).
+            home.onActivity { a -> (find(a.appMenu.rowsView!!, labels.first())!!.parent as View).performClick() }
+            Thread.sleep(1000)
             // A cold first launch on the emulator can be slow: the app's task appearing counts.
             var menuOpen = false
             home.onActivity { menuOpen = it.appMenu.isShowing }
