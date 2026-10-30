@@ -129,8 +129,8 @@ class AppMenuDeviceTest {
             home.onActivity { a -> (find(a.appMenu.rowsView!!, labels.first())!!.parent as View).performClick() }
             Thread.sleep(1000)
             // A cold first launch on the emulator can be slow: the app's task appearing counts.
-            var menuOpen = false
-            home.onActivity { menuOpen = it.appMenu.isShowing }
+            // (Launching the app can take this test's home screen away: then it's no longer open.)
+            val menuOpen = runCatching { var open = false; home.onActivity { open = it.appMenu.isShowing }; open }.getOrDefault(false)
             try {
                 waitFor("${c.label} opened", 30_000) {
                     resumedActivity().contains(c.packageName) || shell("dumpsys activity recents").contains("A=${c.user.hashCode()}:${c.packageName}") ||
