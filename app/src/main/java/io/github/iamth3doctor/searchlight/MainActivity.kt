@@ -799,7 +799,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         adapter.columns = appColumns()
         binding.results.layoutManager = LinearLayoutManager(this)
         // Panel and pill are glass like the home card, each with its own shadow (see frosted()).
-        binding.resultsPanel.background = frosted(binding.resultsPanel, R.dimen.radius_card)
+        binding.resultsPanel.background = frosted(binding.resultsPanel, R.dimen.radius_panel)
         binding.resultsPanel.clipToOutline = true // scrolled results slide under the rounded corners
         binding.webPill.background = frosted(binding.webPill, R.dimen.radius_pill)
         binding.webPill.clipToOutline = true

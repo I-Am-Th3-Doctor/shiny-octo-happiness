@@ -18,9 +18,10 @@
     <!-- "50%": Android clamps a corner radius to half the shape's height, so any value at
          least that large gives a true pill / circle at every size. -->
     <dimen name="radius_pill">999dp</dimen>
-    <dimen name="radius_home_card">30dp</dimen>     <!-- the home card (tiles + search row) -->
-    <!-- The tile strip, inset by the card's space_s padding: 30 - 8, so its corners run parallel to the card's. -->
-    <dimen name="radius_home_row">22dp</dimen>
+    <dimen name="radius_home_card">38dp</dimen>     <!-- the home card (tiles + search row): pill-round -->
+    <!-- The tile strip, inset by the card's space_s padding: 38 - 8, so its corners run parallel to the card's. -->
+    <dimen name="radius_home_row">30dp</dimen>
+    <dimen name="radius_panel">36dp</dimen>         <!-- results panel, favorites row -->
     <dimen name="inset_home_card">12dp</dimen>      <!-- home card to the screen sides and bottom -->
     <dimen name="radius_tile">20dp</dimen>
 
