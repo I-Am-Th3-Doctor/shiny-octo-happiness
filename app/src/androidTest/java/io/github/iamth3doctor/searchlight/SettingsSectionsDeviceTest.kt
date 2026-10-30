@@ -67,6 +67,14 @@ class SettingsSectionsDeviceTest {
             Thread.sleep(1000)
             // Every section has a header; first open, the rest closed.
             assertEquals(listOf(true, false, false, false, false, false), open(s))
+            // Each section in its own card, 28dp corners.
+            s.onActivity { a ->
+                val r = a.resources.getDimension(R.dimen.radius_card)
+                for (k in settingsKeys) {
+                    val bg = CollapsibleSections.cardOf(a.window.decorView, k)!!.background as android.graphics.drawable.GradientDrawable
+                    assertEquals("$k card corners", r, bg.cornerRadius, 0.5f)
+                }
+            }
             shell("screencap -p $dir/${prefix}_font1.0_26-settings-sections.png")
 
             // A header toggles its own section only.

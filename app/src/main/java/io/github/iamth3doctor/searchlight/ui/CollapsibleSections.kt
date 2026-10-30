@@ -21,6 +21,9 @@ import io.github.iamth3doctor.searchlight.data.Prefs
  *
  * Each section's open/closed state is remembered per [screen] (Prefs); the first section of a
  * screen starts open, the rest closed.
+ *
+ * Each section sits in its own card: 28dp corners, filled with the theme's text color at a few
+ * percent over the page, so it reads in light and dark alike.
  */
 object CollapsibleSections {
 
@@ -30,6 +33,7 @@ object CollapsibleSections {
     /** The header row and the body of section [key] (for tests). */
     fun headerOf(root: View, key: String): View? = root.findViewWithTag("sectionHeader:$key")
     fun bodyOf(root: View, key: String): View? = root.findViewWithTag("sectionBody:$key")
+    fun cardOf(root: View, key: String): View? = root.findViewWithTag("sectionCard:$key")
 
     fun apply(column: LinearLayout, screen: String, prefs: Prefs) {
         val children = (0 until column.childCount).map(column::getChildAt)
@@ -50,13 +54,40 @@ object CollapsibleSections {
                 children.subList(i + 1, j).forEach { addView(it) }
             }
             val open = prefs.sectionExpanded(screen, key, default = first)
-            column.addView(header(column, title, key, body, open) { expanded ->
+            val card = card(column, key, top = if (first) ctxPx(column, R.dimen.space_xs) else ctxPx(column, R.dimen.space_s))
+            // Inside a card the title needs only a little room above it, not the page's section gap.
+            title.setPadding(title.paddingLeft, ctxPx(column, R.dimen.space_m), title.paddingRight, title.paddingBottom)
+            card.addView(header(column, title, key, body, open) { expanded ->
                 prefs.setSectionExpanded(screen, key, expanded)
             })
             body.visibility = if (open) View.VISIBLE else View.GONE
-            column.addView(body, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            card.addView(body, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             first = false
             i = j
+        }
+    }
+
+    private fun ctxPx(v: View, dimen: Int) = v.context.px(dimen)
+
+    /** A section's card, added to [column]: rounded, a faint tint of the theme's text color. */
+    private fun card(column: LinearLayout, key: String, top: Int): LinearLayout {
+        val ctx = column.context
+        val a = ctx.obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
+        val ink = a.getColor(0, 0xFF000000.toInt())
+        a.recycle()
+        val pad = ctx.px(R.dimen.space_m)
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            tag = "sectionCard:$key"
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor((ink and 0x00FFFFFF) or CARD_TINT)
+                cornerRadius = ctx.pxF(R.dimen.radius_card)
+            }
+            clipToOutline = true // the header's tap ripple follows the corners
+            setPadding(pad, 0, pad, ctx.px(R.dimen.space_s))
+            column.addView(this, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = top
+            })
         }
     }
 
@@ -105,7 +136,8 @@ object CollapsibleSections {
     /** Opens or closes [body] by animating its height; it ends at its natural height or gone. */
     private fun animate(body: View, expand: Boolean) {
         (body.getTag(R.id.section_anim) as? ValueAnimator)?.cancel()
-        val parentWidth = (body.parent as View).width
+        val parent = body.parent as View
+        val parentWidth = parent.width - parent.paddingLeft - parent.paddingRight
         val from = if (body.visibility == View.VISIBLE) body.height else 0
         val to = if (expand) {
             body.measure(
@@ -137,4 +169,6 @@ object CollapsibleSections {
     }
 
     private const val ANIM_MS = 220L
+    /** The card's fill: the text color at ~6%. */
+    private const val CARD_TINT = 0x10000000
 }
