@@ -16,7 +16,7 @@
 
         <TextView style="@style/PageTitle" android:text="@string/settings_title" />
 
-        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="@dimen/space_xs" android:text="@string/settings_section_home" />
+        <TextView style="@style/SettingsSection" android:tag="section:home" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="@dimen/space_xs" android:text="@string/settings_section_home" />
 
         <LinearLayout
             android:id="@+id/widgetCenterRow"
@@ -61,7 +61,7 @@
             <TextView android:id="@+id/webEngineValue" style="@style/SettingsRowSummary" />
         </LinearLayout>
 
-        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_appearance" />
+        <TextView style="@style/SettingsSection" android:tag="section:appearance" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_appearance" />
 
         <LinearLayout
             android:id="@+id/iconPackRow"
@@ -70,7 +70,7 @@
             <TextView android:id="@+id/iconPackValue" style="@style/SettingsRowSummary" />
         </LinearLayout>
 
-        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_gestures" />
+        <TextView style="@style/SettingsSection" android:tag="section:gestures" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_gestures" />
 
         <TextView
             android:layout_width="match_parent"
@@ -85,7 +85,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
-        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_permissions" />
+        <TextView style="@style/SettingsSection" android:tag="section:permissions" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_permissions" />
 
         <TextView
             android:layout_width="match_parent"
@@ -117,7 +117,7 @@
             android:text="@string/index_rebuild"
             android:textAppearance="@style/TextAppearance.Searchlight.Body" />
 
-        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_favorites" />
+        <TextView style="@style/SettingsSection" android:tag="section:favorites" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_favorites" />
 
         <TextView
             android:layout_width="match_parent"
@@ -165,7 +165,7 @@
             android:layout_marginTop="@dimen/space_s"
             android:orientation="vertical" />
 
-        <TextView style="@style/SettingsSection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_about" />
+        <TextView style="@style/SettingsSection" android:tag="section:about" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_about" />
 
         <TextView
             android:id="@+id/about"

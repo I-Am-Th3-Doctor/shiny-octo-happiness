@@ -26,6 +26,7 @@ import io.github.iamth3doctor.searchlight.iconpack.IconPackActivity
 import io.github.iamth3doctor.searchlight.data.Prefs
 import io.github.iamth3doctor.searchlight.data.WebEngine
 import io.github.iamth3doctor.searchlight.media.MusicApps
+import io.github.iamth3doctor.searchlight.ui.CollapsibleSections
 import io.github.iamth3doctor.searchlight.ui.Type
 import io.github.iamth3doctor.searchlight.ui.edgeToEdge
 import io.github.iamth3doctor.searchlight.ui.isLightTheme
@@ -54,6 +55,8 @@ class SettingsActivity : Activity() {
         setContentView(binding.root)
         edgeToEdge(lightBackground = isLightTheme())
         binding.scroll.padForSystemBars()
+        // Each section (Home, Appearance, Gestures, ...) folds open and shut under its title.
+        CollapsibleSections.apply(binding.scroll.getChildAt(0) as LinearLayout, SCREEN, prefs)
 
         binding.setDefault.setOnClickListener { requestDefaultHome() }
         binding.autoKeyboard.isChecked = prefs.autoOpenKeyboard
@@ -519,6 +522,7 @@ class SettingsActivity : Activity() {
 
 
     private companion object {
+        const val SCREEN = "settings"
         const val REQUEST_HOME_ROLE = 1
         const val REQUEST_RUNTIME = 2
     }

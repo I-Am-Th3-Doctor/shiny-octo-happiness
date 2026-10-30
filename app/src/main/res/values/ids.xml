@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A settings section body's running open/close animation (CollapsibleSections). -->
+    <item name="section_anim" type="id" />
+</resources>

@@ -19,6 +19,7 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import io.github.iamth3doctor.searchlight.cards.CardType
+import io.github.iamth3doctor.searchlight.ui.CollapsibleSections
 import io.github.iamth3doctor.searchlight.ui.MaxWidthLinearLayout
 import io.github.iamth3doctor.searchlight.ui.Type
 import io.github.iamth3doctor.searchlight.ui.edgeToEdge
@@ -79,19 +80,19 @@ class WidgetCenterActivity : Activity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
         )
 
-        section(R.string.wc_section_cards, first = true)
+        section(R.string.wc_section_cards, "cards", first = true)
         help(R.string.wc_cards_help)
         val order = prefs.cardOrder
         val off = prefs.disabledCards
         order.forEachIndexed { i, type -> cardRow(type, i, order, type !in off) }
 
-        section(R.string.wc_section_idle)
+        section(R.string.wc_section_idle, "idle")
         val enabled = prefs.enabledCards
         row(getString(R.string.wc_idle_card), getString(prefs.idleCard.title)) { pickIdleCard() }
         switchRow(R.string.wc_music_front, prefs.musicAutoFront) { prefs.musicAutoFront = it }
         if (enabled.isEmpty()) help(R.string.wc_no_cards)
 
-        section(R.string.wc_section_weather)
+        section(R.string.wc_section_weather, "weather")
         val weatherApp = prefs.weatherAppKey?.let { app.apps.find(it) }
         row(getString(R.string.weather_app), weatherApp?.label ?: getString(R.string.weather_app_unset)) {
             pickWeatherApp { render() }
@@ -109,6 +110,8 @@ class WidgetCenterActivity : Activity() {
             else getString(R.string.weather_updated, DateFormat.getTimeFormat(this).format(Date(data.fetchedAt))) + " · " + data.locationName,
         ) { app.weather.refresh() }
         help(R.string.wc_weather_privacy)
+        // Each section folds open and shut under its title (state kept across re-renders and restarts).
+        CollapsibleSections.apply(content, SCREEN, prefs)
     }
 
     // ------------------------------------------------------------------ cards
@@ -252,9 +255,10 @@ class WidgetCenterActivity : Activity() {
 
     // ------------------------------------------------------------------ building blocks
 
-    private fun section(text: Int, first: Boolean = false) {
+    private fun section(text: Int, key: String, first: Boolean = false) {
         content.addView(TextView(this, null, 0, R.style.SettingsSection).apply {
             setText(text)
+            tag = CollapsibleSections.headerTag(key)
             if (first) setPadding(paddingLeft, px(R.dimen.space_xs), paddingRight, paddingBottom)
         })
     }
@@ -311,6 +315,7 @@ class WidgetCenterActivity : Activity() {
 
 
     private companion object {
+        const val SCREEN = "widget_center"
         const val REQUEST_LOCATION = 1
     }
 }

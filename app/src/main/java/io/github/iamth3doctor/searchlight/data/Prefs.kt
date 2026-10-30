@@ -268,6 +268,14 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_ICON_PACK, null)
         set(value) = sp.edit().putString(KEY_ICON_PACK, value).apply()
 
+    // ---- Settings screens: which sections are open ----
+
+    fun sectionExpanded(screen: String, key: String, default: Boolean): Boolean =
+        sp.getBoolean("$KEY_SECTION$screen.$key", default)
+
+    fun setSectionExpanded(screen: String, key: String, open: Boolean) =
+        sp.edit().putBoolean("$KEY_SECTION$screen.$key", open).apply()
+
     // ---- Home gestures: one action per swipe, the same folded and unfolded ----
 
     fun gestureAction(g: HomeGesture): GestureAction =
@@ -296,6 +304,7 @@ class Prefs(context: Context) {
         const val MAX_FAVORITES = 6
         private const val KEY_FAVORITES = "favorites"
         private const val KEY_GESTURE = "gesture_"
+        private const val KEY_SECTION = "section_open."
         private const val KEY_ICON_PACK = "icon_pack"
         private const val KEY_GESTURE_APP = "gesture_app_"
         private const val KEY_FAVORITES_MODE = "favorites_mode"

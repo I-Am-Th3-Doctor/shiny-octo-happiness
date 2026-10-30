@@ -73,6 +73,7 @@
     <dimen name="size_menu_min_width">200dp</dimen>
     <dimen name="size_menu_max_width">300dp</dimen>
     <dimen name="size_predicted_glow">9dp</dimen>     <!-- how far the predicted favorite's halo reaches past its icon -->
+    <dimen name="size_chevron">20dp</dimen>          <!-- settings section headers -->
     <dimen name="space_menu_margin">12dp</dimen>     <!-- the menu's clearance from the screen's safe edges -->
     <dimen name="blur_radius">24dp</dimen>         <!-- backdrop blur behind glass surfaces -->
     <dimen name="stroke_dash">4dp</dimen>

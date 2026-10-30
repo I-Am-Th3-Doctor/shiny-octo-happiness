@@ -206,6 +206,9 @@
     <string name="perm_accessibility">Accessibility (home gestures)</string>
     <string name="perm_accessibility_desc">Lets swipes on the home screen open notifications and quick settings and lock the screen. Reads nothing on screen.</string>
 
+    <string name="section_expanded">Expanded</string>
+    <string name="section_collapsed">Collapsed</string>
+
     <!-- Appearance: icon packs -->
     <string name="settings_section_appearance">Appearance</string>
     <string name="icon_pack_title">Icon pack</string>
