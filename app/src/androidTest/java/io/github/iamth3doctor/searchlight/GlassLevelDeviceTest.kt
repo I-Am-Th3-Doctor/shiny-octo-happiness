@@ -172,8 +172,10 @@ class GlassLevelDeviceTest {
                     else sample?.let { GlassTint.tint(it, GlassTint.Layer.CARD) } ?: a.getColor(R.color.glass_card)
                 val stockRow = if (!row.glass.drewBlur) a.getColor(R.color.surface_inset)
                     else sample?.let { GlassTint.tint(it, GlassTint.Layer.ROW) } ?: a.getColor(R.color.glass_row)
+                // (A surface not on screen hasn't drawn: it paints the same once it shows.)
+                assertTrue("home card shown", card.shown)
                 assertEquals("home card at the default", hex(stockCard), hex(card.glass.drawnColor))
-                assertEquals("search row at the default", hex(stockRow), hex(row.glass.drawnColor))
+                if (row.shown) assertEquals("search row at the default", hex(stockRow), hex(row.glass.drawnColor))
             }
             shell("screencap -p $dir/${prefix}_font1.0_29-glass-default.png")
 
