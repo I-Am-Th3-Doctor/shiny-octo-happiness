@@ -243,7 +243,11 @@ class GlassLevelDeviceTest {
             home.onActivity { a ->
                 val card = surfaces(a)[0]
                 assertEquals(hex(painted(card)), hex(card.glass.drawnColor))
-                assertTrue(hex(card.glass.drawnColor), alpha(card.glass.drawnColor) < 0x40)
+                // Well under today's tint for the path it drew (17 keeps under half of it).
+                val sample = WallpaperBlur.sampledColor()
+                val stock = if (!card.glass.drewBlur) a.getColor(R.color.glass_card_fallback)
+                    else sample?.let { GlassTint.tint(it, GlassTint.Layer.CARD) } ?: a.getColor(R.color.glass_card)
+                assertTrue("${hex(card.glass.drawnColor)} vs stock ${hex(stock)}", alpha(card.glass.drawnColor) * 2 < alpha(stock))
             }
         }
         main { FrostedDrawable.setGlassLevel(GlassTint.LEVEL_DEFAULT) }
