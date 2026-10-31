@@ -25,6 +25,10 @@ import java.util.WeakHashMap
  * Without [wallpaper] (a screen with its own opaque background) it's always the [fallbackTint]
  * over whatever the page draws: the same glass look, nothing sampled.
  *
+ * Without [fallbackSolid] the fallback is a light inset on other glass (the search row on the
+ * card), not glass of its own: toward Clear it fades with the rest, but it never grows past its
+ * stock opacity toward Solid (an opaque white row would swallow its white text).
+ *
  * Every tint, blurred or fallback, is scaled by the "Glass transparency" setting ([glassLevel], see
  * [GlassTint.scaleAlpha]), worked out afresh on every draw. [setGlassLevel] redraws every live glass
  * surface, in every window, at once.
@@ -38,6 +42,7 @@ class FrostedDrawable(
     borderWidth: Float = 0f,
     private val adaptive: GlassTint.Layer? = null,
     private val wallpaper: Boolean = true,
+    private val fallbackSolid: Boolean = true,
 ) : Drawable() {
 
     private val fixedTint = tint
@@ -49,7 +54,8 @@ class FrostedDrawable(
         val sample = if (adaptive != null) WallpaperBlur.sampledColor() else null
         return if (sample == null || adaptive == null) GlassTint.scale(fixedTint, glassLevel) else GlassTint.tint(sample, adaptive, glassLevel)
     }
-    val appliedFallback: Int get() = GlassTint.scale(fixedFallback, glassLevel)
+    val appliedFallback: Int get() =
+        if (!fallbackSolid && glassLevel > GlassTint.LEVEL_DEFAULT) fixedFallback else GlassTint.scale(fixedFallback, glassLevel)
 
     /** What the last draw actually painted, and over what (for tests). */
     var drawnColor = 0

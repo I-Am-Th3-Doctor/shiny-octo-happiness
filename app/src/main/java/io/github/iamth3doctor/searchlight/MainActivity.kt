@@ -430,7 +430,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.searchPill.background = FrostedDrawable(
             binding.searchPill, pxF(R.dimen.radius_pill), // a full pill: half its height
             color(R.color.glass_row), color(R.color.surface_inset), border, borderWidth,
-            adaptive = GlassTint.Layer.ROW,
+            adaptive = GlassTint.Layer.ROW, fallbackSolid = false, // without a blur: a light inset on the card
         )
         binding.homeCard.clipToOutline = true
         // The tile strip's tap ripples follow the card's corners too.

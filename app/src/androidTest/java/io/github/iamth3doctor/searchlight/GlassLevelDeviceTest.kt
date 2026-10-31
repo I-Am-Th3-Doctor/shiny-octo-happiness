@@ -205,7 +205,10 @@ class GlassLevelDeviceTest {
             val names = on(home) { a -> surfaces(a).map { it.name } }
             for (i in names.indices) {
                 val (c, d, s) = listOf(at[0]!![i], at[50]!![i], at[100]!![i]).map(::alpha)
-                assertTrue("${names[i]}: clear $c default $d solid $s", c < d && d < s)
+                // The row without a blur is a light inset on the card: it fades toward Clear but
+                // never turns opaque white toward Solid (its white text would vanish).
+                val inset = names[i] == "search row" && at[100]!![i] and 0xFFFFFF == 0xFFFFFF
+                assertTrue("${names[i]}: clear $c default $d solid $s", c < d && (if (inset) s == d else d < s))
                 assertTrue("${names[i]} at clear: $c", c <= 0.15f * 255)
             }
             home.onActivity { it.favoritesPopup.dismiss() }
