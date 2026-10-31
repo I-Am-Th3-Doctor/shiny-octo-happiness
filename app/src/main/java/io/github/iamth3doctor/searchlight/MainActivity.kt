@@ -148,11 +148,11 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.contacts.addListener(sourcesChanged)
         app.files.addListener(sourcesChanged)
         WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperChanged, android.os.Handler(mainLooper))
-        FrostedDrawable.setLevel(prefs.glassLevel)
+        FrostedDrawable.setGlassLevel(prefs.glassLevel)
         FrostedDrawable.addListener(glassChanged)
         for (list in listOf(binding.results, binding.allAppsList)) {
             list.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
-                override fun onChildViewAttachedToWindow(view: View) = shadeTexts(view, GlassTint.textShadow(FrostedDrawable.level))
+                override fun onChildViewAttachedToWindow(view: View) = shadeTexts(view, GlassTint.textShadow(FrostedDrawable.glassLevel))
                 override fun onChildViewDetachedFromWindow(view: View) = Unit
             })
         }
@@ -188,7 +188,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     override fun onResume() {
         super.onResume()
-        FrostedDrawable.setLevel(prefs.glassLevel) // the glass setting, as saved: redraws every surface
+        FrostedDrawable.setGlassLevel(prefs.glassLevel) // the glass setting, as saved: redraws every surface
         applyGlassShadows()
         // Permissions may have been granted in Settings since last time.
         app.startSources()
@@ -846,7 +846,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * soft shadow instead (none from the default up: the stock look).
      */
     fun applyGlassShadows() {
-        val strength = GlassTint.textShadow(FrostedDrawable.level)
+        val strength = GlassTint.textShadow(FrostedDrawable.glassLevel)
         glassSurfaces().forEach { shadeTexts(it, strength) }
     }
 
@@ -867,7 +867,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     /** A new wallpaper means a new blur behind every glass surface. */
     private val wallpaperChanged = WallpaperManager.OnColorsChangedListener { _, _ ->
         WallpaperBlur.invalidate()
-        FrostedDrawable.setLevel(FrostedDrawable.level) // redraws every glass surface
+        FrostedDrawable.setGlassLevel(FrostedDrawable.glassLevel) // redraws every glass surface
     }
 
     /**

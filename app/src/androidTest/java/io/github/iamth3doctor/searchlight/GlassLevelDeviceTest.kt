@@ -58,14 +58,14 @@ class GlassLevelDeviceTest {
     }
 
     /** Sets the level the way the slider does: stored, then handed to the glass. */
-    private fun setLevel(value: Int) = main {
+    private fun setGlassLevel(value: Int) = main {
         app.prefs.glassLevel = value
-        FrostedDrawable.setLevel(value)
+        FrostedDrawable.setGlassLevel(value)
     }
 
     @Before fun fresh() {
         sp.edit().remove(Prefs.KEY_GLASS_LEVEL).commit()
-        main { FrostedDrawable.setLevel(app.prefs.glassLevel) }
+        main { FrostedDrawable.setGlassLevel(app.prefs.glassLevel) }
         shell("mkdir -p $dir")
         shell("cmd role add-role-holder --user 0 android.app.role.HOME $pkg")
     }
@@ -110,7 +110,7 @@ class GlassLevelDeviceTest {
 
     private fun state(s: ActivityScenario<SettingsActivity>) = on(s) { a ->
         val c = settingsCard(a)
-        "level ${FrostedDrawable.level}, stored ${sp.getInt(Prefs.KEY_GLASS_LEVEL, -1)}, slider ${a.findViewById<SeekBar>(R.id.glassSlider).progress}, " +
+        "level ${FrostedDrawable.glassLevel}, stored ${sp.getInt(Prefs.KEY_GLASS_LEVEL, -1)}, slider ${a.findViewById<SeekBar>(R.id.glassSlider).progress}, " +
             "drawn ${hex(c.drawnColor)}, fallback ${hex(c.appliedFallback)}"
     }
 
@@ -133,7 +133,7 @@ class GlassLevelDeviceTest {
                 // Written under the key the glass is read from, handed to the glass, read out.
                 assertEquals(state(s), shown, sp.getInt(Prefs.KEY_GLASS_LEVEL, -1))
                 assertEquals(state(s), shown, Prefs(app).glassLevel)
-                assertEquals(state(s), shown, FrostedDrawable.level)
+                assertEquals(state(s), shown, FrostedDrawable.glassLevel)
                 assertEquals("$shown%", on(s) { it.findViewById<TextView>(R.id.glassValue).text.toString() })
                 // And this screen's own card repainted with it, live.
                 assertEquals(state(s), hex(GlassTint.scale(stock, shown)), hex(on(s) { settingsCard(it).drawnColor }))
@@ -218,7 +218,7 @@ class GlassLevelDeviceTest {
             val glass = FrostedDrawable(v, 20f, 0x800B0B0D.toInt(), 0xBF0B0B0D.toInt(), wallpaper = false)
             val bmp = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888)
             for (level in listOf(0, 50, 100)) {
-                FrostedDrawable.setLevel(level)
+                FrostedDrawable.setGlassLevel(level)
                 bmp.eraseColor(0)
                 glass.setBounds(0, 0, 40, 40)
                 glass.draw(Canvas(bmp))
@@ -236,21 +236,21 @@ class GlassLevelDeviceTest {
     @Test fun savedValueIsReadWhenScreensStart() {
         setLevel(17)
         // As after a restart: the glass forgets, the screens read storage when they start.
-        main { FrostedDrawable.setLevel(GlassTint.LEVEL_DEFAULT) }
+        main { FrostedDrawable.setGlassLevel(GlassTint.LEVEL_DEFAULT) }
         ActivityScenario.launch(MainActivity::class.java).use { home ->
             Thread.sleep(1500)
-            assertEquals(17, FrostedDrawable.level)
+            assertEquals(17, FrostedDrawable.glassLevel)
             home.onActivity { a ->
                 val card = surfaces(a)[0]
                 assertEquals(hex(painted(card)), hex(card.glass.drawnColor))
                 assertTrue(hex(card.glass.drawnColor), alpha(card.glass.drawnColor) < 0x40)
             }
         }
-        main { FrostedDrawable.setLevel(GlassTint.LEVEL_DEFAULT) }
+        main { FrostedDrawable.setGlassLevel(GlassTint.LEVEL_DEFAULT) }
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             Thread.sleep(800)
             showSlider(s)
-            assertEquals(17, FrostedDrawable.level)
+            assertEquals(17, FrostedDrawable.glassLevel)
             assertEquals(17, on(s) { it.findViewById<SeekBar>(R.id.glassSlider).progress })
             assertEquals("17%", on(s) { it.findViewById<TextView>(R.id.glassValue).text.toString() })
         }

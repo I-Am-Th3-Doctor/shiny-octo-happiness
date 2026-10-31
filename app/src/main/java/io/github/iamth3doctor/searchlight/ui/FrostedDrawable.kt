@@ -25,8 +25,8 @@ import java.util.WeakHashMap
  * Without [wallpaper] (a screen with its own opaque background) it's always the [fallbackTint]
  * over whatever the page draws: the same glass look, nothing sampled.
  *
- * Every tint, blurred or fallback, is scaled by the "Glass transparency" setting ([level], see
- * [GlassTint.scaleAlpha]), worked out afresh on every draw. [setLevel] redraws every live glass
+ * Every tint, blurred or fallback, is scaled by the "Glass transparency" setting ([glassLevel], see
+ * [GlassTint.scaleAlpha]), worked out afresh on every draw. [setGlassLevel] redraws every live glass
  * surface, in every window, at once.
  */
 class FrostedDrawable(
@@ -47,9 +47,9 @@ class FrostedDrawable(
     /** The tint each path draws with at the current level (over the blur, and without one). */
     val appliedTint: Int get() {
         val sample = if (adaptive != null) WallpaperBlur.sampledColor() else null
-        return if (sample == null || adaptive == null) GlassTint.scale(fixedTint, level) else GlassTint.tint(sample, adaptive, level)
+        return if (sample == null || adaptive == null) GlassTint.scale(fixedTint, glassLevel) else GlassTint.tint(sample, adaptive, glassLevel)
     }
-    val appliedFallback: Int get() = GlassTint.scale(fixedFallback, level)
+    val appliedFallback: Int get() = GlassTint.scale(fixedFallback, glassLevel)
 
     /** What the last draw actually painted, and over what (for tests). */
     var drawnColor = 0
@@ -136,8 +136,11 @@ class FrostedDrawable(
     override fun setColorFilter(colorFilter: ColorFilter?) = Unit
 
     companion object {
-        /** The "Glass transparency" setting, 0 (Clear) to 100 (Solid); see [setLevel]. */
-        @Volatile var level = GlassTint.LEVEL_DEFAULT
+        /**
+         * The "Glass transparency" setting, 0 (Clear) to 100 (Solid); see [setGlassLevel]. Not
+         * "level": inside a Drawable that name is Drawable.getLevel() (always 0 here).
+         */
+        @Volatile var glassLevel = GlassTint.LEVEL_DEFAULT
             private set
 
         /** Every view with glass behind it (weakly: gone views drop out). */
@@ -148,10 +151,10 @@ class FrostedDrawable(
          * The setting's one way in (the slider, and each screen's start from Prefs): every live
          * glass surface redraws with it at once, and listeners (text shadows) hear of it.
          */
-        fun setLevel(value: Int) {
+        fun setGlassLevel(value: Int) {
             val l = value.coerceIn(0, GlassTint.LEVEL_MAX)
-            val changed = l != level
-            level = l
+            val changed = l != glassLevel
+            glassLevel = l
             val views = synchronized(hosts) { hosts.keys.toList() }
             val onMain = Looper.myLooper() == Looper.getMainLooper()
             for (v in views) if (onMain) v.invalidate() else v.postInvalidate()
