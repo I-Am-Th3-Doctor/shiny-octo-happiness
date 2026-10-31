@@ -58,7 +58,7 @@ class GlassLevelDeviceTest {
     }
 
     /** Sets the level the way the slider does: stored, then handed to the glass. */
-    private fun setGlassLevel(value: Int) = main {
+    private fun setLevel(value: Int) = main {
         app.prefs.glassLevel = value
         FrostedDrawable.setGlassLevel(value)
     }
