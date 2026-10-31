@@ -177,6 +177,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     override fun onResume() {
         super.onResume()
+        FrostedDrawable.invalidateAll(binding.root) // the glass setting may have changed meanwhile
         // Permissions may have been granted in Settings since last time.
         app.startSources()
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
@@ -825,10 +826,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     /** A new wallpaper means a new blur behind every glass surface. */
     private val wallpaperChanged = WallpaperManager.OnColorsChangedListener { _, _ ->
         WallpaperBlur.invalidate()
-        binding.homeCard.invalidate()
-        binding.searchPill.invalidate()
-        binding.resultsPanel.invalidate()
-        binding.webPill.invalidate()
+        FrostedDrawable.invalidateAll(binding.root)
     }
 
     /**

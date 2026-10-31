@@ -96,6 +96,11 @@ class FavoritesPopup(
         b.hint.setText(emptyHint)
         b.hint.visibility = if (favorites.all { it == null }) View.VISIBLE else View.GONE
 
+        // The raised surface, as clear or solid as the glass setting says (no blur under it).
+        b.root.background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(GlassTint.scale(activity.getColor(R.color.surface_raised), FrostedDrawable.level, GlassTint.FLOOR_PLAIN))
+            cornerRadius = activity.resources.getDimension(R.dimen.radius_panel)
+        }
         val popup = PopupWindow(b.root, above.width, ViewGroup.LayoutParams.WRAP_CONTENT, false)
         popup.setBackgroundDrawable(ColorDrawable(0))
         popup.isOutsideTouchable = true

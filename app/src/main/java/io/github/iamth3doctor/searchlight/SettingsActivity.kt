@@ -16,6 +16,9 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.Switch
 import android.widget.LinearLayout
+import android.widget.SeekBar
+import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
+import io.github.iamth3doctor.searchlight.ui.GlassTint
 import android.widget.TextView
 import io.github.iamth3doctor.searchlight.cards.QuickAction
 import io.github.iamth3doctor.searchlight.data.FavoritesMode
@@ -69,6 +72,7 @@ class SettingsActivity : Activity() {
         binding.greetingRow.setOnClickListener { editGreeting() }
         binding.webEngineRow.setOnClickListener { pickWebEngine() }
         binding.iconPackRow.setOnClickListener { startActivity(Intent(this, IconPackActivity::class.java)) }
+        setupGlassSlider()
         binding.favoritesModeRow.setOnClickListener { pickFavoritesMode() }
         binding.predictedSlotSwitch.setOnCheckedChangeListener { _, on ->
             if (on == prefs.predictedSlot) return@setOnCheckedChangeListener
@@ -525,6 +529,33 @@ class SettingsActivity : Activity() {
             setOnClickListener { onClick() }
         }
 
+
+    /** "Glass transparency": moving it redraws the glass here at once; home redraws on return. */
+    private fun setupGlassSlider() {
+        val slider = binding.glassSlider
+        slider.max = GlassTint.LEVEL_MAX
+        slider.progress = prefs.glassLevel
+        showGlassLevel(prefs.glassLevel)
+        slider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar, value: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                prefs.glassLevel = value
+                FrostedDrawable.level = value
+                showGlassLevel(value)
+                FrostedDrawable.invalidateAll(window.decorView)
+            }
+            override fun onStartTrackingTouch(s: SeekBar) = Unit
+            override fun onStopTrackingTouch(s: SeekBar) = Unit
+        })
+    }
+
+    private fun showGlassLevel(value: Int) {
+        val text = getString(R.string.glass_value, value)
+        binding.glassValue.text = text
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            binding.glassSlider.stateDescription = "$text, ${getString(R.string.glass_clear)} to ${getString(R.string.glass_solid)}"
+        }
+    }
 
     private companion object {
         const val SCREEN = "settings"

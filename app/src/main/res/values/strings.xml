@@ -274,4 +274,8 @@
     <string name="move_up">Move up</string>
     <string name="move_down">Move down</string>
     <string name="remove">Remove</string>
+    <string name="glass_title">Glass transparency</string>
+    <string name="glass_clear">Clear</string>
+    <string name="glass_solid">Solid</string>
+    <string name="glass_value">%1$d%%</string>
 </resources>

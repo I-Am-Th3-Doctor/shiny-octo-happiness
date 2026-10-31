@@ -22,6 +22,9 @@ import androidx.annotation.ColorInt
  *
  * Without [wallpaper] (a screen with its own opaque background) it's always the [fallbackTint]
  * over whatever the page draws: the same glass look, nothing sampled.
+ *
+ * Every tint is scaled by the "Glass transparency" setting ([level], see [GlassTint.scaleAlpha]),
+ * read when drawing: changing it and invalidating ([invalidateAll]) is enough.
  */
 class FrostedDrawable(
     private val host: View,
@@ -35,7 +38,16 @@ class FrostedDrawable(
 ) : Drawable() {
 
     private val fixedTint = tint
+    private val fixedFallback = fallbackTint
     private var tintFrom: Int? = null
+    private var tintLevel = GlassTint.LEVEL_DEFAULT
+    private var fallbackLevel = GlassTint.LEVEL_DEFAULT
+
+    /** The tints as last set up, and whether the last draw was over the blur (for tests). */
+    val appliedTint get() = tintPaint.color
+    val appliedFallback get() = fallbackPaint.color
+    var drewBlur = false
+        private set
 
     private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint }
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fallbackTint }
@@ -56,16 +68,21 @@ class FrostedDrawable(
         val root = host.rootView
         val blur = if (wallpaper) WallpaperBlur.get(host.context, root.width, root.height) { host.invalidate() } else null
         if (blur == null) {
+            if (fallbackLevel != level) {
+                fallbackLevel = level
+                fallbackPaint.color = GlassTint.scale(fixedFallback, level, GlassTint.FLOOR_PLAIN)
+            }
+            drewBlur = false
             canvas.drawRoundRect(rect, r, r, fallbackPaint)
             drawBorder(canvas, r)
             return
         }
-        if (adaptive != null) {
-            val sample = WallpaperBlur.sampledColor()
-            if (sample != tintFrom) {
-                tintFrom = sample
-                tintPaint.color = if (sample == null) fixedTint else GlassTint.tint(sample, adaptive)
-            }
+        val sample = if (adaptive != null) WallpaperBlur.sampledColor() else null
+        if (sample != tintFrom || tintLevel != level) {
+            tintFrom = sample
+            tintLevel = level
+            tintPaint.color = if (sample == null || adaptive == null) GlassTint.scale(fixedTint, level)
+                else GlassTint.tint(sample, adaptive, level)
         }
         // Line the blurred wallpaper up with the screen: this view's corner is at (here - screen).
         host.getLocationOnScreen(here)
@@ -79,6 +96,7 @@ class FrostedDrawable(
         canvas.scale(scale, root.height / blur.height.toFloat())
         canvas.drawBitmap(blur, 0f, 0f, blurPaint)
         canvas.restore()
+        drewBlur = true
         canvas.drawRoundRect(rect, r, r, tintPaint)
         drawBorder(canvas, r)
     }
@@ -104,6 +122,17 @@ class FrostedDrawable(
     }
 
     override fun setColorFilter(colorFilter: ColorFilter?) = Unit
+
+    companion object {
+        /** The "Glass transparency" setting, 0 (Clear) to 100 (Solid); set from Prefs at start. */
+        @Volatile var level = GlassTint.LEVEL_DEFAULT
+
+        /** Redraws every frosted surface under [root] (after [level] changed). */
+        fun invalidateAll(root: View) {
+            if (root.background is FrostedDrawable) root.invalidate()
+            if (root is android.view.ViewGroup) for (i in 0 until root.childCount) invalidateAll(root.getChildAt(i))
+        }
+    }
 
     @Deprecated("Deprecated in Java")
     override fun getOpacity() = PixelFormat.TRANSLUCENT

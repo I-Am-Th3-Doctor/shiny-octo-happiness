@@ -1,5 +1,6 @@
 package io.github.iamth3doctor.searchlight.data
 
+import io.github.iamth3doctor.searchlight.ui.GlassTint
 import android.content.Context
 import io.github.iamth3doctor.searchlight.cards.CardType
 import io.github.iamth3doctor.searchlight.cards.QuickAction
@@ -207,6 +208,11 @@ class Prefs(context: Context) {
 
     // ---- Predicted 6th slot (Manual mode): five picks plus a predicted app ----
 
+    /** "Glass transparency": 0 (Clear) to 100 (Solid); [GlassTint.LEVEL_DEFAULT] is the stock look. */
+    var glassLevel: Int
+        get() = sp.getInt(KEY_GLASS_LEVEL, GlassTint.LEVEL_DEFAULT).coerceIn(0, GlassTint.LEVEL_MAX)
+        set(value) = sp.edit().putInt(KEY_GLASS_LEVEL, value.coerceIn(0, GlassTint.LEVEL_MAX)).apply()
+
     /** The setting. Only does anything in Manual mode (see [predictedSlotActive]). */
     var predictedSlot: Boolean
         get() = sp.getBoolean(KEY_PREDICTED_SLOT, false)
@@ -306,6 +312,7 @@ class Prefs(context: Context) {
         private const val KEY_GESTURE = "gesture_"
         private const val KEY_SECTION = "section_open."
         private const val KEY_ICON_PACK = "icon_pack"
+        private const val KEY_GLASS_LEVEL = "glass_level"
         private const val KEY_GESTURE_APP = "gesture_app_"
         private const val KEY_FAVORITES_MODE = "favorites_mode"
         private const val KEY_PREDICTED_SLOT = "predicted_slot"

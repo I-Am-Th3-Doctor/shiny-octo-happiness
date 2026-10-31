@@ -70,6 +70,56 @@
             <TextView android:id="@+id/iconPackValue" style="@style/SettingsRowSummary" />
         </LinearLayout>
 
+        <!-- Glass transparency: how clear or solid every frosted surface is, live. -->
+        <LinearLayout
+            android:id="@+id/glassRow"
+            style="@style/SettingsRow"
+            android:background="@null">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <TextView
+                    style="@style/SettingsRowTitle"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="@string/glass_title" />
+                <TextView
+                    android:id="@+id/glassValue"
+                    style="@style/SettingsRowSummary"
+                    android:layout_width="wrap_content" />
+            </LinearLayout>
+
+            <SeekBar
+                android:id="@+id/glassSlider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:contentDescription="@string/glass_title"
+                android:max="100" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:importantForAccessibility="no">
+                <TextView
+                    android:id="@+id/glassClear"
+                    style="@style/SettingsRowSummary"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="@string/glass_clear" />
+                <TextView
+                    android:id="@+id/glassSolid"
+                    style="@style/SettingsRowSummary"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:gravity="end"
+                    android:text="@string/glass_solid" />
+            </LinearLayout>
+        </LinearLayout>
+
         <TextView style="@style/SettingsSection" android:tag="section:gestures" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_gestures" />
 
         <TextView
