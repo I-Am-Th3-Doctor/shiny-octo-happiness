@@ -283,4 +283,51 @@ class GlassLevelDeviceTest {
             assertEquals(hex(GlassTint.scale(stock, 100)), hex(on(s) { settingsCard(it).drawnColor }))
         }
     }
+
+    // ---- Over the blurred wallpaper (what a phone with a readable wallpaper shows) ----
+
+    @Test fun blurredGlassBecomesSeeThroughTowardClear() {
+        // Read the wallpaper as the shell may (the app itself may lack photo access here), so
+        // the glass draws its real blurred path; dropped and forgotten afterwards.
+        instrumentation.uiAutomation.adoptShellPermissionIdentity()
+        try {
+            main { WallpaperBlur.invalidate() }
+            ActivityScenario.launch(MainActivity::class.java).use { home ->
+                val deadline = System.currentTimeMillis() + 15_000
+                var blurred = false
+                while (!blurred && System.currentTimeMillis() < deadline) {
+                    home.onActivity { a -> a.findViewById<View>(R.id.homeCard).invalidate() }
+                    frame()
+                    blurred = on(home) { a -> surfaces(a)[0].glass.drewBlur }
+                }
+                assertTrue("the home card never drew over the blurred wallpaper", blurred)
+
+                val looks = mutableMapOf<Int, Pair<Int, Int>>() // level -> (tint alpha, blur alpha)
+                for ((level, shot) in listOf(50 to "33-glass-blur-default", 0 to "34-glass-blur-clear", 100 to "35-glass-blur-solid")) {
+                    setLevel(level)
+                    frame()
+                    home.onActivity { a ->
+                        for (s in surfaces(a).take(2)) if (s.shown) {
+                            assertTrue("${s.name} over the blur", s.glass.drewBlur)
+                            assertEquals("${s.name} at $level", hex(s.glass.appliedTint), hex(s.glass.drawnColor))
+                        }
+                        val card = surfaces(a)[0].glass
+                        looks[level] = alpha(card.drawnColor) to card.drawnBlurAlpha
+                    }
+                    shell("screencap -p $dir/${prefix}_font1.0_$shot.png")
+                }
+                val (tc, bc) = looks[0]!!
+                val (td, bd) = looks[50]!!
+                val (ts, bs) = looks[100]!!
+                // Default: the blur in full under today's tint. Clear: blur and tint nearly gone
+                // (the wallpaper itself shows). Solid: the tint nearly opaque.
+                assertEquals("default blur", 255, bd)
+                assertTrue("clear: blur $bc tint $tc", bc <= 0.12f * 255 && tc <= 0.15f * 255)
+                assertTrue("solid: tint $ts vs default $td", ts >= 0.9f * 255 && ts > td && bs == 255)
+            }
+        } finally {
+            instrumentation.uiAutomation.dropShellPermissionIdentity()
+            main { WallpaperBlur.invalidate() }
+        }
+    }
 }

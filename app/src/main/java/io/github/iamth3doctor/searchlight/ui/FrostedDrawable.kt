@@ -62,6 +62,8 @@ class FrostedDrawable(
         private set
     var drewBlur = false
         private set
+    var drawnBlurAlpha = 0
+        private set
 
     private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val blurPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
@@ -102,7 +104,9 @@ class FrostedDrawable(
         canvas.translate((screen[0] - here[0]).toFloat(), (screen[1] - here[1]).toFloat())
         val scale = root.width / blur.width.toFloat()
         canvas.scale(scale, root.height / blur.height.toFloat())
-        blurPaint.alpha = alpha
+        // Toward Clear the blurred copy fades too, so the real wallpaper shows through.
+        blurPaint.alpha = (GlassTint.blurOpacity(glassLevel) * alpha + 0.5f).toInt()
+        drawnBlurAlpha = blurPaint.alpha
         canvas.drawBitmap(blur, 0f, 0f, blurPaint)
         canvas.restore()
         drewBlur = true

@@ -84,6 +84,18 @@ object GlassTint {
     }
 
     /**
+     * How much of the blurred wallpaper copy shows at [level] (0..1). The blur is drawn opaque
+     * under the tint, so the tint alone can't make the glass see-through: toward Clear the blur
+     * itself fades too, to [BLUR_CLEAR] at 0, and the real wallpaper shows through. Full from the
+     * default up (today's look). The blur radius never changes.
+     */
+    fun blurOpacity(level: Int): Float {
+        val l = level.coerceIn(0, LEVEL_MAX)
+        if (l >= LEVEL_DEFAULT) return 1f
+        return BLUR_CLEAR + (1 - BLUR_CLEAR) * l / LEVEL_DEFAULT.toFloat()
+    }
+
+    /**
      * How strong a shadow white text on the glass needs at [level]: none from the default up,
      * growing toward Clear, where the glass no longer darkens the wallpaper under it (0..1).
      */
@@ -138,6 +150,7 @@ object GlassTint {
     private const val MIN_ALPHA = 0.5f
     private const val MAX_ALPHA = 0.92f
     private const val CLEAR_SHARE = 0.13f
+    private const val BLUR_CLEAR = 0.1f
     private const val SOLID_SHARE = 0.1f
     private const val SOLID_MAX = 0.96f
 }

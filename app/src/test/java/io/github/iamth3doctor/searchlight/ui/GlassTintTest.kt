@@ -125,4 +125,11 @@ class GlassTintTest {
         assertEquals(1f, GlassTint.textShadow(0))
         assertTrue(GlassTint.textShadow(10) > GlassTint.textShadow(40))
     }
+
+    @Test fun theBlurFadesTowardClearOnly() {
+        for (level in 50..100) assertEquals(1f, GlassTint.blurOpacity(level))
+        assertTrue(GlassTint.blurOpacity(0) <= 0.1f)
+        var last = -1f
+        for (level in 0..100) { val o = GlassTint.blurOpacity(level); assertTrue(o >= last); last = o }
+    }
 }
