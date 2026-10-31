@@ -312,7 +312,8 @@ class Prefs(context: Context) {
         private const val KEY_GESTURE = "gesture_"
         private const val KEY_SECTION = "section_open."
         private const val KEY_ICON_PACK = "icon_pack"
-        private const val KEY_GLASS_LEVEL = "glass_level"
+        /** The glass setting's key: the slider writes it, every screen reads it on start. */
+        const val KEY_GLASS_LEVEL = "glass_level"
         private const val KEY_GESTURE_APP = "gesture_app_"
         private const val KEY_FAVORITES_MODE = "favorites_mode"
         private const val KEY_PREDICTED_SLOT = "predicted_slot"

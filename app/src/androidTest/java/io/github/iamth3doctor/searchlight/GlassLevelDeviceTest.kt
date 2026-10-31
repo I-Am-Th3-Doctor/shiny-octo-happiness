@@ -1,5 +1,7 @@
 package io.github.iamth3doctor.searchlight
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.view.View
 import android.widget.SeekBar
 import android.widget.TextView
@@ -20,9 +22,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * "Glass transparency" in Settings > Appearance: the default is today's look, a real drag on
- * the slider changes the glass live (settings cards at once, the home card and search row on
- * return, the row always lighter), and the value outlives the screen and a fresh start.
+ * "Glass transparency" in Settings > Appearance, end to end: the slider writes the very key the
+ * glass reads; what every surface actually paints follows the value live (blurred or not, the
+ * popup and settings cards too); every screen picks the saved value up when it starts; the
+ * default paints today's tints; and 0 / 50 / 100 look plainly different (screenshots).
  */
 @RunWith(AndroidJUnit4::class)
 class GlassLevelDeviceTest {
@@ -32,6 +35,7 @@ class GlassLevelDeviceTest {
     private val pkg = app.packageName
     private val prefix = InstrumentationRegistry.getArguments().getString("shotPrefix") ?: "device"
     private val dir = "/sdcard/Download/searchlight-shots"
+    private val sp get() = app.getSharedPreferences("searchlight", 0)
 
     private fun shell(cmd: String): String =
         instrumentation.uiAutomation.executeShellCommand(cmd).use { String(java.io.FileInputStream(it.fileDescriptor).readBytes()) }
@@ -45,29 +49,44 @@ class GlassLevelDeviceTest {
     }
 
     private fun alpha(c: Int) = c ushr 24
+    private fun hex(c: Int) = Integer.toHexString(c)
 
-    private fun reset() = main {
-        app.prefs.glassLevel = GlassTint.LEVEL_DEFAULT
-        FrostedDrawable.level = GlassTint.LEVEL_DEFAULT
+    /** Lets a frame or two draw. */
+    private fun frame() {
+        Thread.sleep(400)
+        instrumentation.waitForIdleSync()
+    }
+
+    /** Sets the level the way the slider does: stored, then handed to the glass. */
+    private fun setLevel(value: Int) = main {
+        app.prefs.glassLevel = value
+        FrostedDrawable.setLevel(value)
     }
 
     @Before fun fresh() {
-        app.getSharedPreferences("searchlight", 0).edit().remove("glass_level").commit()
-        main { FrostedDrawable.level = app.prefs.glassLevel }
+        sp.edit().remove(Prefs.KEY_GLASS_LEVEL).commit()
+        main { FrostedDrawable.setLevel(app.prefs.glassLevel) }
+        shell("mkdir -p $dir")
+        shell("cmd role add-role-holder --user 0 android.app.role.HOME $pkg")
     }
 
-    @After fun clean() = reset()
+    @After fun clean() {
+        shell("cmd uimode night no")
+        setLevel(GlassTint.LEVEL_DEFAULT)
+    }
+
+    // ---- Settings: the slider ----
 
     /** Opens Appearance and brings the slider on screen. */
     private fun showSlider(s: ActivityScenario<SettingsActivity>) {
         s.onActivity { a ->
-            val body = CollapsibleSections.bodyOf(a.window.decorView, "appearance")!!
-            if (body.visibility != View.VISIBLE) CollapsibleSections.headerOf(a.window.decorView, "appearance")!!.performClick()
+            if (CollapsibleSections.bodyOf(a.window.decorView, "appearance")!!.visibility != View.VISIBLE) {
+                CollapsibleSections.headerOf(a.window.decorView, "appearance")!!.performClick()
+            }
         }
         Thread.sleep(700)
         s.onActivity { a -> a.findViewById<View>(R.id.glassRow).let { it.requestRectangleOnScreen(android.graphics.Rect(0, 0, it.width, it.height), true) } }
-        Thread.sleep(700)
-        instrumentation.waitForIdleSync()
+        frame()
     }
 
     /** A real tap on the slider at [fraction] of its track. */
@@ -80,66 +99,22 @@ class GlassLevelDeviceTest {
             (l[0] + bar.paddingLeft + (track * fraction).toInt()) to (l[1] + bar.height / 2)
         }
         shell("input tap $x $y")
-        Thread.sleep(600)
-        instrumentation.waitForIdleSync()
+        frame()
     }
 
-    /**
-     * The glass of the settings card the slider sits in (on screen, so redrawn as it moves) as
-     * drawn; always its plain tint (it doesn't sample the wallpaper). Waits for a frame first.
-     */
-    private fun settingsGlass(s: ActivityScenario<SettingsActivity>): Int {
-        Thread.sleep(300)
-        instrumentation.waitForIdleSync()
-        return on(s) { a -> card(a).appliedFallback }
-    }
-
-    private fun card(a: SettingsActivity) = CollapsibleSections.cardOf(a.window.decorView, "appearance")!!.background as FrostedDrawable
-
-    /** What a failure needs to say: the level everywhere it lives, and the card as drawn. */
-    private fun state(s: ActivityScenario<SettingsActivity>) = on(s) { a ->
-        val c = card(a)
-        "level ${FrostedDrawable.level}, prefs ${app.prefs.glassLevel}, slider ${a.findViewById<SeekBar>(R.id.glassSlider).progress}, " +
-            "fallback ${hex(c.appliedFallback)}, tint ${hex(c.appliedTint)}, drewBlur ${c.drewBlur}, shown ${CollapsibleSections.cardOf(a.window.decorView, "appearance")!!.isShown}"
-    }
+    /** The glass of the slider's own card (on screen, so it repaints as the slider moves). */
+    private fun settingsCard(a: SettingsActivity) = CollapsibleSections.cardOf(a.window.decorView, "appearance")!!.background as FrostedDrawable
 
     private fun stockSettingsGlass(a: SettingsActivity) =
         a.getColor(if (a.isLightTheme()) R.color.settings_glass_light_fallback else R.color.glass_card_fallback)
 
-    /** The home card's and search row's glass at a level: as drawn, and as expected there. */
-    private class Home(val card: Int, val row: Int, val expectedCard: Int, val expectedRow: Int)
-
-    /** Opens home at the current level and reads its glass; [shot] names a screenshot of it. */
-    private fun home(shot: String? = null): Home {
-        lateinit var h: Home
-        ActivityScenario.launch(MainActivity::class.java).use { s ->
-            Thread.sleep(2000)
-            s.onActivity { a ->
-                val level = FrostedDrawable.level
-                val c = a.findViewById<View>(R.id.homeCard).background as FrostedDrawable
-                val r = a.findViewById<View>(R.id.searchPill).background as FrostedDrawable
-                val sample = WallpaperBlur.sampledColor()
-                fun expected(d: FrostedDrawable, layer: GlassTint.Layer, tint: Int, fallback: Int) = when {
-                    !d.drewBlur -> GlassTint.scale(a.getColor(fallback), level, GlassTint.FLOOR_PLAIN)
-                    sample != null -> GlassTint.tint(sample, layer, level)
-                    else -> GlassTint.scale(a.getColor(tint), level)
-                }
-                h = Home(
-                    if (c.drewBlur) c.appliedTint else c.appliedFallback,
-                    if (r.drewBlur) r.appliedTint else r.appliedFallback,
-                    expected(c, GlassTint.Layer.CARD, R.color.glass_card, R.color.glass_card_fallback),
-                    expected(r, GlassTint.Layer.ROW, R.color.glass_row, R.color.surface_inset),
-                )
-            }
-            if (shot != null) shell("screencap -p $dir/${prefix}_font1.0_$shot.png")
-        }
-        return h
+    private fun state(s: ActivityScenario<SettingsActivity>) = on(s) { a ->
+        val c = settingsCard(a)
+        "level ${FrostedDrawable.level}, stored ${sp.getInt(Prefs.KEY_GLASS_LEVEL, -1)}, slider ${a.findViewById<SeekBar>(R.id.glassSlider).progress}, " +
+            "drawn ${hex(c.drawnColor)}, fallback ${hex(c.appliedFallback)}"
     }
 
-    private fun hex(c: Int) = Integer.toHexString(c)
-
-    @Test fun defaultIsTodaysLook() {
-        assertEquals(GlassTint.LEVEL_DEFAULT, app.prefs.glassLevel)
+    @Test fun sliderWritesTheKeyTheGlassReads() {
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             Thread.sleep(800)
             showSlider(s)
@@ -150,65 +125,153 @@ class GlassLevelDeviceTest {
                 assertEquals("Solid", a.findViewById<TextView>(R.id.glassSolid).text.toString())
             }
             val stock = on(s) { stockSettingsGlass(it) }
-            assertEquals(state(s), hex(stock), hex(settingsGlass(s)))
+            assertEquals("default paints today's tint: ${state(s)}", hex(stock), hex(on(s) { settingsCard(it).drawnColor }))
+
+            for (fraction in listOf(0.97f, 0.03f, 0.5f)) {
+                tapSlider(s, fraction)
+                val shown = on(s) { it.findViewById<SeekBar>(R.id.glassSlider).progress }
+                // Written under the key the glass is read from, handed to the glass, read out.
+                assertEquals(state(s), shown, sp.getInt(Prefs.KEY_GLASS_LEVEL, -1))
+                assertEquals(state(s), shown, Prefs(app).glassLevel)
+                assertEquals(state(s), shown, FrostedDrawable.level)
+                assertEquals("$shown%", on(s) { it.findViewById<TextView>(R.id.glassValue).text.toString() })
+                // And this screen's own card repainted with it, live.
+                assertEquals(state(s), hex(GlassTint.scale(stock, shown)), hex(on(s) { settingsCard(it).drawnColor }))
+                if (fraction > 0.9f) shell("screencap -p $dir/${prefix}_font1.0_28-glass-slider.png")
+            }
         }
-        // Home: exactly the stock tints (level 50 leaves every alpha as it was).
-        val h = home()
-        assertEquals("home card", hex(h.expectedCard), hex(h.card))
-        assertEquals("search row", hex(h.expectedRow), hex(h.row))
     }
 
-    @Test fun sliderScalesTheGlassLiveAndPersists() {
-        shell("mkdir -p $dir")
-        shell("cmd role add-role-holder --user 0 android.app.role.HOME $pkg")
-        ActivityScenario.launch(SettingsActivity::class.java).use { s ->
-            Thread.sleep(800)
-            showSlider(s)
-            val stock = settingsGlass(s)
+    // ---- Home: every surface ----
 
-            // Toward Solid: saved, read out, the card on this screen more opaque at once.
-            tapSlider(s, 0.95f)
-            val solid = app.prefs.glassLevel
-            assertTrue("level $solid", solid >= 85)
-            assertEquals(solid, FrostedDrawable.level)
-            assertEquals("$solid%", on(s) { it.findViewById<TextView>(R.id.glassValue).text.toString() })
-            assertTrue("settings card more solid than ${hex(stock)}: ${state(s)}", alpha(settingsGlass(s)) > alpha(stock))
-            shell("screencap -p $dir/${prefix}_font1.0_28-glass-slider.png")
+    private class Surface(val name: String, val glass: FrostedDrawable, val shown: Boolean)
 
-            // Toward Clear: clearer than today.
-            tapSlider(s, 0.05f)
-            val clear = app.prefs.glassLevel
-            assertTrue("level $clear", clear <= 15)
-            assertTrue("settings card clearer than ${hex(stock)}: ${state(s)}", alpha(settingsGlass(s)) < alpha(stock))
+    private fun surfaces(a: MainActivity): List<Surface> {
+        fun s(name: String, id: Int) = a.findViewById<View>(id).let { Surface(name, it.background as FrostedDrawable, it.isShown) }
+        return listOf(
+            s("home card", R.id.homeCard), s("search row", R.id.searchPill), s("results panel", R.id.resultsPanel),
+            s("web pill", R.id.webPill), s("rail", R.id.rail), s("all apps", R.id.allApps),
+        ) + listOfNotNull(a.favoritesPopup.contentView?.let { Surface("favorites popup", it.background as FrostedDrawable, it.isShown) })
+    }
+
+    /** What a surface paints at the current level: the tint over the blur, or the fallback without one. */
+    private fun painted(s: Surface) = if (s.glass.drewBlur) s.glass.appliedTint else s.glass.appliedFallback
+
+    @Test fun everySurfaceFollowsTheLevelLive() {
+        ActivityScenario.launch(MainActivity::class.java).use { home ->
+            Thread.sleep(2000)
+            home.onActivity { it.favoritesPopup.show(it.findViewById(R.id.homeCard)) }
+            frame()
+
+            // Default: today's tints, exactly, on the card and row as drawn.
+            home.onActivity { a ->
+                val sample = WallpaperBlur.sampledColor()
+                val card = surfaces(a)[0]
+                val row = surfaces(a)[1]
+                val stockCard = if (!card.glass.drewBlur) a.getColor(R.color.glass_card_fallback)
+                    else sample?.let { GlassTint.tint(it, GlassTint.Layer.CARD) } ?: a.getColor(R.color.glass_card)
+                val stockRow = if (!row.glass.drewBlur) a.getColor(R.color.surface_inset)
+                    else sample?.let { GlassTint.tint(it, GlassTint.Layer.ROW) } ?: a.getColor(R.color.glass_row)
+                assertEquals("home card at the default", hex(stockCard), hex(card.glass.drawnColor))
+                assertEquals("search row at the default", hex(stockRow), hex(row.glass.drawnColor))
+            }
+            shell("screencap -p $dir/${prefix}_font1.0_29-glass-default.png")
+
+            val at = mutableMapOf<Int, List<Int>>()
+            for (level in listOf(0, 100, 50)) {
+                setLevel(level)
+                frame()
+                home.onActivity { a ->
+                    val all = surfaces(a)
+                    assertTrue("popup open", all.any { it.name == "favorites popup" })
+                    // Every shown surface repainted with the new value (hidden ones paint it when shown).
+                    for (s in all) {
+                        if (s.shown) assertEquals("${s.name} at $level", hex(painted(s)), hex(s.glass.drawnColor))
+                    }
+                    at[level] = all.map { painted(it) }
+                    // The row lighter than the card at every level (with the blur; without, it's a light inset).
+                    if (all[0].glass.drewBlur && all[1].glass.drewBlur) {
+                        val card = painted(all[0])
+                        val row = painted(all[1])
+                        assertTrue("row ${hex(row)} vs card ${hex(card)} at $level",
+                            alpha(row) < alpha(card) || GlassTint.hsl(row).third > GlassTint.hsl(card).third)
+                    }
+                }
+                if (level != 50) shell("screencap -p $dir/${prefix}_font1.0_${if (level == 0) "30-glass-clear" else "31-glass-solid"}.png")
+            }
+            // Clear < default < Solid on every surface, and far apart: 0 nearly invisible, 100 nearly opaque.
+            val names = on(home) { a -> surfaces(a).map { it.name } }
+            for (i in names.indices) {
+                val (c, d, s) = listOf(at[0]!![i], at[50]!![i], at[100]!![i]).map(::alpha)
+                assertTrue("${names[i]}: clear $c default $d solid $s", c < d && d < s)
+                assertTrue("${names[i]} at clear: $c", c <= 0.15f * 255)
+            }
+            home.onActivity { it.favoritesPopup.dismiss() }
         }
+    }
 
-        // Home at Clear vs the stock look: both clearer, as the curve says.
-        main { FrostedDrawable.level = GlassTint.LEVEL_DEFAULT }
-        val stock50 = home()
-        main { FrostedDrawable.level = app.prefs.glassLevel }
-        val clear = home("29-glass-clear")
-        assertEquals("card", hex(clear.expectedCard), hex(clear.card))
-        assertEquals("row", hex(clear.expectedRow), hex(clear.row))
-        assertTrue("card clearer", alpha(clear.card) < alpha(stock50.card))
-        assertTrue("row clearer", alpha(clear.row) < alpha(stock50.row))
+    @Test fun noBlurFallbackPaintsTheScaledTint() {
+        // A glass surface with no wallpaper under it, drawn for real at each level.
+        val pixels = mutableMapOf<Int, Int>()
+        main {
+            val v = View(app)
+            val glass = FrostedDrawable(v, 20f, 0x800B0B0D.toInt(), 0xBF0B0B0D.toInt(), wallpaper = false)
+            val bmp = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888)
+            for (level in listOf(0, 50, 100)) {
+                FrostedDrawable.setLevel(level)
+                bmp.eraseColor(0)
+                glass.setBounds(0, 0, 40, 40)
+                glass.draw(Canvas(bmp))
+                assertTrue(!glass.drewBlur)
+                assertEquals(hex(GlassTint.scale(0xBF0B0B0D.toInt(), level)), hex(glass.drawnColor))
+                pixels[level] = alpha(bmp.getPixel(20, 20))
+            }
+        }
+        assertTrue("pixels: $pixels", kotlin.math.abs(pixels[50]!! - 0xBF) <= 1)
+        assertTrue("pixels: $pixels", pixels[0]!! < 0x20 && pixels[100]!! > 0xF0)
+    }
 
-        // Solid: both more opaque, a hint of glass left.
-        main { app.prefs.glassLevel = 100; FrostedDrawable.level = 100 }
-        val solid = home("30-glass-solid")
-        assertEquals("card", hex(solid.expectedCard), hex(solid.card))
-        assertEquals("row", hex(solid.expectedRow), hex(solid.row))
-        assertTrue("card more solid", alpha(solid.card) > alpha(stock50.card))
-        assertTrue("row more solid", alpha(solid.row) > alpha(stock50.row))
-        assertTrue("a hint of glass", alpha(solid.card) < 0xF5)
+    // ---- Restart, and the dark theme ----
 
-        // A fresh start: storage read anew (a new Prefs, as after a restart), the slider where it was left.
-        main { app.prefs.glassLevel = 23 }
-        assertEquals(23, Prefs(app).glassLevel)
+    @Test fun savedValueIsReadWhenScreensStart() {
+        setLevel(17)
+        // As after a restart: the glass forgets, the screens read storage when they start.
+        main { FrostedDrawable.setLevel(GlassTint.LEVEL_DEFAULT) }
+        ActivityScenario.launch(MainActivity::class.java).use { home ->
+            Thread.sleep(1500)
+            assertEquals(17, FrostedDrawable.level)
+            home.onActivity { a ->
+                val card = surfaces(a)[0]
+                assertEquals(hex(painted(card)), hex(card.glass.drawnColor))
+                assertTrue(hex(card.glass.drawnColor), alpha(card.glass.drawnColor) < 0x40)
+            }
+        }
+        main { FrostedDrawable.setLevel(GlassTint.LEVEL_DEFAULT) }
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             Thread.sleep(800)
             showSlider(s)
-            assertEquals(23, on(s) { it.findViewById<SeekBar>(R.id.glassSlider).progress })
-            assertEquals("23%", on(s) { it.findViewById<TextView>(R.id.glassValue).text.toString() })
+            assertEquals(17, FrostedDrawable.level)
+            assertEquals(17, on(s) { it.findViewById<SeekBar>(R.id.glassSlider).progress })
+            assertEquals("17%", on(s) { it.findViewById<TextView>(R.id.glassValue).text.toString() })
+        }
+    }
+
+    @Test fun darkThemeSettingsCardsScaleToo() {
+        shell("cmd uimode night yes")
+        Thread.sleep(1500)
+        ActivityScenario.launch(SettingsActivity::class.java).use { s ->
+            Thread.sleep(1000)
+            showSlider(s)
+            assertTrue("dark", on(s) { !it.isLightTheme() })
+            val stock = on(s) { it.getColor(R.color.glass_card_fallback) }
+            assertEquals(hex(stock), hex(on(s) { settingsCard(it).drawnColor }))
+            setLevel(0)
+            frame()
+            assertEquals(hex(GlassTint.scale(stock, 0)), hex(on(s) { settingsCard(it).drawnColor }))
+            shell("screencap -p $dir/${prefix}_font1.0_32-glass-dark-clear.png")
+            setLevel(100)
+            frame()
+            assertEquals(hex(GlassTint.scale(stock, 100)), hex(on(s) { settingsCard(it).drawnColor }))
         }
     }
 }

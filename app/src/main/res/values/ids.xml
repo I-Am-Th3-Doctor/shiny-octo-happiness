@@ -2,4 +2,5 @@
 <resources>
     <!-- A settings section body's running open/close animation (CollapsibleSections). -->
     <item name="section_anim" type="id" />
+    <item name="glass_text_shadow" type="id" />
 </resources>

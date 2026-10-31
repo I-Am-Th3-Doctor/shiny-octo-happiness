@@ -533,6 +533,7 @@ class SettingsActivity : Activity() {
     /** "Glass transparency": moving it redraws the glass here at once; home redraws on return. */
     private fun setupGlassSlider() {
         val slider = binding.glassSlider
+        FrostedDrawable.setLevel(prefs.glassLevel)
         slider.max = GlassTint.LEVEL_MAX
         slider.progress = prefs.glassLevel
         showGlassLevel(prefs.glassLevel)
@@ -540,9 +541,8 @@ class SettingsActivity : Activity() {
             override fun onProgressChanged(s: SeekBar, value: Int, fromUser: Boolean) {
                 if (!fromUser) return
                 prefs.glassLevel = value
-                FrostedDrawable.level = value
+                FrostedDrawable.setLevel(value) // every glass surface redraws, here and on home
                 showGlassLevel(value)
-                FrostedDrawable.invalidateAll(window.decorView)
             }
             override fun onStartTrackingTouch(s: SeekBar) = Unit
             override fun onStopTrackingTouch(s: SeekBar) = Unit

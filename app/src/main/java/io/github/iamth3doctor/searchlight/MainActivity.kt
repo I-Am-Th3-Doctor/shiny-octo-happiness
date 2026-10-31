@@ -14,6 +14,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.widget.TextView
 import android.view.ViewOutlineProvider
 import android.view.inputmethod.EditorInfo
 import android.widget.FrameLayout
@@ -147,6 +148,15 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.contacts.addListener(sourcesChanged)
         app.files.addListener(sourcesChanged)
         WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperChanged, android.os.Handler(mainLooper))
+        FrostedDrawable.setLevel(prefs.glassLevel)
+        FrostedDrawable.addListener(glassChanged)
+        for (list in listOf(binding.results, binding.allAppsList)) {
+            list.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
+                override fun onChildViewAttachedToWindow(view: View) = shadeTexts(view, GlassTint.textShadow(FrostedDrawable.level))
+                override fun onChildViewDetachedFromWindow(view: View) = Unit
+            })
+        }
+        applyGlassShadows()
     }
 
     override fun onDestroy() {
@@ -155,6 +165,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.contacts.removeListener(sourcesChanged)
         app.files.removeListener(sourcesChanged)
         WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperChanged)
+        FrostedDrawable.removeListener(glassChanged)
         super.onDestroy()
     }
 
@@ -177,7 +188,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     override fun onResume() {
         super.onResume()
-        FrostedDrawable.invalidateAll(binding.root) // the glass setting may have changed meanwhile
+        FrostedDrawable.setLevel(prefs.glassLevel) // the glass setting, as saved: redraws every surface
+        applyGlassShadows()
         // Permissions may have been granted in Settings since last time.
         app.startSources()
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
@@ -823,10 +835,39 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         color(R.color.glass_border), pxF(R.dimen.stroke_glass), adaptive = GlassTint.Layer.CARD,
     )
 
+    private val glassChanged: (Int) -> Unit = { runOnUiThread { applyGlassShadows() } }
+
+    /** The surfaces with glass behind their text. */
+    private fun glassSurfaces(): List<View> =
+        listOf(binding.homeCard, binding.resultsPanel, binding.webPill, binding.rail, binding.allApps)
+
+    /**
+     * Toward Clear the glass stops darkening the wallpaper under it, so white text on it gets a
+     * soft shadow instead (none from the default up: the stock look).
+     */
+    fun applyGlassShadows() {
+        val strength = GlassTint.textShadow(FrostedDrawable.level)
+        glassSurfaces().forEach { shadeTexts(it, strength) }
+    }
+
+    private fun shadeTexts(v: View, strength: Float) {
+        if (v is TextView) {
+            // A text's own shadow (OnWallpaperText) is kept, and comes back at the default.
+            val own = v.getTag(R.id.glass_text_shadow) as? TextShadow
+                ?: TextShadow(v.shadowRadius, v.shadowDx, v.shadowDy, v.shadowColor).also { v.setTag(R.id.glass_text_shadow, it) }
+            if (strength <= 0f || own.radius > 0f) v.setShadowLayer(own.radius, own.dx, own.dy, own.color)
+            else v.setShadowLayer(pxF(R.dimen.glass_text_shadow) * (0.5f + strength / 2), 0f, pxF(R.dimen.stroke_glass),
+                (((GLASS_SHADOW_ALPHA * strength) * 255).toInt() shl 24))
+        }
+        if (v is ViewGroup) for (i in 0 until v.childCount) shadeTexts(v.getChildAt(i), strength)
+    }
+
+    private class TextShadow(val radius: Float, val dx: Float, val dy: Float, val color: Int)
+
     /** A new wallpaper means a new blur behind every glass surface. */
     private val wallpaperChanged = WallpaperManager.OnColorsChangedListener { _, _ ->
         WallpaperBlur.invalidate()
-        FrostedDrawable.invalidateAll(binding.root)
+        FrostedDrawable.setLevel(FrostedDrawable.level) // redraws every glass surface
     }
 
     /**
@@ -1104,6 +1145,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         private const val UNFOLDED_APP_COLUMNS = 7
         private const val KEY_PENDING_WIDGET = "pending_widget_id"
         private const val TABLE_ANIM_MS = 220L
+        /** The text shadow's opacity at the Clear end of the glass setting. */
+        private const val GLASS_SHADOW_ALPHA = 0.6f
         private const val FAVORITES_HOLD_MS = 250L
     }
 }

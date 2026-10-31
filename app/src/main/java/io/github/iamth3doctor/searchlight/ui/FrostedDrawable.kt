@@ -8,8 +8,10 @@ import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.os.Looper
 import android.view.View
 import androidx.annotation.ColorInt
+import java.util.WeakHashMap
 
 /**
  * Frosted glass: the wallpaper right behind [host], blurred, under a dark tint, with rounded
@@ -23,8 +25,9 @@ import androidx.annotation.ColorInt
  * Without [wallpaper] (a screen with its own opaque background) it's always the [fallbackTint]
  * over whatever the page draws: the same glass look, nothing sampled.
  *
- * Every tint is scaled by the "Glass transparency" setting ([level], see [GlassTint.scaleAlpha]),
- * read when drawing: changing it and invalidating ([invalidateAll]) is enough.
+ * Every tint, blurred or fallback, is scaled by the "Glass transparency" setting ([level], see
+ * [GlassTint.scaleAlpha]), worked out afresh on every draw. [setLevel] redraws every live glass
+ * surface, in every window, at once.
  */
 class FrostedDrawable(
     private val host: View,
@@ -39,19 +42,24 @@ class FrostedDrawable(
 
     private val fixedTint = tint
     private val fixedFallback = fallbackTint
-    private var tintFrom: Int? = null
-    private var tintLevel = GlassTint.LEVEL_DEFAULT
-    private var fallbackLevel = GlassTint.LEVEL_DEFAULT
+    private var alpha = 255
 
-    /** The tints as last set up, and whether the last draw was over the blur (for tests). */
-    val appliedTint get() = tintPaint.color
-    val appliedFallback get() = fallbackPaint.color
+    /** The tint each path draws with at the current level (over the blur, and without one). */
+    val appliedTint: Int get() {
+        val sample = if (adaptive != null) WallpaperBlur.sampledColor() else null
+        return if (sample == null || adaptive == null) GlassTint.scale(fixedTint, level) else GlassTint.tint(sample, adaptive, level)
+    }
+    val appliedFallback: Int get() = GlassTint.scale(fixedFallback, level)
+
+    /** What the last draw actually painted, and over what (for tests). */
+    var drawnColor = 0
+        private set
     var drewBlur = false
         private set
 
-    private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint }
-    private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fallbackTint }
+    private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val blurPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    private val borderColor = border
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = border
@@ -62,27 +70,21 @@ class FrostedDrawable(
     private val here = IntArray(2)
     private val screen = IntArray(2)
 
+    init {
+        synchronized(hosts) { hosts[host] = true }
+    }
+
     override fun draw(canvas: Canvas) {
         rect.set(bounds)
         val r = minOf(radius, rect.height() / 2, rect.width() / 2)
         val root = host.rootView
         val blur = if (wallpaper) WallpaperBlur.get(host.context, root.width, root.height) { host.invalidate() } else null
         if (blur == null) {
-            if (fallbackLevel != level) {
-                fallbackLevel = level
-                fallbackPaint.color = GlassTint.scale(fixedFallback, level, GlassTint.FLOOR_PLAIN)
-            }
             drewBlur = false
-            canvas.drawRoundRect(rect, r, r, fallbackPaint)
+            paintTint(appliedFallback)
+            canvas.drawRoundRect(rect, r, r, tintPaint)
             drawBorder(canvas, r)
             return
-        }
-        val sample = if (adaptive != null) WallpaperBlur.sampledColor() else null
-        if (sample != tintFrom || tintLevel != level) {
-            tintFrom = sample
-            tintLevel = level
-            tintPaint.color = if (sample == null || adaptive == null) GlassTint.scale(fixedTint, level)
-                else GlassTint.tint(sample, adaptive, level)
         }
         // Line the blurred wallpaper up with the screen: this view's corner is at (here - screen).
         host.getLocationOnScreen(here)
@@ -94,17 +96,27 @@ class FrostedDrawable(
         canvas.translate((screen[0] - here[0]).toFloat(), (screen[1] - here[1]).toFloat())
         val scale = root.width / blur.width.toFloat()
         canvas.scale(scale, root.height / blur.height.toFloat())
+        blurPaint.alpha = alpha
         canvas.drawBitmap(blur, 0f, 0f, blurPaint)
         canvas.restore()
         drewBlur = true
+        paintTint(appliedTint)
         canvas.drawRoundRect(rect, r, r, tintPaint)
         drawBorder(canvas, r)
+    }
+
+    /** The tint as the setting scales it, with this drawable's own alpha on top. */
+    private fun paintTint(color: Int) {
+        drawnColor = color
+        tintPaint.color = color
+        tintPaint.alpha = (color ushr 24) * alpha / 255
     }
 
     /** Inside the edge, so the outline (and clipping) still match the shape. */
     private fun drawBorder(canvas: Canvas, r: Float) {
         val w = borderPaint.strokeWidth
-        if (w <= 0f || borderPaint.color == 0) return
+        if (w <= 0f || borderColor == 0) return
+        borderPaint.alpha = (borderColor ushr 24) * alpha / 255
         rect.inset(w / 2, w / 2)
         canvas.drawRoundRect(rect, r - w / 2, r - w / 2, borderPaint)
         rect.inset(-w / 2, -w / 2)
@@ -115,23 +127,39 @@ class FrostedDrawable(
     }
 
     override fun setAlpha(alpha: Int) {
-        tintPaint.alpha = alpha
-        blurPaint.alpha = alpha
-        borderPaint.alpha = alpha
-        fallbackPaint.alpha = alpha
+        this.alpha = alpha
+        invalidateSelf()
     }
+
+    override fun getAlpha() = alpha
 
     override fun setColorFilter(colorFilter: ColorFilter?) = Unit
 
     companion object {
-        /** The "Glass transparency" setting, 0 (Clear) to 100 (Solid); set from Prefs at start. */
+        /** The "Glass transparency" setting, 0 (Clear) to 100 (Solid); see [setLevel]. */
         @Volatile var level = GlassTint.LEVEL_DEFAULT
+            private set
 
-        /** Redraws every frosted surface under [root] (after [level] changed). */
-        fun invalidateAll(root: View) {
-            if (root.background is FrostedDrawable) root.invalidate()
-            if (root is android.view.ViewGroup) for (i in 0 until root.childCount) invalidateAll(root.getChildAt(i))
+        /** Every view with glass behind it (weakly: gone views drop out). */
+        private val hosts = WeakHashMap<View, Boolean>()
+        private val listeners = mutableListOf<(Int) -> Unit>()
+
+        /**
+         * The setting's one way in (the slider, and each screen's start from Prefs): every live
+         * glass surface redraws with it at once, and listeners (text shadows) hear of it.
+         */
+        fun setLevel(value: Int) {
+            val l = value.coerceIn(0, GlassTint.LEVEL_MAX)
+            val changed = l != level
+            level = l
+            val views = synchronized(hosts) { hosts.keys.toList() }
+            val onMain = Looper.myLooper() == Looper.getMainLooper()
+            for (v in views) if (onMain) v.invalidate() else v.postInvalidate()
+            if (changed) synchronized(listeners) { listeners.toList() }.forEach { it(l) }
         }
+
+        fun addListener(l: (Int) -> Unit) = synchronized(listeners) { listeners += l }
+        fun removeListener(l: (Int) -> Unit) = synchronized(listeners) { listeners -= l }
     }
 
     @Deprecated("Deprecated in Java")

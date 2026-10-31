@@ -41,6 +41,8 @@ class FavoritesPopup(
     private var apps: List<AppEntry?> = emptyList()
 
     val isShowing get() = window?.isShowing == true
+    /** The open row's view (its background is the glass). */
+    val contentView: View? get() = window?.contentView
 
     /** The open row's six cells, in order (for tests). */
     internal var cells: List<View> = emptyList()
@@ -96,11 +98,12 @@ class FavoritesPopup(
         b.hint.setText(emptyHint)
         b.hint.visibility = if (favorites.all { it == null }) View.VISIBLE else View.GONE
 
-        // The raised surface, as clear or solid as the glass setting says (no blur under it).
-        b.root.background = android.graphics.drawable.GradientDrawable().apply {
-            setColor(GlassTint.scale(activity.getColor(R.color.surface_raised), FrostedDrawable.level, GlassTint.FLOOR_PLAIN))
-            cornerRadius = activity.resources.getDimension(R.dimen.radius_panel)
-        }
+        // The raised surface as glass: its own window, so no wallpaper slice under it, but the
+        // glass setting scales it with every other surface, live.
+        b.root.background = FrostedDrawable(
+            b.root, activity.resources.getDimension(R.dimen.radius_panel),
+            activity.getColor(R.color.surface_raised), activity.getColor(R.color.surface_raised), wallpaper = false,
+        )
         val popup = PopupWindow(b.root, above.width, ViewGroup.LayoutParams.WRAP_CONTENT, false)
         popup.setBackgroundDrawable(ColorDrawable(0))
         popup.isOutsideTouchable = true

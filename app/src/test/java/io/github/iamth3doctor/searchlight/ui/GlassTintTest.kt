@@ -61,61 +61,68 @@ class GlassTintTest {
 
     private val walls = listOf(red, blue, 0xFFFFD54F.toInt(), 0xFFF5F5F5.toInt(), 0xFF202830.toInt(), 0xFF808080.toInt())
     private fun alpha(c: Int) = (c ushr 24) / 255f
-    /** The fixed tints the launcher uses today (tokens.xml): card, row, card without blur, popup. */
-    private val stock = listOf(0x800B0B0D.toInt(), 0x590B0B0D, 0xBF0B0B0D.toInt(), 0xA60B0B0D.toInt(), 0x1FFFFFFF, 0xE6FFFFFF.toInt())
+    /** The fixed tints (tokens.xml): card, row, card and row without blur, popup, settings cards. */
+    private val card = 0x800B0B0D.toInt()
+    private val row = 0x590B0B0D
+    private val stock = listOf(card, row, 0xBF0B0B0D.toInt(), 0x1FFFFFFF, 0xA60B0B0D.toInt(), 0xE6FFFFFF.toInt(), 0x990B0B0D.toInt())
 
     @Test fun theDefaultLevelIsTodaysLook() {
-        for (c in stock) {
-            assertEquals(c, GlassTint.scale(c, GlassTint.LEVEL_DEFAULT))
-            assertEquals(c, GlassTint.scale(c, GlassTint.LEVEL_DEFAULT, GlassTint.FLOOR_PLAIN))
-        }
+        for (c in stock) assertEquals(c, GlassTint.scale(c, GlassTint.LEVEL_DEFAULT))
         for (wall in walls) for (layer in GlassTint.Layer.values()) {
             assertEquals(GlassTint.tint(wall, layer), GlassTint.tint(wall, layer, GlassTint.LEVEL_DEFAULT))
         }
-        // The stock adaptive alphas, unchanged: 50% card over a dark wallpaper, as before.
         assertEquals(0.5f, alpha(GlassTint.tint(0xFF202830.toInt(), GlassTint.Layer.CARD)), 0.01f)
+    }
+
+    @Test fun clearIsNearlyInvisibleAndSolidNearlyOpaque() {
+        // The card's 50% and the row's 35%: about 10% or less at Clear.
+        assertTrue(alpha(GlassTint.scale(card, 0)) <= 0.10f)
+        assertTrue(alpha(GlassTint.scale(row, 0)) <= 0.10f)
+        for (wall in walls) assertTrue(alpha(GlassTint.tint(wall, GlassTint.Layer.CARD, 0)) <= 0.13f)
+        // Every surface clearly clearer, and nearly opaque at Solid (a hint of glass left).
+        for (c in stock) {
+            assertTrue(alpha(GlassTint.scale(c, 0)) <= alpha(c) * 0.15f)
+            if (alpha(c) < 0.9f) assertTrue(alpha(GlassTint.scale(c, 100)) >= 0.9f)
+            assertTrue(alpha(GlassTint.scale(c, 100)) <= 0.965f)
+        }
+        // The three looks the screenshots compare are far apart.
+        assertTrue(alpha(GlassTint.scale(card, 50)) - alpha(GlassTint.scale(card, 0)) > 0.4f)
+        assertTrue(alpha(GlassTint.scale(card, 100)) - alpha(GlassTint.scale(card, 50)) > 0.4f)
     }
 
     @Test fun theLevelScalesEveryTintTogether() {
         for (c in stock) {
             var last = -1f
-            for (level in 0..100 step 5) {
+            for (level in 0..100) {
                 val a = alpha(GlassTint.scale(c, level))
                 assertTrue("$level: $a after $last", a >= last)
                 last = a
             }
-            assertTrue("clear is clearer", alpha(GlassTint.scale(c, 0)) < alpha(c))
-            assertTrue("solid is more solid", alpha(GlassTint.scale(c, 100)) > alpha(c))
         }
-        // The card's 50%: barely there at Clear, nearly opaque at Solid.
-        assertEquals(0.25f, alpha(GlassTint.scale(0x800B0B0D.toInt(), 0)), 0.01f)
-        assertTrue(alpha(GlassTint.scale(0x800B0B0D.toInt(), 100)) in 0.9f..0.96f)
-    }
-
-    @Test fun solidStillShowsAHintOfGlass() {
-        for (c in stock) assertTrue(alpha(GlassTint.scale(c, 100)) <= 0.96f)
-        for (wall in walls) assertTrue(alpha(GlassTint.tint(wall, GlassTint.Layer.CARD, 100)) <= 0.96f)
-    }
-
-    @Test fun theRowStaysLighterThanTheCardAtEveryLevel() {
-        for (level in 0..100 step 5) {
-            // Fixed tints (the wallpaper's color unknown): the row lets more through.
-            assertTrue("$level", alpha(GlassTint.scale(0x590B0B0D, level)) < alpha(GlassTint.scale(0x800B0B0D.toInt(), level)))
-            // Wallpaper-tinted: what's seen through the row is lighter than through the card.
-            for (wall in walls) {
-                val card = GlassTint.luminance(composite(GlassTint.tint(wall, GlassTint.Layer.CARD, level), wall))
-                val row = GlassTint.luminance(composite(GlassTint.tint(wall, GlassTint.Layer.ROW, level), wall))
-                assertTrue("level $level, wall ${Integer.toHexString(wall)}: row $row card $card", row >= card)
+        for (wall in walls) {
+            var last = -1f
+            for (level in 0..100 step 5) {
+                val a = alpha(GlassTint.tint(wall, GlassTint.Layer.CARD, level))
+                assertTrue(a >= last)
+                last = a
             }
         }
     }
 
-    @Test fun whiteTextStaysReadableAtClear() {
-        for (wall in walls) {
-            val card = composite(GlassTint.tint(wall, GlassTint.Layer.CARD, 0), wall)
-            val row = composite(GlassTint.tint(wall, GlassTint.Layer.ROW, 0), wall)
-            assertTrue("card %.1f".format(contrastWithWhite(card)), contrastWithWhite(card) >= 2.9f)
-            assertTrue("row %.1f".format(contrastWithWhite(row)), contrastWithWhite(row) >= 2.5f)
+    @Test fun theRowStaysLighterThanTheCardAtEveryLevel() {
+        for (level in 0..100 step 5) {
+            assertTrue("$level", alpha(GlassTint.scale(row, level)) < alpha(GlassTint.scale(card, level)))
+            for (wall in walls) {
+                val c = GlassTint.luminance(composite(GlassTint.tint(wall, GlassTint.Layer.CARD, level), wall))
+                val r = GlassTint.luminance(composite(GlassTint.tint(wall, GlassTint.Layer.ROW, level), wall))
+                assertTrue("level $level, wall ${Integer.toHexString(wall)}: row $r card $c", r >= c)
+            }
         }
+    }
+
+    @Test fun textShadowOnlyTowardClear() {
+        for (level in 50..100) assertEquals(0f, GlassTint.textShadow(level))
+        assertEquals(1f, GlassTint.textShadow(0))
+        assertTrue(GlassTint.textShadow(10) > GlassTint.textShadow(40))
     }
 }

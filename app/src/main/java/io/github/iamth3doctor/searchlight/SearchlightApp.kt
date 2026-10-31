@@ -44,7 +44,7 @@ class SearchlightApp : Application() {
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this)
-        io.github.iamth3doctor.searchlight.ui.FrostedDrawable.level = prefs.glassLevel
+        io.github.iamth3doctor.searchlight.ui.FrostedDrawable.setLevel(prefs.glassLevel)
         apps = AppRepository(this, prefs)
         autoFavorites = AutoFavorites(this, prefs, apps)
         contacts = ContactRepository(this)
