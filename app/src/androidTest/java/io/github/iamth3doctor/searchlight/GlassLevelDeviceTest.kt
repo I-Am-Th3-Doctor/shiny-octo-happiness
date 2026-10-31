@@ -84,9 +84,24 @@ class GlassLevelDeviceTest {
         instrumentation.waitForIdleSync()
     }
 
-    /** The settings Home card's glass as drawn (always its plain tint: it doesn't sample the wallpaper). */
-    private fun settingsGlass(s: ActivityScenario<SettingsActivity>) =
-        on(s) { a -> (CollapsibleSections.cardOf(a.window.decorView, "home")!!.background as FrostedDrawable).appliedFallback }
+    /**
+     * The glass of the settings card the slider sits in (on screen, so redrawn as it moves) as
+     * drawn; always its plain tint (it doesn't sample the wallpaper). Waits for a frame first.
+     */
+    private fun settingsGlass(s: ActivityScenario<SettingsActivity>): Int {
+        Thread.sleep(300)
+        instrumentation.waitForIdleSync()
+        return on(s) { a -> card(a).appliedFallback }
+    }
+
+    private fun card(a: SettingsActivity) = CollapsibleSections.cardOf(a.window.decorView, "appearance")!!.background as FrostedDrawable
+
+    /** What a failure needs to say: the level everywhere it lives, and the card as drawn. */
+    private fun state(s: ActivityScenario<SettingsActivity>) = on(s) { a ->
+        val c = card(a)
+        "level ${FrostedDrawable.level}, prefs ${app.prefs.glassLevel}, slider ${a.findViewById<SeekBar>(R.id.glassSlider).progress}, " +
+            "fallback ${hex(c.appliedFallback)}, tint ${hex(c.appliedTint)}, drewBlur ${c.drewBlur}, shown ${CollapsibleSections.cardOf(a.window.decorView, "appearance")!!.isShown}"
+    }
 
     private fun stockSettingsGlass(a: SettingsActivity) =
         a.getColor(if (a.isLightTheme()) R.color.settings_glass_light_fallback else R.color.glass_card_fallback)
@@ -135,7 +150,7 @@ class GlassLevelDeviceTest {
                 assertEquals("Solid", a.findViewById<TextView>(R.id.glassSolid).text.toString())
             }
             val stock = on(s) { stockSettingsGlass(it) }
-            assertEquals(stock, settingsGlass(s))
+            assertEquals(state(s), hex(stock), hex(settingsGlass(s)))
         }
         // Home: exactly the stock tints (level 50 leaves every alpha as it was).
         val h = home()
@@ -157,14 +172,14 @@ class GlassLevelDeviceTest {
             assertTrue("level $solid", solid >= 85)
             assertEquals(solid, FrostedDrawable.level)
             assertEquals("$solid%", on(s) { it.findViewById<TextView>(R.id.glassValue).text.toString() })
-            assertTrue("settings card more solid", alpha(settingsGlass(s)) > alpha(stock))
+            assertTrue("settings card more solid than ${hex(stock)}: ${state(s)}", alpha(settingsGlass(s)) > alpha(stock))
             shell("screencap -p $dir/${prefix}_font1.0_28-glass-slider.png")
 
             // Toward Clear: clearer than today.
             tapSlider(s, 0.05f)
             val clear = app.prefs.glassLevel
             assertTrue("level $clear", clear <= 15)
-            assertTrue("settings card clearer", alpha(settingsGlass(s)) < alpha(stock))
+            assertTrue("settings card clearer than ${hex(stock)}: ${state(s)}", alpha(settingsGlass(s)) < alpha(stock))
         }
 
         // Home at Clear vs the stock look: both clearer, as the curve says.
