@@ -28,7 +28,7 @@ import type {
   Status,
 } from '../src/messages.ts';
 import { Mutex } from '../src/mutex.ts';
-import { type LoginEntry, loginKey, normalizeOrigin, originMatches } from '../src/passwords/model.ts';
+import { type LoginEntry, loginKey, loginMatchesPage, normalizeOrigin } from '../src/passwords/model.ts';
 import { PasswordVault } from '../src/passwords/vault.ts';
 import { CURSOR_KEY, makeEnv, resetSyncState, runSync } from '../src/sync.ts';
 import type { CollectionAdapter } from '../src/sync-types.ts';
@@ -347,7 +347,7 @@ export default defineBackground(() => {
       case 'pw.fillTab': {
         const tab = await browser.tabs.get(msg.tabId);
         const entry = await withVault(async (v) => v.get(msg.id));
-        if (!entry || !tab.url || !originMatches(entry.origin, tab.url)) throw new Error('That login is not for this site');
+        if (!entry || !tab.url || !loginMatchesPage(entry.origin, tab.url)) throw new Error('That login is not for this site');
         const cmd: FillCommand = { type: 'cs.doFill', origin: entry.origin, username: entry.username, password: entry.password };
         await browser.tabs.sendMessage(msg.tabId, cmd, { frameId: 0 });
         return null;
@@ -370,9 +370,9 @@ export default defineBackground(() => {
       }
       case 'cs.fill': {
         // The site is the browser-reported URL of the frame that asked, so a page can only ever
-        // receive credentials saved for itself.
+        // receive credentials saved for its own registrable domain (never another domain).
         const entry = await withVault(async (v) => v.get(msg.id));
-        if (!entry || !originMatches(entry.origin, pageUrl)) throw new Error('That login is not for this site');
+        if (!entry || !loginMatchesPage(entry.origin, pageUrl)) throw new Error('That login is not for this site');
         return { username: entry.username, password: entry.password };
       }
       case 'cs.captured': {

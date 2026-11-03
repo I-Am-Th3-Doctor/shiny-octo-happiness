@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCsv, parsePasswordCsv } from '../src/passwords/csv.ts';
-import { normalizeOrigin, originMatches } from '../src/passwords/model.ts';
+import { loginMatchesPage, normalizeOrigin, originMatches, registrableDomain, registrableDomains, siteMatch } from '../src/passwords/model.ts';
 
 describe('normalizeOrigin', () => {
   it.each([
@@ -27,6 +27,77 @@ describe('originMatches (what is allowed to autofill where)', () => {
     ['https://example.com', 'https://example.com:8443/', false],
     ['https://example.com', 'not a url', false],
   ])('%s on %s → %s', (saved, page, ok) => expect(originMatches(saved, page)).toBe(ok));
+});
+
+describe('registrableDomain (eTLD+1)', () => {
+  it.each([
+    ['https://example.com', 'example.com'],
+    ['https://www.example.com/login?x=1', 'example.com'],
+    ['login.accounts.example.com', 'example.com'],
+    ['http://example.com:8080', 'example.com'],
+    ['EXAMPLE.COM.', 'example.com'],
+    ['shop.example.co.uk', 'example.co.uk'],
+    ['example.co.uk', 'example.co.uk'],
+    ['a.b.example.com.au', 'example.com.au'],
+    ['www.example.co.jp', 'example.co.jp'],
+    ['alice.github.io', 'alice.github.io'], // shared hosting: every subdomain is its own owner
+    ['co.uk', null], // a bare public suffix is nobody's domain
+    ['github.io', null],
+    ['127.0.0.1', '127.0.0.1'], // IPs are never grouped
+    ['http://10.0.0.1:8080/x', '10.0.0.1'],
+    ['localhost', 'localhost'],
+    ['http://[::1]:8787/', '[::1]'],
+    ['', null],
+    ['not a url at all', null],
+  ])('%s → %s', (input, expected) => expect(registrableDomain(input)).toBe(expected));
+
+  it('returns the domain for both the stored site and the tab hostname', () => {
+    expect(registrableDomains('https://www.example.com', 'login.example.com')).toEqual({ saved: 'example.com', page: 'example.com' });
+  });
+});
+
+describe('which saved logins belong on a page (siteMatch)', () => {
+  it.each([
+    // 1. saved https://example.com is listed on www., a login. subdomain, and http
+    ['https://example.com', 'https://www.example.com/', 'exact'],
+    ['https://example.com', 'https://login.example.com/signin', 'domain'],
+    ['https://example.com', 'http://example.com/', 'domain'],
+    // 2. saved www. is listed on the apex
+    ['https://www.example.com', 'https://example.com/', 'exact'],
+    // exact origin still wins over domain
+    ['https://example.com', 'https://example.com/login', 'exact'],
+    ['http://example.com', 'https://example.com/', 'exact'],
+    // bare hostnames and stored values in other shapes work too
+    ['example.com', 'https://accounts.example.com/', 'domain'],
+    ['https://shop.example.co.uk', 'https://www.example.co.uk/', 'domain'],
+  ])('%s on %s → %s', (saved, page, expected) => expect(siteMatch(saved, page)).toBe(expected));
+
+  it.each([
+    // 3. never across registrable domains
+    ['example.com', 'https://notexample.com/'],
+    ['example.com', 'https://example.com.evil.com/'],
+    ['example.com', 'https://evil.com/'],
+    ['https://example.com', 'https://www.example.com.evil.com/login'],
+    ['https://example.com', 'https://example.co/'],
+    ['https://example.com', 'https://example.org/'],
+    ['https://notexample.com', 'https://example.com/'],
+    // public suffixes are not a shared domain
+    ['https://shop.example.co.uk', 'https://other.co.uk/'],
+    ['https://alice.github.io', 'https://bob.github.io/'],
+    ['https://example.com.au', 'https://evil.com.au/'],
+    // IPs and localhost only ever match themselves
+    ['http://127.0.0.1:8080', 'http://127.0.0.2:8080/'],
+    ['http://10.0.0.1', 'http://0.0.1/'],
+    ['http://localhost:3000', 'http://127.0.0.1:3000/'],
+    // only http(s) pages, and garbage never matches
+    ['https://example.com', 'ftp://example.com/'],
+    ['https://example.com', 'not a url'],
+    ['', 'https://example.com/'],
+    ['co.uk', 'https://example.co.uk/'],
+  ])('%s is NOT listed on %s', (saved, page) => {
+    expect(siteMatch(saved, page)).toBeNull();
+    expect(loginMatchesPage(saved, page)).toBe(false);
+  });
 });
 
 describe('parseCsv', () => {

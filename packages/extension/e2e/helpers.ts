@@ -39,7 +39,13 @@ export async function launchProfile(name: string): Promise<Profile> {
   const ctx = await chromium.launchPersistentContext(dir, {
     executablePath: chromiumPath(),
     headless: process.env.HEADED !== '1',
-    args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
+    args: [
+      `--disable-extensions-except=${EXT}`,
+      `--load-extension=${EXT}`,
+      // Test-only hostnames (shop.omnisync.test, login.omnisync.test, omnisync.test.evil.test …)
+      // all resolve to the local test site, so real subdomain/redirect cases can be exercised.
+      '--host-resolver-rules=MAP *.test 127.0.0.1',
+    ],
   });
   const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'));
   return { ctx, extId: new URL(sw.url()).host, dir };

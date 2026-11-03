@@ -17,7 +17,7 @@ import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import type { ContentRequest, FillCommand, PendingAction, PendingPrompt, QueryResult, Response } from '../src/messages.ts';
 import { extractCredentials, fillLogin, findFields, isPasswordField, isUsernameLike, scopeOf } from '../src/passwords/forms.ts';
-import { originMatches } from '../src/passwords/model.ts';
+import { loginMatchesPage } from '../src/passwords/model.ts';
 
 const Z = '2147483647';
 const SUBMIT_TEXT = /log\s?in|sign\s?in|continue|next|submit|enter|anmelden|connexion|iniciar|accedi/i;
@@ -279,7 +279,7 @@ export default defineContentScript({
 
     if (isTop) {
       browser.runtime.onMessage.addListener((msg: FillCommand) => {
-        if (msg?.type !== 'cs.doFill' || !originMatches(msg.origin, location.href)) return;
+        if (msg?.type !== 'cs.doFill' || !loginMatchesPage(msg.origin, location.href)) return;
         const focused = document.activeElement instanceof Element ? document.activeElement : null;
         const scope =
           (focused && findFields(scopeOf(focused)).passwords.length ? scopeOf(focused) : null) ??

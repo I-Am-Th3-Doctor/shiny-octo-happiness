@@ -14,7 +14,7 @@ import * as oc from '@omnisync/crypto';
 import { compareVersions, type Version } from '@omnisync/protocol';
 import type { KV } from '../kv.ts';
 import type { CollectionAdapter, DecryptedRecord, Outgoing, SyncEnv } from '../sync-types.ts';
-import { type Login, type LoginEntry, type PwPayload, loginKey, normalizeOrigin, originMatches } from './model.ts';
+import { type Login, type LoginEntry, type PwPayload, loginKey, normalizeOrigin, siteMatch } from './model.ts';
 
 const STATE_KEY = 'pw.state';
 const NEVER_KEY = 'pw.never';
@@ -82,8 +82,20 @@ export class PasswordVault implements CollectionAdapter<PwPayload> {
     return out.sort((a, b) => a.origin.localeCompare(b.origin) || a.username.localeCompare(b.username));
   }
 
+  /**
+   * Logins for a page: exact-origin matches first, then logins from another host on the same
+   * registrable domain (the site redirected from example.com to login.example.com, say).
+   * Within each group the order is unchanged (sorted by site, then username).
+   */
   forPage(pageUrl: string): LoginEntry[] {
-    return this.entries().filter((e) => originMatches(e.origin, pageUrl));
+    const exact: LoginEntry[] = [];
+    const sameDomain: LoginEntry[] = [];
+    for (const e of this.entries()) {
+      const m = siteMatch(e.origin, pageUrl);
+      if (m === 'exact') exact.push(e);
+      else if (m === 'domain') sameDomain.push(e);
+    }
+    return [...exact, ...sameDomain];
   }
 
   get(id: string): LoginEntry | undefined {

@@ -150,7 +150,7 @@ describe('password vault sync', () => {
     }
   });
 
-  it('autofill lookup only returns logins for the exact site', async () => {
+  it('autofill lookup returns logins for the same registrable domain, never another domain', async () => {
     const { zen } = await pair();
     const v = await zen.vault();
     await v.importMany([
@@ -158,8 +158,24 @@ describe('password vault sync', () => {
       login('https://accounts.example.com', 'b', '2'),
       login('https://example.org', 'c', '3'),
     ]);
-    expect(v.forPage('https://www.example.com/login').map((e) => e.username)).toEqual(['a']);
-    expect(v.forPage('http://example.com/login')).toEqual([]);
+    // a is an exact match (www. ignored), b is the same registrable domain; c is another domain.
+    expect(v.forPage('https://www.example.com/login').map((e) => e.username)).toEqual(['a', 'b']);
+    // On http both are domain-only matches, so they keep the vault's usual order (by site).
+    expect(v.forPage('http://example.com/login').map((e) => e.username)).toEqual(['b', 'a']);
+    expect(v.forPage('https://notexample.com/login')).toEqual([]);
+    expect(v.forPage('https://example.com.evil.com/login')).toEqual([]);
+  });
+
+  it('lists exact-origin matches before domain-only matches (acceptance check 4)', async () => {
+    const { zen } = await pair();
+    const v = await zen.vault();
+    // Vault order (by site) puts accounts.example.com before login.example.com.
+    await v.importMany([
+      login('https://accounts.example.com', 'domain-only', '1'),
+      login('https://login.example.com', 'exact', '2'),
+      login('https://shop.example.com', 'also-domain-only', '3'),
+    ]);
+    expect(v.forPage('https://login.example.com/signin').map((e) => e.username)).toEqual(['exact', 'domain-only', 'also-domain-only']);
   });
 
   it('imports a browser CSV export and syncs it, reporting duplicates as unchanged', async () => {

@@ -149,6 +149,47 @@ async function main() {
     if ((await evil.inputValue('#pw')) !== '') throw new Error('password leaked into a different site');
     log('B: different site (localhost vs 127.0.0.1): no dropdown, fill refused');
 
+    // 5b. The site lands on a different host than the one saved: same registrable domain is
+    //     listed (exact match first) and fillable; a look-alike domain gets nothing.
+    const port = web.port;
+    await ext(b, { type: 'pw.save', login: { origin: `http://shop.omnisync.test:${port}`, username: 'domain-user', password: 'domain-pass-1' } });
+    await ext(b, { type: 'pw.save', login: { origin: `http://login.omnisync.test:${port}`, username: 'exact-user', password: 'exact-pass-2' } });
+    const tabIdFor = async (url: string) => {
+      const v = await openExtensionPage(b, 'vault.html');
+      const id = await v.evaluate(async (u) => (await chrome.tabs.query({ url: u }))[0]?.id, url);
+      await v.close();
+      return id!;
+    };
+    const redirected = await b.ctx.newPage();
+    await redirected.goto(`http://login.omnisync.test:${port}/login`);
+    const listed = await ext<{ logins: { id: string; username: string }[] }>(b, { type: 'pw.forTab', tabId: await tabIdFor(`http://login.omnisync.test:${port}/login`) });
+    const names = listed.logins.map((l) => l.username).join(',');
+    if (names !== 'exact-user,domain-user') throw new Error(`expected exact match first then domain match, got "${names}"`);
+    await ext(b, { type: 'pw.fillTab', tabId: await tabIdFor(`http://login.omnisync.test:${port}/login`), id: listed.logins[1]!.id });
+    await waitFor('domain-match fill', async () => (await redirected.inputValue('#pw')) === 'domain-pass-1', 5000);
+    await redirected.click('#email');
+    await redirected.locator('omnisync-ui').last().waitFor({ state: 'attached', timeout: 5000 });
+    log('B: on login.omnisync.test, the exact login is listed first and a shop.omnisync.test login is listed and fillable');
+    for (const host of ['omnisync.test.evil.test', 'notomnisync.test']) {
+      const look = await b.ctx.newPage();
+      await look.goto(`http://${host}:${port}/login`);
+      const r = await ext<{ logins: unknown[] }>(b, { type: 'pw.forTab', tabId: await tabIdFor(`http://${host}:${port}/login`) });
+      const refusedFill = await ext(b, { type: 'pw.fillTab', tabId: await tabIdFor(`http://${host}:${port}/login`), id: listed.logins[0]!.id }).then(
+        () => false,
+        (e: Error) => /not for this site/.test(e.message),
+      );
+      await look.click('#email');
+      await sleep(1000);
+      if (r.logins.length || !refusedFill || (await look.locator('omnisync-ui').count()) > 0 || (await look.inputValue('#pw')) !== '') {
+        throw new Error(`a login leaked onto ${host}`);
+      }
+      await look.close();
+    }
+    log('B: look-alike domains (omnisync.test.evil.test, notomnisync.test): nothing listed, no dropdown, fill refused');
+    await ext(b, { type: 'pw.delete', id: listed.logins[0]!.id });
+    await ext(b, { type: 'pw.delete', id: listed.logins[1]!.id });
+    await redirected.close();
+
     // 6. JavaScript-only login (no <form>, role=button): prompt appears on the same page.
     await pa.goto(`${SITE}/spa`);
     await pa.fill('#user', 'second-account');

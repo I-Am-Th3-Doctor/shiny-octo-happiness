@@ -86,8 +86,8 @@ OmniSync keeps its **own** encrypted password vault, separate from Zen's and Bra
 - **Autofill:** focus a login field and an OmniSync dropdown lists the logins saved for that site; pick one to fill. The popup also has a **Fill** button for each login on the current site.
 - **Vault page:** search, show, copy, add, edit and delete logins, and import CSVs. Open it from the popup with **Password vault**.
 - **Safety rules:**
-  - A login fills only on its exact site. `www.` is ignored; other subdomains don't match.
-  - An https login never fills on plain http.
+  - A login is offered on its own site and on other addresses of the same registered domain, because sites often redirect between them. For example, a login saved on `example.com` also shows on `www.example.com`, `login.example.com` and `http://example.com`. Logins saved for the exact address are listed first.
+  - It is never offered on a different domain. A login for `example.com` never appears on `notexample.com`, `example.com.evil.com` or `evil.com`. Domains are compared after parsing, never as text. Shared suffixes such as `co.uk` and multi-owner hosts such as `github.io` count as separate domains per owner. IP addresses and `localhost` match only themselves.
   - The website's own scripts can't read OmniSync's prompt or dropdown (closed shadow DOM).
   - A password is released only after a real user click, and only for the site the *browser* says the page is on.
   - Content scripts never receive the vault or the list of passwords.
