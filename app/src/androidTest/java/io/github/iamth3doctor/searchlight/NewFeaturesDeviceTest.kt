@@ -230,14 +230,15 @@ class NewFeaturesDeviceTest {
         // No access, never asked: the home screen asks, once.
         shell("cmd notification disallow_listener $listener")
         sp.edit().putBoolean(Prefs.KEY_BADGE_ASKED, false).commit()
-        home { _ ->
+        home { h ->
             Thread.sleep(800)
-            assertTrue("asked", shell("uiautomator dump /dev/tty").contains(app.getString(R.string.badges_ask_title)))
-            shell("input keyevent KEYCODE_BACK")
+            assertTrue("asked", on(h) { it.lastPrompt?.isShowing == true })
+            shell("screencap -p $dir/${prefix}_font1.0_45-badges-ask.png")
+            h.onActivity { it.lastPrompt?.dismiss() }
         }
-        home { _ ->
+        home { h ->
             Thread.sleep(800)
-            assertFalse("asked twice", shell("uiautomator dump /dev/tty").contains(app.getString(R.string.badges_ask_title)))
+            assertFalse("asked twice", on(h) { it.lastPrompt?.isShowing == true })
         }
 
         // Access on, a notification posted: Searchlight's own icon shows 1, in results and the drawer.
@@ -312,11 +313,11 @@ class NewFeaturesDeviceTest {
             val spot = on(h) { emptySpot(it) }
             doubleTap(spot.first, spot.second)
             assertEquals("no access", on(h) { it.lastDoubleTap })
-            assertTrue("asked", shell("uiautomator dump /dev/tty").contains(app.getString(R.string.lock_ask_title)))
-            shell("input keyevent KEYCODE_BACK")
+            assertTrue("asked", on(h) { it.lastPrompt?.isShowing == true })
+            h.onActivity { it.lastPrompt?.dismiss(); it.lastPrompt = null }
             Thread.sleep(500)
             doubleTap(spot.first, spot.second)
-            assertFalse("asked twice", shell("uiautomator dump /dev/tty").contains(app.getString(R.string.lock_ask_title)))
+            assertFalse("asked twice", on(h) { it.lastPrompt?.isShowing == true })
         }
 
         shell("settings put secure enabled_accessibility_services $service")

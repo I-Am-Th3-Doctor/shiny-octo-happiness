@@ -810,6 +810,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
     }
 
+    /** The last one-time prompt shown (badges, lock), for the device tests. */
+    internal var lastPrompt: android.app.AlertDialog? = null
+
     /** Debug/test hook: what the last double tap on empty space did. */
     internal var lastDoubleTap: String? = null
 
@@ -827,7 +830,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         lastDoubleTap = "no access"
         if (prefs.lockAccessAsked) return
         prefs.lockAccessAsked = true
-        android.app.AlertDialog.Builder(this)
+        lastPrompt = android.app.AlertDialog.Builder(this)
             .setTitle(R.string.lock_ask_title)
             .setMessage(R.string.lock_ask_message)
             .setPositiveButton(R.string.lock_ask_open) { _, _ -> Permissions.openAccessibilitySettings(this) }
@@ -913,7 +916,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun askBadgeAccessOnce() {
         if (prefs.badgeAccessAsked || Permissions.hasMediaAccess(this)) return
         prefs.badgeAccessAsked = true
-        android.app.AlertDialog.Builder(this)
+        lastPrompt = android.app.AlertDialog.Builder(this)
             .setTitle(R.string.badges_ask_title)
             .setMessage(R.string.badges_ask_message)
             .setPositiveButton(R.string.badges_ask_allow) { _, _ -> Permissions.openNotificationListenerSettings(this) }
