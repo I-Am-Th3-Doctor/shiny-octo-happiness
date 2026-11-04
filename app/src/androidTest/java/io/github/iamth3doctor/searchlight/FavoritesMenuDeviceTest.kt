@@ -35,7 +35,9 @@ class FavoritesMenuDeviceTest {
     private val sp get() = app.getSharedPreferences("searchlight", 0)
     private var saved = emptyMap<String, Any?>()
 
-    private fun shell(cmd: String) = instrumentation.uiAutomation.executeShellCommand(cmd).close()
+    /** Runs [cmd] and waits for it to finish (a screenshot must be taken before the menu closes). */
+    private fun shell(cmd: String): String =
+        instrumentation.uiAutomation.executeShellCommand(cmd).use { String(java.io.FileInputStream(it.fileDescriptor).readBytes()) }
     private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
 
     private fun waitFor(what: String, timeoutMs: Long = 10_000, check: () -> Boolean) {
