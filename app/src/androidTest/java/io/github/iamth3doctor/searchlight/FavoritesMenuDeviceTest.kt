@@ -201,11 +201,12 @@ class FavoritesMenuDeviceTest {
 
     @Test fun aManualAddNeverTakesThePredictedSlot() {
         val target = entry("com.android.settings")
-        val five = others(target).take(5).map { it.key }
+        val rest = others(target).map { it.key } // (not inside main {}: it runs on the main thread itself)
+        val five = rest.take(5)
         main {
             app.prefs.predictedSlot = true
             five.forEach { app.prefs.addFavorite(it) }
-            app.prefs.savePredictions(listOf(target.key) + others(target).drop(5).map { it.key }, System.currentTimeMillis())
+            app.prefs.savePredictions(listOf(target.key) + rest.drop(5), System.currentTimeMillis())
         }
         val beforeRow = row()
         assertEquals(FavoriteSlots.Kind.PREDICTED, beforeRow[5].second)
