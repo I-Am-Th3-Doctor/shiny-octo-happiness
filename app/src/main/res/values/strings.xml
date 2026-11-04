@@ -19,7 +19,7 @@
     <string name="section_events">Upcoming events</string>
     <string name="convert_unit_detail">%1$s · tap to copy</string>
     <string name="convert_currency_detail">1 %1$s = %2$s %3$s · rates of %4$s · tap to copy</string>
-    <string name="convert_currency_pending">%1$s · getting today's exchange rates…</string>
+    <string name="convert_currency_pending">%1$s · getting today\'s exchange rates…</string>
     <string name="shortcut_search">Search %1$s for “%2$s”</string>
     <string name="shortcut_subtitle">Shortcut “%1$s” + your search</string>
     <string name="shortcut_hint">%1$s + search → %2$s</string>
