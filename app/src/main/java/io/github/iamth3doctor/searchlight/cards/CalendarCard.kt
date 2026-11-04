@@ -44,6 +44,11 @@ class CalendarCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
         super.onStop()
     }
 
+    /** Unfolded, side by side: just the time, at a glance (the date too, folded). */
+    override fun onRowChanged(inRow: Boolean) {
+        date.visibility = if (inRow) View.GONE else View.VISIBLE
+    }
+
     override fun draw() {
         date.text = DateFormat.format("EEEE, MMMM d", System.currentTimeMillis())
     }

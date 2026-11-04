@@ -36,6 +36,14 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
 
     private val listener: () -> Unit = { render() }
 
+    /** Unfolded, side by side: just the temperature, at a glance (the full line folded). */
+    private var glance = false
+
+    override fun onRowChanged(inRow: Boolean) {
+        glance = inRow
+        render()
+    }
+
     override val layout = R.layout.card_weather
 
     override fun bind(root: View) {
@@ -69,6 +77,10 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
         val unit = prefs.tempUnit
         if (data == null) {
             emoji.text = "🌡️"
+            if (glance) {
+                line.text = withUnit("--°", unit) // "--°F" until a reading arrives, like "72°F" after
+                return
+            }
             line.text = joinedLine(
                 withUnit("--", unit),
                 activity.getString(
@@ -83,6 +95,10 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
             return
         }
         emoji.text = data.emoji
+        if (glance) {
+            line.text = withUnit(Temperature.format(data.temperatureC, unit), unit)
+            return
+        }
         val time = DateFormat.getTimeFormat(activity).format(Date(data.fetchedAt))
         line.text = joinedLine(
             data.locationName,

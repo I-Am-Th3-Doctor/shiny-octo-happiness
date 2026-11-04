@@ -308,7 +308,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         if (posture == Posture.UNFOLDED) {
             binding.cards.adapter = null // releases the tile views to the row
             for (card in cards) {
-                row.addView(card.viewFor(row).apply { minimumWidth = if (card.minRowWidth != 0) px(card.minRowWidth) else 0 })
+                row.addView(card.viewFor(row).apply {
+                    minimumWidth = if (card.minRowWidth != 0) px(card.minRowWidth) else 0
+                    setTag(R.id.tile_flexible, card.rowFlexible)
+                })
                 card.setInRow(true)
             }
             binding.cards.isVisible = false
@@ -497,7 +500,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
         list.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         list.adapter = appTable
-        binding.widgetGrid.onSwipeUp = ::openAppTable
+        // Unfolded, home is one at-a-glance screen: no page slides up over it (the rail's
+        // all-apps button opens the apps there). Folded, swipe up opens the app table as before.
+        binding.widgetGrid.onSwipeUp = { if (posture != Posture.UNFOLDED) openAppTable() }
 
         // Swipe down closes, but only from the top: otherwise it's an ordinary scroll back up.
         val distance = pxF(R.dimen.size_swipe)

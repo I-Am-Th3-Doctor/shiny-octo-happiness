@@ -45,6 +45,11 @@ class BatteryCard(activity: Activity) : HomeCard(CardType.BATTERY, activity) {
         }
     }
 
+    /** Unfolded, side by side: just the percentage, at a glance (status and signal too, folded). */
+    override fun onRowChanged(inRow: Boolean) {
+        line.visibility = if (inRow) View.GONE else View.VISIBLE
+    }
+
     override fun bind(root: View) {
         percent = root.findViewById(R.id.batteryPercent)
         line = root.findViewById(R.id.batteryLine)

@@ -53,7 +53,7 @@
     <dimen name="size_all_apps_panel">224dp</dimen>  <!-- two columns of app cells -->
     <dimen name="size_drop_zone">72dp</dimen>        <!-- screen-edge drop targets while dragging -->
     <dimen name="size_tile_min_actions">192dp</dimen> <!-- 4 × 40dp circles with small gaps -->
-    <dimen name="size_tile_min_music">184dp</dimen>   <!-- art + some title + play/pause (no prev/next in the row) -->
+    <dimen name="size_tile_min_music">136dp</dimen>   <!-- unfolded bar: art + a little title + play/pause; less room and it leaves the bar -->
     <dimen name="size_grid_icon">56dp</dimen>         <!-- favorites grid icon -->
     <dimen name="size_result_icon">48dp</dimen>       <!-- search results app icon -->
     <dimen name="marquee_speed">32dp</dimen>           <!-- tile text scroll, per second -->

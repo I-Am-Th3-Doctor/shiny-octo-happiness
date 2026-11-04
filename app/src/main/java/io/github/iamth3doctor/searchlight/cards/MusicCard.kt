@@ -58,6 +58,7 @@ class MusicCard(activity: Activity) : HomeCard(CardType.MUSIC, activity) {
 
     override val layout = R.layout.card_music
     override val minRowWidth = R.dimen.size_tile_min_music
+    override val rowFlexible = true
 
     /** Side by side with other tiles (unfolded): play/pause only, so the title has room. */
     private var compact = false

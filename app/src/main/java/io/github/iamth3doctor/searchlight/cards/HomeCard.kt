@@ -35,6 +35,12 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
     /** Narrowest this tile can be when tiles sit side by side (unfolded): room for its buttons. */
     @get:DimenRes open val minRowWidth: Int = 0
 
+    /**
+     * Unfolded, may this tile give up width (down to [minRowWidth], or leave the row) so the
+     * others show whole? The at-a-glance tiles (temperature, time, battery, toggles) never do.
+     */
+    open val rowFlexible: Boolean = false
+
     protected abstract fun bind(root: View)
 
     /** Draw current state into the views. Only ever called once [bind] has run. */
