@@ -16,7 +16,7 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "io.github.iamth3doctor.searchlight.SearchlightTestRunner"
     }
 
     signingConfigs {

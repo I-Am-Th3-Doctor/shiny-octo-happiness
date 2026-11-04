@@ -51,6 +51,28 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_ACCESS_HINT_DISMISSED, false)
         set(value) = sp.edit().putBoolean(KEY_ACCESS_HINT_DISMISSED, value).apply()
 
+    /** Asked once whether to allow notification access for the unread badges (whatever the answer). */
+    var badgeAccessAsked: Boolean
+        get() = sp.getBoolean(KEY_BADGE_ASKED, false)
+        set(value) = sp.edit().putBoolean(KEY_BADGE_ASKED, value).apply()
+
+    /** Asked once to turn on the accessibility service that double-tap to lock needs. */
+    var lockAccessAsked: Boolean
+        get() = sp.getBoolean(KEY_LOCK_ASKED, false)
+        set(value) = sp.edit().putBoolean(KEY_LOCK_ASKED, value).apply()
+
+    /** Focus: home shows only search and the favorites. Stays on until turned off, restarts too. */
+    var focusMode: Boolean
+        get() = sp.getBoolean(KEY_FOCUS, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_FOCUS, value).apply()
+            focusListeners.toList().forEach { it() }
+        }
+
+    private val focusListeners = mutableListOf<() -> Unit>()
+    fun addFocusListener(l: () -> Unit) { focusListeners += l }
+    fun removeFocusListener(l: () -> Unit) { focusListeners -= l }
+
     /** Runtime permissions we've asked for at least once (Android stops showing the prompt after a denial). */
     fun wasAsked(permission: String) = permission in sp.getStringSet(KEY_ASKED, emptySet()).orEmpty()
     fun markAsked(permissions: Array<String>) =
@@ -335,6 +357,9 @@ class Prefs(context: Context) {
         private const val KEY_GESTURE = "gesture_"
         private const val KEY_SECTION = "section_open."
         private const val KEY_ICON_PACK = "icon_pack"
+        const val KEY_BADGE_ASKED = "badge_access_asked"
+        const val KEY_LOCK_ASKED = "lock_access_asked"
+        private const val KEY_FOCUS = "focus_mode"
         /** The glass setting's key: the slider writes it, every screen reads it on start. */
         const val KEY_GLASS_LEVEL = "glass_level"
         private const val KEY_GESTURE_APP = "gesture_app_"

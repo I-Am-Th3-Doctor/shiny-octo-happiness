@@ -92,6 +92,37 @@ object Actions {
     fun webSearch(context: Context, engine: WebEngine, query: String) =
         start(context, Intent(Intent.ACTION_VIEW, Uri.parse(engine.url(query))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
+    /**
+     * "y lofi" / "m tacos" / "w turing": the app's own search when it's installed (YouTube's
+     * search intent, a Maps geo query), else the same search on the web.
+     */
+    fun prefixSearch(context: Context, m: io.github.iamth3doctor.searchlight.search.PrefixShortcuts.Match) {
+        val q = Uri.encode(m.query)
+        val (app, web) = when (m.target) {
+            io.github.iamth3doctor.searchlight.search.PrefixShortcuts.Target.YOUTUBE ->
+                Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube").putExtra("query", m.query) to
+                    "https://www.youtube.com/results?search_query=$q"
+            io.github.iamth3doctor.searchlight.search.PrefixShortcuts.Target.MAPS ->
+                Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$q")) to "https://www.google.com/maps/search/?api=1&query=$q"
+            io.github.iamth3doctor.searchlight.search.PrefixShortcuts.Target.WIKIPEDIA ->
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://en.wikipedia.org/wiki/Special:Search?search=$q")) to
+                    "https://en.wikipedia.org/wiki/Special:Search?search=$q"
+        }
+        if (!start(context, app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), toastOnFail = false)) {
+            start(context, Intent(Intent.ACTION_VIEW, Uri.parse(web)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
+    /** The calendar app on this event, at this occurrence. */
+    fun openEvent(context: Context, e: io.github.iamth3doctor.searchlight.calendar.EventEntry) =
+        start(
+            context,
+            Intent(Intent.ACTION_VIEW, android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, e.eventId))
+                .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, e.begin)
+                .putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, e.end)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+
     fun copy(context: Context, text: String) {
         val cm = context.getSystemService(ClipboardManager::class.java)
         cm.setPrimaryClip(ClipData.newPlainText("Searchlight", text))

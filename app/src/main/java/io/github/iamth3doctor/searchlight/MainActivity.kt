@@ -34,6 +34,8 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.apps.AppEntry
 import io.github.iamth3doctor.searchlight.apps.FavoriteSlots
+import io.github.iamth3doctor.searchlight.ui.Permissions
+import io.github.iamth3doctor.searchlight.apps.Badges
 import io.github.iamth3doctor.searchlight.cards.BatteryCard
 import io.github.iamth3doctor.searchlight.cards.CalendarCard
 import io.github.iamth3doctor.searchlight.cards.CardType
@@ -123,7 +125,13 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        engine = SearchEngine(prefs, app.apps, app.contacts)
+        engine = SearchEngine(prefs, app.apps, app.contacts, app.currency, object : SearchEngine.Format {
+            override fun unitDetail(query: String) = getString(R.string.convert_unit_detail, query)
+            override fun currencyDetail(rate: String, from: String, to: String, date: String) =
+                getString(R.string.convert_currency_detail, from, rate, to, date)
+            override fun currencyPending(query: String) = getString(R.string.convert_currency_pending, query)
+        })
+        app.currency.onUpdated = { if (query().isNotBlank()) refreshResults() } // fresh rates: re-answer
         adapter = ResultsAdapter(app.apps, app.contacts, app.thumbnails, this)
         favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp, ::showAppMenu)
         widgets = WidgetController(this, binding.widgetGrid, prefs) { editing -> binding.editBar.isVisible = editing }
@@ -151,6 +159,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperChanged, android.os.Handler(mainLooper))
         FrostedDrawable.setGlassLevel(prefs.glassLevel)
         FrostedDrawable.addListener(glassChanged)
+        Badges.addListener(badgesChanged)
+        prefs.addFocusListener(focusChanged)
+        applyFocus()
         for (list in listOf(binding.results, binding.allAppsList)) {
             list.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
                 override fun onChildViewAttachedToWindow(view: View) = shadeTexts(view, GlassTint.textShadow(FrostedDrawable.glassLevel))
@@ -167,6 +178,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.files.removeListener(sourcesChanged)
         WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperChanged)
         FrostedDrawable.removeListener(glassChanged)
+        Badges.removeListener(badgesChanged)
+        prefs.removeFocusListener(focusChanged)
         super.onDestroy()
     }
 
@@ -191,6 +204,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         super.onResume()
         FrostedDrawable.setGlassLevel(prefs.glassLevel) // the glass setting, as saved: redraws every surface
         applyGlassShadows()
+        badgesChanged() // counts may have changed while away
+        askBadgeAccessOnce()
         // Permissions may have been granted in Settings since last time.
         app.startSources()
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
@@ -746,6 +761,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     @android.annotation.SuppressLint("ClickableViewAccessibility") // swipes only; taps fall through
     private fun setupHomeGestures() {
         binding.widgetGrid.onSwipe = ::onHomeSwipe
+        binding.widgetGrid.onDoubleTap = ::lockFromDoubleTap
         val tracker = SwipeTracker(pxF(R.dimen.size_swipe), pxF(R.dimen.size_gesture))
         binding.root.setOnTouchListener { _, e ->
             when (e.actionMasked) {
@@ -792,6 +808,31 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             // Uninstalled since it was chosen: nothing to open (Settings says "App not installed").
             GestureAction.LAUNCH_APP -> prefs.gestureApp(gesture)?.let(app.apps::findByPackage)?.let { launchApp(it, null) }
         }
+    }
+
+    /** Debug/test hook: what the last double tap on empty space did. */
+    internal var lastDoubleTap: String? = null
+
+    /**
+     * Double tap on empty home space locks the screen, through our accessibility service (the
+     * only way an app may). Off: asked once to turn it on; after that the gesture does nothing
+     * until it's on.
+     */
+    private fun lockFromDoubleTap() {
+        if (binding.appTable.isVisible || binding.allApps.isVisible) return
+        if (GestureService.perform(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)) {
+            lastDoubleTap = "locked"
+            return
+        }
+        lastDoubleTap = "no access"
+        if (prefs.lockAccessAsked) return
+        prefs.lockAccessAsked = true
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.lock_ask_title)
+            .setMessage(R.string.lock_ask_message)
+            .setPositiveButton(R.string.lock_ask_open) { _, _ -> Permissions.openAccessibilitySettings(this) }
+            .setNegativeButton(R.string.not_now, null)
+            .show()
     }
 
     /** Shade, quick settings, lock: only through our accessibility service. Says so when it's off. */
@@ -842,6 +883,43 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     )
 
     private val glassChanged: (Int) -> Unit = { runOnUiThread { applyGlassShadows() } }
+
+    private val focusChanged: () -> Unit = { applyFocus() }
+
+    /**
+     * Focus on: the tiles and the widgets go (the widget area's empty space keeps its swipes and
+     * double tap, so the drawer is where it was). Off: both come back exactly as they were (they
+     * were only hidden: same page, same widgets).
+     */
+    private fun applyFocus() {
+        binding.widgetGrid.widgetsHidden = prefs.focusMode
+        refreshResults() // shows or hides the tiles, for the current query
+    }
+
+    /** New unread counts: every icon that shows them (results, drawer, all-apps, rail, favorites row). */
+    private val badgesChanged: () -> Unit = {
+        // A count may change on any icon: redraw them all.
+        if (query().isNotBlank()) adapter.notifyDataSetChanged()
+        appTable.notifyDataSetChanged()
+        allApps.notifyDataSetChanged()
+        if (posture == Posture.UNFOLDED) rail.render()
+        favoritesPopup.refreshBadges()
+    }
+
+    /**
+     * Badges need notification access: asked once (a short explanation, then the system's
+     * switch). Until it's granted the counts stay empty, so no badge shows.
+     */
+    private fun askBadgeAccessOnce() {
+        if (prefs.badgeAccessAsked || Permissions.hasMediaAccess(this)) return
+        prefs.badgeAccessAsked = true
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.badges_ask_title)
+            .setMessage(R.string.badges_ask_message)
+            .setPositiveButton(R.string.badges_ask_allow) { _, _ -> Permissions.openNotificationListenerSettings(this) }
+            .setNegativeButton(R.string.not_now, null)
+            .show()
+    }
 
     /** The surfaces with glass behind their text. */
     private fun glassSurfaces(): List<View> =
@@ -925,7 +1003,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         updateSearchRow()
         binding.clearButton.isVisible = q.isNotEmpty()
         binding.settingsButton.isVisible = q.isEmpty()
-        binding.cardArea.isVisible = !searching && cards.isNotEmpty()
+        // Focus: no tiles (search and the favorites are all home shows).
+        binding.cardArea.isVisible = !searching && cards.isNotEmpty() && !prefs.focusMode
         if (searching) widgets.exitEditMode()
         binding.widgetGrid.isVisible = !searching
         binding.resultsStack.isVisible = searching
@@ -950,6 +1029,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
     }
 
+    /** What the results panel shows now (device tests read it). */
+    private var shownResults: List<SearchResult> = emptyList()
+    internal fun currentResultsForTest(): List<SearchResult> = if (query().isBlank()) emptyList() else shownResults
+
     private fun render() {
         val q = query().trim()
         val list = ArrayList<SearchResult>(local.size + slowResults.size + 2)
@@ -959,6 +1042,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             list += SearchResult.AccessHint
         }
         adapter.submit(list)
+        shownResults = list
         binding.results.scrollToPosition(0)
         binding.resultsPanel.isVisible = list.isNotEmpty()
         // Web search has its own pill under the panel (and Enter goes there when nothing matched).
@@ -1007,6 +1091,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             }
             is SearchResult.Message -> opened { Actions.message(this, result.entry.address) }
             is SearchResult.Calc -> Actions.copy(this, result.value.replace(",", ""))
+            is SearchResult.Convert -> if (result.copyText.isNotEmpty()) Actions.copy(this, result.copyText)
+            is SearchResult.Shortcut -> opened { Actions.prefixSearch(this, result.match) }
+            is SearchResult.ShortcutHint -> binding.searchInput.setText("${result.target.key} ").also {
+                binding.searchInput.setSelection(binding.searchInput.length())
+            }
+            is SearchResult.Event -> opened { Actions.openEvent(this, result.entry) }
             is SearchResult.Web -> opened { Actions.webSearch(this, result.engine, result.query) }
             SearchResult.AccessHint -> startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -1026,6 +1116,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             is SearchResult.Photo -> Actions.shareMedia(this, result.entry.uri, result.entry.mime ?: "image/*")
             is SearchResult.Message -> Actions.copy(this, result.entry.body)
             is SearchResult.Calc -> Actions.copy(this, result.value.replace(",", ""))
+            is SearchResult.Convert -> if (result.copyText.isNotEmpty()) Actions.copy(this, result.copyText)
+            is SearchResult.Shortcut, is SearchResult.ShortcutHint, is SearchResult.Event -> Unit
             SearchResult.AccessHint -> menu(view) {
                 add(R.string.menu_hide_hint) {
                     prefs.accessHintDismissed = true

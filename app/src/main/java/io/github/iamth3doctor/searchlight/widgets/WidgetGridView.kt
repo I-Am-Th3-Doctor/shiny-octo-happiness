@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import io.github.iamth3doctor.searchlight.R
+import io.github.iamth3doctor.searchlight.ui.DoubleTap
 import io.github.iamth3doctor.searchlight.ui.Swipe
 import io.github.iamth3doctor.searchlight.ui.SwipeTracker
 import io.github.iamth3doctor.searchlight.ui.color
@@ -47,6 +48,12 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     var onSwipeUp: (() -> Unit)? = null
     /** A swipe down, left or right on empty space (outside edit mode): the home gestures. */
     var onSwipe: ((Swipe.Direction) -> Unit)? = null
+    /** Two quick taps on empty space (outside edit mode). */
+    var onDoubleTap: (() -> Unit)? = null
+    private val doubleTap = DoubleTap(ViewConfiguration.getDoubleTapTimeout().toLong(), ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat())
+    private var tapDownTime = 0L
+    private var travelled = false
+    private var swiped = false
     private val swipe = SwipeTracker(context.pxF(R.dimen.size_swipe), context.pxF(R.dimen.size_gesture))
     private var swipeDownX = 0f
     private var swipeDownY = 0f
@@ -99,11 +106,24 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
         setWillNotDraw(false)
         isLongClickable = true
         setOnLongClickListener {
+            doubleTap.reset()
+            if (widgetsHidden) return@setOnLongClickListener false // Focus: no widgets to arrange
             setEditMode(true)
             enteredThisGesture = true
             true
         }
     }
+
+    /**
+     * Focus mode: the widgets are hidden (and long-press doesn't open edit mode), while empty
+     * space keeps its swipes and double tap. Off: every widget back where it was.
+     */
+    var widgetsHidden = false
+        set(value) {
+            field = value
+            if (value && editMode) setEditMode(false)
+            for (i in 0 until childCount) getChildAt(i).visibility = if (value) INVISIBLE else VISIBLE
+        }
 
     fun setWidgets(widgets: List<Pair<View, GridSpec>>) {
         removeAllViews()
@@ -113,6 +133,7 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
             v.translationX = 0f
             v.translationY = 0f
             specs[v] = s
+            v.visibility = if (widgetsHidden) INVISIBLE else VISIBLE
             addView(v)
         }
         requestLayout()
@@ -318,15 +339,27 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
                 swipeDownX = ev.x
                 swipeDownY = ev.y
                 swipe.down(ev.x, ev.y)
+                tapDownTime = ev.eventTime
+                travelled = false
+                swiped = false
             }
             MotionEvent.ACTION_MOVE -> {
-                // A finger that's travelling isn't long-pressing.
-                if (abs(ev.x - swipeDownX) > slop || abs(ev.y - swipeDownY) > slop) cancelLongPress()
+                // A finger that's travelling isn't long-pressing (or tapping).
+                if (abs(ev.x - swipeDownX) > slop || abs(ev.y - swipeDownY) > slop) {
+                    cancelLongPress()
+                    travelled = true
+                }
                 when (val d = swipe.move(ev.x, ev.y)) {
                     null -> Unit
-                    Swipe.Direction.UP -> onSwipeUp?.invoke()
-                    else -> onSwipe?.invoke(d)
+                    Swipe.Direction.UP -> { swiped = true; onSwipeUp?.invoke() }
+                    else -> { swiped = true; onSwipe?.invoke(d) }
                 }
+            }
+            MotionEvent.ACTION_UP -> {
+                // A tap: no travel, no swipe, shorter than a long press. Two of them: double tap.
+                val tap = !travelled && !swiped && ev.eventTime - tapDownTime < ViewConfiguration.getLongPressTimeout()
+                if (!tap) doubleTap.reset()
+                else if (doubleTap.tap(ev.x, ev.y, ev.eventTime)) onDoubleTap?.invoke()
             }
         }
     }

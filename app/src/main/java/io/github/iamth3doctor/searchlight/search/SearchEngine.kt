@@ -14,10 +14,20 @@ class SearchEngine(
     private val prefs: Prefs,
     private val apps: AppRepository,
     private val contacts: ContactRepository,
+    private val currency: CurrencyRates,
+    private val format: Format,
 ) {
+    /** The wording of answer rows (from string resources). */
+    interface Format {
+        fun unitDetail(query: String): String
+        fun currencyDetail(rate: String, from: String, to: String, date: String): String
+        fun currencyPending(query: String): String
+    }
+
     fun local(query: String): List<SearchResult> {
         val out = ArrayList<SearchResult>()
         Calculator.evaluate(query)?.let { out += SearchResult.Calc(query.trim(), it) }
+        answers(query, out)
 
         val scored = ArrayList<Pair<SearchResult, Int>>()
         Ranking.rankScored(query, apps.apps, { it.matchKey }, { prefs.launchCount(it.key) }, limit = Int.MAX_VALUE)
@@ -28,6 +38,26 @@ class SearchEngine(
         scored.sortByDescending { it.second }
         scored.mapTo(out) { it.first }
         return out
+    }
+
+    /** Conversions, a prefix shortcut, or shortcut hints: rows above the rest, in Answer. */
+    private fun answers(query: String, out: MutableList<SearchResult>) {
+        UnitConverter.convert(query)?.let { a ->
+            out += SearchResult.Convert(a.text, format.unitDetail(query.trim()), a.text.substringBefore(' ').replace(",", ""))
+        }
+        CurrencyConverter.parse(query)?.let { ask ->
+            currency.refreshIfStale() // new rates re-run the search (MainActivity)
+            val rates = currency.cached
+            val a = rates?.let { CurrencyConverter.convert(ask, it) }
+            out += if (a != null) {
+                val rate = String.format(java.util.Locale.US, "%.4f", a.rate)
+                SearchResult.Convert(a.text, format.currencyDetail(rate, ask.from, ask.to, a.date), a.text.substringBefore(' ').replace(",", ""))
+            } else {
+                SearchResult.Convert("${ask.from} → ${ask.to}", format.currencyPending(query.trim()), "")
+            }
+        }
+        PrefixShortcuts.match(query)?.let { out += SearchResult.Shortcut(it) }
+        PrefixShortcuts.hints(query).forEach { out += SearchResult.ShortcutHint(it) }
     }
 
     private fun searchContacts(query: String): List<Pair<ContactEntry, Int>> {

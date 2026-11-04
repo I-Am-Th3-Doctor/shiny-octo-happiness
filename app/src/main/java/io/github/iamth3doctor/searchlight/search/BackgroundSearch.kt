@@ -2,6 +2,7 @@ package io.github.iamth3doctor.searchlight.search
 
 import android.os.Handler
 import android.os.Looper
+import io.github.iamth3doctor.searchlight.calendar.CalendarSearch
 import io.github.iamth3doctor.searchlight.files.FileSearch
 import io.github.iamth3doctor.searchlight.media.MediaRepository
 import io.github.iamth3doctor.searchlight.messages.MessageRepository
@@ -17,6 +18,7 @@ class BackgroundSearch(
     private val files: FileSearch,
     private val media: MediaRepository,
     private val messages: MessageRepository,
+    private val calendar: CalendarSearch,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
@@ -31,6 +33,7 @@ class BackgroundSearch(
             if (cancelled()) return@execute
             val out = ArrayList<SearchResult>()
 
+            calendar.search(query, MAX_EVENTS).forEach { out += SearchResult.Event(it) }
             val songs = media.searchSongs(query, MAX_SONGS)
             songs.forEach { out += SearchResult.Song(it) }
             if (photosFromMedia) media.searchPhotos(query, MAX_PHOTOS).forEach { out += SearchResult.Photo(it) }
@@ -57,6 +60,7 @@ class BackgroundSearch(
 
     private companion object {
         const val MAX_SONGS = 4
+        const val MAX_EVENTS = 4
         const val MAX_PHOTOS = 8
         const val MAX_MESSAGES = 4
         const val MAX_FILES = 20

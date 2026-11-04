@@ -67,6 +67,8 @@ class SettingsActivity : Activity() {
             else intArrayOf(getColor(R.color.settings_page_dark_top), getColor(R.color.settings_page_dark_bottom)))
 
         binding.setDefault.setOnClickListener { requestDefaultHome() }
+        binding.focusSwitch.isChecked = prefs.focusMode
+        binding.focusSwitch.setOnCheckedChangeListener { _, checked -> prefs.focusMode = checked }
         binding.autoKeyboard.isChecked = prefs.autoOpenKeyboard
         binding.autoKeyboard.setOnCheckedChangeListener { _, checked -> prefs.autoOpenKeyboard = checked }
         binding.greetingRow.setOnClickListener { editGreeting() }
@@ -260,6 +262,8 @@ class SettingsActivity : Activity() {
         return listOf(
             Perm(R.string.perm_contacts, R.string.perm_contacts_desc, app.contacts::hasPermission,
                 runtime = arrayOf(Manifest.permission.READ_CONTACTS)),
+            Perm(R.string.perm_calendar, R.string.perm_calendar_desc, app.calendar::hasPermission,
+                runtime = arrayOf(Manifest.permission.READ_CALENDAR)),
             Perm(R.string.perm_messages, R.string.perm_messages_desc, app.messages::hasPermission,
                 runtime = arrayOf(Manifest.permission.READ_SMS)),
             Perm(R.string.perm_music, R.string.perm_music_desc, app.media::hasMusicPermission,

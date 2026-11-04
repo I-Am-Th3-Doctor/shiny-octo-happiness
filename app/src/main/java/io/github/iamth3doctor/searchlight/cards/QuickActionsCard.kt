@@ -59,6 +59,7 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
 
     private class Slot(val circle: View, val icon: ImageView)
     private lateinit var slots: List<Slot>
+    private lateinit var focus: Slot
 
     private class State(val on: Boolean, val label: String, val icon: Int, val available: Boolean = true)
 
@@ -87,6 +88,12 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
                 // Read the config at tap time, so a change in Settings applies immediately.
                 slot.circle.setOnClickListener { perform(prefs.quickActionSlots[index]) }
             }
+        }
+        focus = Slot(root.findViewById(R.id.qaFocusCircle), root.findViewById(R.id.qaFocusIcon))
+        // One tap on, one tap off (off is also in Settings: with Focus on this tile is hidden).
+        focus.circle.setOnClickListener {
+            prefs.focusMode = !prefs.focusMode
+            render()
         }
     }
 
@@ -118,6 +125,12 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
             slot.circle.backgroundTintList = ColorStateList.valueOf(activity.color(if (st.on) R.color.accent else R.color.control_off))
             slot.icon.imageTintList = ColorStateList.valueOf(activity.color(if (st.on) R.color.on_accent else R.color.on_surface))
             slot.circle.alpha = if (st.available) 1f else 0.4f
+        }
+        val on = prefs.focusMode
+        focus.circle.backgroundTintList = ColorStateList.valueOf(activity.color(if (on) R.color.accent else R.color.control_off))
+        focus.icon.imageTintList = ColorStateList.valueOf(activity.color(if (on) R.color.on_accent else R.color.on_surface))
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            focus.circle.stateDescription = activity.getString(if (on) R.string.state_on else R.string.state_off)
         }
     }
 

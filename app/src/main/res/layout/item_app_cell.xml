@@ -10,7 +10,7 @@
     android:paddingHorizontal="@dimen/space_s"
     android:paddingVertical="@dimen/space_s">
 
-    <ImageView
+    <io.github.iamth3doctor.searchlight.ui.BadgedImageView
         android:id="@+id/icon"
         android:layout_width="@dimen/size_result_icon"
         android:layout_height="@dimen/size_result_icon"

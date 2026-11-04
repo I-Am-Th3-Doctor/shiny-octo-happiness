@@ -165,6 +165,7 @@ class ResultsAdapter(
         h.b.label.text = entry.label
         h.b.root.contentDescription = entry.label
         h.b.icon.setImageBitmap(apps.icon(entry) { bmp -> if (h.result === r) h.b.icon.setImageBitmap(bmp) })
+        h.b.icon.badgeCount = io.github.iamth3doctor.searchlight.apps.Badges.countFor(entry.packageName)
     }
 
     private fun bindLine(h: Holder, r: SearchResult, activated: Boolean) {
@@ -251,6 +252,31 @@ class ResultsAdapter(
                 subtitle(b, ctx.getString(R.string.calc_subtitle, r.expression))
                 showBadge(b, "=", ctx.color(R.color.accent))
             }
+            is SearchResult.Convert -> {
+                b.title.text = r.value
+                b.title.type(Type.TILE_TITLE)
+                subtitle(b, r.detail)
+                showBadge(b, "⇄", ctx.color(R.color.accent))
+            }
+            is SearchResult.Shortcut -> {
+                b.title.text = ctx.getString(R.string.shortcut_search, r.match.target.label, r.match.query)
+                subtitle(b, ctx.getString(R.string.shortcut_subtitle, r.match.target.key))
+                b.icon.setImageResource(R.drawable.ic_search)
+            }
+            is SearchResult.ShortcutHint -> {
+                b.title.text = ctx.getString(R.string.shortcut_hint, r.target.key, r.target.label)
+                subtitle(b, ctx.getString(R.string.shortcut_hint_subtitle, r.target.key))
+                showBadge(b, r.target.key, ctx.color(R.color.accent))
+            }
+            is SearchResult.Event -> {
+                val e = r.entry
+                b.title.text = e.title
+                val flags = if (e.allDay) DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_UTC
+                    else DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_TIME
+                val time = DateUtils.formatDateRange(ctx, e.begin, if (e.allDay) e.begin else e.end, flags)
+                subtitle(b, listOfNotNull(time, e.location?.takeIf { it.isNotBlank() }).joinToString(" · "))
+                showBadge(b, "📅", ctx.color(R.color.cat_document))
+            }
             is SearchResult.Web -> {
                 b.title.text = ctx.getString(R.string.web_search_for, r.engine.label, r.query)
                 b.icon.setImageResource(R.drawable.ic_search)
@@ -324,6 +350,7 @@ class ResultsAdapter(
         Section.APPS -> R.string.section_apps
         Section.ANSWER -> R.string.section_answer
         Section.CONTACTS -> R.string.section_contacts
+        Section.EVENTS -> R.string.section_events
         Section.MUSIC -> R.string.section_music
         Section.PHOTOS -> R.string.section_photos
         Section.MESSAGES -> R.string.section_messages
@@ -340,7 +367,8 @@ class ResultsAdapter(
 
         fun sectionOf(r: SearchResult): Section = when (r) {
             is SearchResult.App -> Section.APPS
-            is SearchResult.Calc -> Section.ANSWER
+            is SearchResult.Calc, is SearchResult.Convert, is SearchResult.Shortcut, is SearchResult.ShortcutHint -> Section.ANSWER
+            is SearchResult.Event -> Section.EVENTS
             is SearchResult.Contact -> Section.CONTACTS
             is SearchResult.Song -> Section.MUSIC
             is SearchResult.Photo -> Section.PHOTOS

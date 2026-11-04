@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One-row strip: four action circles. Their names are spoken (content description) and
+<!-- One-row strip: four action circles (yours to pick), then Focus. Their names are spoken (content description) and
      shown on long-press. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -90,6 +90,33 @@
                     android:layout_height="@dimen/size_icon"
                     android:layout_gravity="center"
                     android:importantForAccessibility="no" />
+            </FrameLayout>
+        </FrameLayout>
+
+        <!-- Focus: always here (not one of the four picks); on, home shows only search and favorites. -->
+        <FrameLayout
+            android:id="@+id/qaFocus"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+
+            <FrameLayout
+                android:id="@+id/qaFocusCircle"
+                android:layout_width="@dimen/size_avatar"
+                android:layout_height="@dimen/size_avatar"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_circle"
+                android:contentDescription="@string/qa_focus"
+                android:foreground="?android:attr/selectableItemBackgroundBorderless"
+                android:tooltipText="@string/qa_focus">
+
+                <ImageView
+                    android:id="@+id/qaFocusIcon"
+                    android:layout_width="@dimen/size_icon"
+                    android:layout_height="@dimen/size_icon"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_focus" />
             </FrameLayout>
         </FrameLayout>
     </LinearLayout>

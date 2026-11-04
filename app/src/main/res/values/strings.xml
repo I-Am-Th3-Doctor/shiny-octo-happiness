@@ -16,6 +16,16 @@
     <string name="section_apps">Apps</string>
     <string name="section_answer">Answer</string>
     <string name="section_contacts">Contacts</string>
+    <string name="section_events">Upcoming events</string>
+    <string name="convert_unit_detail">%1$s · tap to copy</string>
+    <string name="convert_currency_detail">1 %1$s = %2$s %3$s · rates of %4$s · tap to copy</string>
+    <string name="convert_currency_pending">%1$s · getting today's exchange rates…</string>
+    <string name="shortcut_search">Search %1$s for “%2$s”</string>
+    <string name="shortcut_subtitle">Shortcut “%1$s” + your search</string>
+    <string name="shortcut_hint">%1$s + search → %2$s</string>
+    <string name="shortcut_hint_subtitle">Type “%1$s ” then what to look for</string>
+    <string name="perm_calendar">Calendar</string>
+    <string name="perm_calendar_desc">Upcoming events in search results</string>
     <string name="section_music">Music</string>
     <string name="section_photos">Photos &amp; videos</string>
     <string name="section_messages">Messages</string>
@@ -278,4 +288,19 @@
     <string name="glass_clear">Clear</string>
     <string name="glass_solid">Solid</string>
     <string name="glass_value">%1$d%%</string>
+    <plurals name="badge_description">
+        <item quantity="one">%1$s, %2$d unread notification</item>
+        <item quantity="other">%1$s, %2$d unread notifications</item>
+    </plurals>
+    <string name="badges_ask_title">Show unread counts on app icons?</string>
+    <string name="badges_ask_message">Searchlight can put a small count on an app\'s icon for each notification it has waiting. It needs notification access for that. Only counts are used: no notification\'s text is ever read or kept.</string>
+    <string name="badges_ask_allow">Allow</string>
+    <string name="qa_focus">Focus</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="settings_focus">Focus mode</string>
+    <string name="settings_focus_help">Home shows only search and your favorites: no tiles, no widgets. The app drawer stays where it is. Also in the Quick Actions tile.</string>
+    <string name="lock_ask_title">Double-tap to lock</string>
+    <string name="lock_ask_message">Double-tapping empty space on the home screen can lock your phone. Android only lets an app lock the screen through its accessibility service: turn on Searchlight\'s to use it.</string>
+    <string name="lock_ask_open">Open settings</string>
 </resources>

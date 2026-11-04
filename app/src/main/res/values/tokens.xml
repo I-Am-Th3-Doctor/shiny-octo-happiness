@@ -52,7 +52,7 @@
     <dimen name="size_rail_divider">32dp</dimen>
     <dimen name="size_all_apps_panel">224dp</dimen>  <!-- two columns of app cells -->
     <dimen name="size_drop_zone">72dp</dimen>        <!-- screen-edge drop targets while dragging -->
-    <dimen name="size_tile_min_actions">192dp</dimen> <!-- 4 × 40dp circles with small gaps -->
+    <dimen name="size_tile_min_actions">240dp</dimen> <!-- 5 × 40dp circles (four picks + Focus) with small gaps -->
     <dimen name="size_tile_min_music">136dp</dimen>   <!-- unfolded bar: art + a little title + play/pause; less room and it leaves the bar -->
     <dimen name="size_grid_icon">56dp</dimen>         <!-- favorites grid icon -->
     <dimen name="size_result_icon">48dp</dimen>       <!-- search results app icon -->
@@ -68,7 +68,9 @@
     <dimen name="size_preview_height">88dp</dimen>
     <dimen name="stroke_hairline">1.5dp</dimen>
     <dimen name="stroke_glass">1dp</dimen>
-    <dimen name="glass_text_shadow">4dp</dimen>  <!-- white text on clear glass (see the glass setting) -->
+    <dimen name="glass_text_shadow">4dp</dimen>
+    <dimen name="size_badge_min">16dp</dimen>    <!-- unread badge height on small icons -->
+    <dimen name="size_badge_max">22dp</dimen>    <!-- ... and on big ones -->  <!-- white text on clear glass (see the glass setting) -->
     <dimen name="radius_menu">20dp</dimen>          <!-- app long-press menu -->
     <dimen name="size_menu_icon">28dp</dimen>       <!-- shortcut / action icons in that menu -->
     <dimen name="size_menu_min_width">200dp</dimen>
@@ -99,7 +101,9 @@
     <color name="glass_card">#800B0B0D</color>      <!-- 50% -->
     <color name="glass_card_fallback">#BF0B0B0D</color> <!-- 75% -->
     <color name="glass_row">#590B0B0D</color>       <!-- 35%: the search row, lighter than the card -->
-    <color name="glass_border">#26FFFFFF</color>    <!-- 15% white hairline round the glass -->
+    <color name="glass_border">#26FFFFFF</color>
+    <color name="badge_fill">#E60B0B0D</color>     <!-- unread badge: dark glass, legible on any icon -->
+    <color name="badge_border">#80FFFFFF</color>   <!-- ... with a light hairline for dark wallpapers -->    <!-- 15% white hairline round the glass -->
     <color name="surface_inset">#1FFFFFFF</color>   <!-- the search row inside the card -->
     <color name="control_off">#33FFFFFF</color>     <!-- off toggles, empty art, tracks -->
 

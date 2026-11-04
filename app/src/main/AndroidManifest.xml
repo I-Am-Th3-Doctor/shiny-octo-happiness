@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Contact search (asked at runtime, optional). -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Upcoming calendar events in search results (optional, asked from the permissions hub). -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Search ALL files in shared storage (granted by you in Android settings, optional).
          Fine for a sideloaded app; Play would require a justification. -->
     <uses-permission

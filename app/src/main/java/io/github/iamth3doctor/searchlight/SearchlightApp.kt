@@ -13,6 +13,8 @@ import io.github.iamth3doctor.searchlight.media.MediaRepository
 import io.github.iamth3doctor.searchlight.media.Thumbnails
 import io.github.iamth3doctor.searchlight.messages.MessageRepository
 import io.github.iamth3doctor.searchlight.search.BackgroundSearch
+import io.github.iamth3doctor.searchlight.search.CurrencyRates
+import io.github.iamth3doctor.searchlight.calendar.CalendarSearch
 import io.github.iamth3doctor.searchlight.weather.WeatherRepository
 
 class SearchlightApp : Application() {
@@ -40,6 +42,10 @@ class SearchlightApp : Application() {
         private set
     lateinit var weather: WeatherRepository
         private set
+    lateinit var currency: CurrencyRates
+        private set
+    lateinit var calendar: CalendarSearch
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -52,7 +58,9 @@ class SearchlightApp : Application() {
         messages = MessageRepository(this, contacts)
         media = MediaRepository(this)
         thumbnails = Thumbnails(this)
-        background = BackgroundSearch(files, media, messages)
+        calendar = CalendarSearch(this)
+        currency = CurrencyRates(this)
+        background = BackgroundSearch(files, media, messages, calendar)
         weather = WeatherRepository(this, prefs)
         iconPacks = IconPacks(this, prefs, apps)
         iconPacks.start()

@@ -1,6 +1,7 @@
 package io.github.iamth3doctor.searchlight.ui
 
 import android.app.Activity
+import io.github.iamth3doctor.searchlight.apps.Badges
 import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -41,6 +42,11 @@ class FavoritesPopup(
     private var apps: List<AppEntry?> = emptyList()
 
     val isShowing get() = window?.isShowing == true
+
+    /** The open row's icons and their apps, to update their unread counts in place. */
+    private val badged = ArrayList<Pair<BadgedImageView, String>>()
+
+    fun refreshBadges() = badged.forEach { (icon, pkg) -> icon.badgeCount = Badges.countFor(pkg) }
     /** The open row's view (its background is the glass). */
     val contentView: View? get() = window?.contentView
 
@@ -62,6 +68,7 @@ class FavoritesPopup(
         val inflater = LayoutInflater.from(activity)
         val iconPx = iconSize(above.width - b.root.paddingLeft - b.root.paddingRight)
         val shown = ArrayList<View>()
+        badged.clear()
 
         for (i in 0 until Prefs.MAX_FAVORITES) {
             val cell = ItemGridCellBinding.inflate(inflater, b.row, false)
@@ -71,6 +78,8 @@ class FavoritesPopup(
                 val entry = fav.entry
                 cell.label.text = entry.label
                 cell.icon.setImageBitmap(repo.icon(entry) { cell.icon.setImageBitmap(it) })
+                cell.icon.badgeCount = Badges.countFor(entry.packageName)
+                badged += cell.icon to entry.packageName
                 // The predicted slot changes with what you use: a soft gold halo says so.
                 if (fav.predicted) PredictedGlow.apply(cell.root, cell.icon)
                 cell.root.contentDescription =

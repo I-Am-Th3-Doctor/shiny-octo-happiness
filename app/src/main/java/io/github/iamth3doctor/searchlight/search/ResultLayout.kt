@@ -1,7 +1,7 @@
 package io.github.iamth3doctor.searchlight.search
 
 /** Result sections, in display order: the app grid first, then list sections. */
-enum class Section { APPS, ANSWER, CONTACTS, MUSIC, PHOTOS, MESSAGES, FILES, ACTIONS }
+enum class Section { APPS, ANSWER, CONTACTS, EVENTS, MUSIC, PHOTOS, MESSAGES, FILES, ACTIONS }
 
 /**
  * Turns a flat result list into what the results view shows: the apps as one grid block on top

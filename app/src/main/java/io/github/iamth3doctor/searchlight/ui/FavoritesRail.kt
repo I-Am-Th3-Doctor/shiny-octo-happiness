@@ -5,6 +5,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
+import io.github.iamth3doctor.searchlight.apps.Badges
 import android.widget.LinearLayout
 import android.widget.Toast
 import io.github.iamth3doctor.searchlight.R
@@ -33,7 +34,7 @@ class FavoritesRail(
         val icon = activity.px(R.dimen.size_rail_icon)
         for (i in 0 until Prefs.MAX_FAVORITES) {
             val fav = favorites.getOrNull(i)
-            val image = ImageView(activity).apply {
+            val image = BadgedImageView(activity).apply {
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
@@ -44,6 +45,7 @@ class FavoritesRail(
             if (fav != null) {
                 val entry = fav.entry
                 image.setImageBitmap(repo.icon(entry) { image.setImageBitmap(it) })
+                image.badgeCount = Badges.countFor(entry.packageName)
                 // The predicted slot changes with what you use: a soft gold halo says so.
                 if (fav.predicted) PredictedGlow.apply(slot, image)
                 slot.contentDescription =
