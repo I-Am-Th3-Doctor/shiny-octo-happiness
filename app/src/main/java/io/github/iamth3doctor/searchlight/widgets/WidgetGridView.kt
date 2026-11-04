@@ -355,6 +355,11 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
                     else -> { swiped = true; onSwipe?.invoke(d) }
                 }
             }
+            // A second finger (a two-finger tap or pinch) is no tap toward double tap to lock.
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                cancelLongPress()
+                travelled = true
+            }
             MotionEvent.ACTION_UP -> {
                 // A tap: no travel, no swipe, shorter than a long press. Two of them: double tap.
                 val tap = !travelled && !swiped && ev.eventTime - tapDownTime < ViewConfiguration.getLongPressTimeout()

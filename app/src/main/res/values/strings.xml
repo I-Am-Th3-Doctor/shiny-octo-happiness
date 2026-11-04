@@ -296,10 +296,11 @@
     <string name="badges_ask_message">Searchlight can put a small count on an app\'s icon for each notification it has waiting. It needs notification access for that. Only counts are used: no notification\'s text is ever read or kept.</string>
     <string name="badges_ask_allow">Allow</string>
     <string name="qa_focus">Focus</string>
+    <string name="focus_off">Focus mode off</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
     <string name="settings_focus">Focus mode</string>
-    <string name="settings_focus_help">Home shows only search and your favorites: no tiles, no widgets. The app drawer stays where it is. Also in the Quick Actions tile.</string>
+    <string name="settings_focus_help">Home shows only search, your favorites and the Focus button: no tiles, no widgets. The app drawer stays where it is. Leave it with the same Focus button (in Quick Actions), a two-finger tap on home, or here.</string>
     <string name="lock_ask_title">Double-tap to lock</string>
     <string name="lock_ask_message">Double-tapping empty space on the home screen can lock your phone. Android only lets an app lock the screen through its accessibility service: turn on Searchlight\'s to use it.</string>
     <string name="lock_ask_open">Open settings</string>

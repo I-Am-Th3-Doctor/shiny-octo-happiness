@@ -35,6 +35,7 @@ import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.apps.AppEntry
 import io.github.iamth3doctor.searchlight.apps.FavoriteSlots
 import io.github.iamth3doctor.searchlight.ui.Permissions
+import io.github.iamth3doctor.searchlight.ui.TwoFingerTap
 import io.github.iamth3doctor.searchlight.apps.Badges
 import io.github.iamth3doctor.searchlight.cards.BatteryCard
 import io.github.iamth3doctor.searchlight.cards.CalendarCard
@@ -325,15 +326,22 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private fun appColumns() = if (posture == Posture.UNFOLDED) UNFOLDED_APP_COLUMNS else FOLDED_APP_COLUMNS
 
-    /** Puts the tile views in the pager (folded) or the side-by-side row (unfolded). */
-    private fun applyTileMode() {
+    /**
+     * Puts the tile views in the pager (folded) or the side-by-side row (unfolded). In Focus,
+     * the row holds only the Quick Actions tile showing just its Focus button: the way back out.
+     * [restorePage]: the folded page to land on (leaving Focus: where you were), else the idle card.
+     */
+    private fun applyTileMode(restorePage: Int = -1) {
         val row = binding.tileRow
         row.removeAllViews()
-        if (posture == Posture.UNFOLDED) {
+        val focusTile = cards.firstOrNull { it is QuickActionsCard } as QuickActionsCard?
+        val focusOnly = prefs.focusMode && focusTile != null
+        focusTile?.setFocusOnly(focusOnly)
+        if (posture == Posture.UNFOLDED || focusOnly) {
             binding.cards.adapter = null // releases the tile views to the row
-            for (card in cards) {
+            for (card in if (focusOnly) listOfNotNull(focusTile) else cards) {
                 row.addView(card.viewFor(row).apply {
-                    minimumWidth = if (card.minRowWidth != 0) px(card.minRowWidth) else 0
+                    minimumWidth = if (card.minRowWidth != 0 && !focusOnly) px(card.minRowWidth) else 0
                     setTag(R.id.tile_flexible, card.rowFlexible)
                 })
                 card.setInRow(true)
@@ -347,7 +355,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             binding.cards.isVisible = true
             binding.cards.adapter = CardsAdapter(cards)
             binding.dots.isVisible = cards.size > 1
-            goToIdleCard()
+            if (restorePage in cards.indices) {
+                binding.cards.setCurrentItem(restorePage, false)
+                updateDots(restorePage)
+            } else {
+                goToIdleCard()
+            }
         }
     }
 
@@ -904,8 +917,50 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * were only hidden: same page, same widgets).
      */
     private fun applyFocus() {
-        binding.widgetGrid.widgetsHidden = prefs.focusMode
+        val on = prefs.focusMode
+        val was = focusApplied
+        focusApplied = on
+        binding.widgetGrid.widgetsHidden = on
+        if (was != null && was != on) {
+            // Entering: remember the folded page. Leaving: every tile back, on that page.
+            if (on && posture == Posture.FOLDED && binding.cards.adapter != null) pageBeforeFocus = binding.cards.currentItem
+            applyTileMode(restorePage = if (on) -1 else pageBeforeFocus)
+            if (!on) {
+                pageBeforeFocus = -1
+                lastToast = getString(R.string.focus_off)
+                Toast.makeText(this, R.string.focus_off, Toast.LENGTH_SHORT).show()
+            }
+        }
         refreshResults() // shows or hides the tiles, for the current query
+    }
+
+    /** Focus as last applied (null before the first time), and the folded page it was entered from. */
+    private var focusApplied: Boolean? = null
+    private var pageBeforeFocus = -1
+
+    /** The last toast about Focus (device tests read it). */
+    internal var lastToast: String? = null
+
+    /** In Focus the tiles go but the Focus button stays (the Quick Actions tile, if it's on). */
+    private fun hasFocusButton() = cards.any { it is QuickActionsCard }
+
+    /** Two fingers tapped anywhere on home: leaves Focus (the gesture's only meaning). */
+    private val twoFingerTap by lazy { TwoFingerTap(TWO_FINGER_TAP_MS, ViewConfiguration.get(this).scaledTouchSlop * 2f) }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> twoFingerTap.down()
+            MotionEvent.ACTION_POINTER_DOWN -> if (ev.pointerCount >= 2) {
+                twoFingerTap.pointerDown(ev.pointerCount, ev.eventTime, ev.getX(0), ev.getY(0), ev.getX(1), ev.getY(1))
+            }
+            MotionEvent.ACTION_MOVE -> if (ev.pointerCount >= 2) twoFingerTap.move(ev.pointerCount, ev.getX(0), ev.getY(0), ev.getX(1), ev.getY(1))
+            MotionEvent.ACTION_UP -> if (twoFingerTap.up(ev.eventTime) && prefs.focusMode &&
+                !binding.appTable.isVisible && !binding.allApps.isVisible
+            ) {
+                prefs.focusMode = false
+            }
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     /** New unread counts: every icon that shows them (results, drawer, all-apps, rail, favorites row). */
@@ -1016,7 +1071,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.clearButton.isVisible = q.isNotEmpty()
         binding.settingsButton.isVisible = q.isEmpty()
         // Focus: no tiles (search and the favorites are all home shows).
-        binding.cardArea.isVisible = !searching && cards.isNotEmpty() && !prefs.focusMode
+        binding.cardArea.isVisible = !searching && cards.isNotEmpty() && (!prefs.focusMode || hasFocusButton())
         syncHomeCard()
         if (searching) widgets.exitEditMode()
         binding.widgetGrid.isVisible = !searching
@@ -1254,6 +1309,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         private const val UNFOLDED_APP_COLUMNS = 7
         private const val KEY_PENDING_WIDGET = "pending_widget_id"
         private const val TABLE_ANIM_MS = 220L
+        /** A two-finger tap is both fingers down and up within this. */
+        private const val TWO_FINGER_TAP_MS = 400L
         /** The text shadow's opacity at the Clear end of the glass setting. */
         private const val GLASS_SHADOW_ALPHA = 0.6f
         private const val FAVORITES_HOLD_MS = 250L

@@ -362,60 +362,134 @@ class NewFeaturesDeviceTest {
 
     // ---- 4. Focus ----
 
-    @Test fun focusShowsOnlySearchAndFavorites() {
+    private fun pager(a: MainActivity) = a.findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.cards)
+
+    /** The Focus button's centre on screen, after bringing its tile into view (folded: its pager page). */
+    private fun focusButton(h: ActivityScenario<MainActivity>): Pair<Int, Int> {
+        val qa = app.prefs.enabledCards.indexOf(CardType.QUICK_ACTIONS)
+        h.onActivity { a -> if (!app.prefs.focusMode && pager(a).adapter != null) pager(a).setCurrentItem(qa, false) }
+        Thread.sleep(800)
+        return on(h) { a ->
+            val v = a.findViewById<View>(R.id.qaFocusCircle)
+            assertTrue("Focus button on screen", v.isShown)
+            val l = IntArray(2)
+            v.getLocationOnScreen(l)
+            (l[0] + v.width / 2) to (l[1] + v.height / 2)
+        }
+    }
+
+    private fun tap(p: Pair<Int, Int>) {
+        shell("input tap ${p.first} ${p.second}")
+        Thread.sleep(900)
+        instrumentation.waitForIdleSync()
+    }
+
+    /** What home shows: (tiles shown by type, folded page, widgets shown, favorites). */
+    private fun layout(h: ActivityScenario<MainActivity>) = on(h) { a ->
+        val grid = a.findViewById<WidgetGridView>(R.id.widgetGrid)
+        listOf(
+            a.findViewById<View>(R.id.cardArea).isShown,
+            if (pager(a).adapter != null) pager(a).currentItem else -1,
+            (0 until grid.childCount).count { grid.getChildAt(it).isShown },
+            app.prefs.favorites.toList(),
+        )
+    }
+
+    /** Focus as it should look: the Focus button and search/favorites, nothing else and nothing new. */
+    private fun assertFocused(h: ActivityScenario<MainActivity>) = h.onActivity { a ->
+        assertTrue(app.prefs.focusMode)
+        val row = a.findViewById<ViewGroup>(R.id.tileRow)
+        assertTrue("only the Focus button's tile", row.isShown && row.childCount == 1)
+        assertTrue("the Focus button stays", a.findViewById<View>(R.id.qaFocusCircle).isShown)
+        for (id in listOf(R.id.qaSlot0, R.id.qaSlot1, R.id.qaSlot2, R.id.qaSlot3)) assertFalse("toggle shown", a.findViewById<View>(id).isShown)
+        assertFalse("pager", a.findViewById<View>(R.id.cards).isShown)
+        assertFalse("dots", a.findViewById<View>(R.id.dots).isShown)
+        val grid = a.findViewById<WidgetGridView>(R.id.widgetGrid)
+        assertTrue("widgets hidden", (0 until grid.childCount).none { grid.getChildAt(it).isShown })
+    }
+
+    /** Two fingers down and up together on empty home space, injected as one real touch. */
+    private fun twoFingerTap(h: ActivityScenario<MainActivity>) {
+        val (x, y) = on(h) { emptySpot(it) }
+        val t = SystemClock.uptimeMillis()
+        val props = Array(2) { MotionEvent.PointerProperties().apply { id = it; toolType = MotionEvent.TOOL_TYPE_FINGER } }
+        fun coords(dx: Float) = MotionEvent.PointerCoords().apply { this.x = x + dx; this.y = y.toFloat(); pressure = 1f; size = 1f }
+        val both = arrayOf(coords(-60f), coords(60f))
+        fun ev(action: Int, at: Long, n: Int) = MotionEvent.obtain(t, at, action, n, props, both, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+        val events = listOf(
+            ev(MotionEvent.ACTION_DOWN, t, 1),
+            ev(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), t + 20, 2),
+            ev(MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), t + 120, 2),
+            ev(MotionEvent.ACTION_UP, t + 140, 1),
+        )
+        for (e in events) {
+            automation.injectInputEvent(e, true)
+            e.recycle()
+        }
+        Thread.sleep(900)
+        instrumentation.waitForIdleSync()
+    }
+
+    @Test fun focusTogglesFromItsButtonAndLeavesEveryWay() {
         main { app.prefs.focusMode = false }
         home { h ->
-            // The Focus toggle in the Quick Actions tile (folded: its pager page; unfolded: the bar).
-            val qa = app.prefs.enabledCards.indexOf(CardType.QUICK_ACTIONS)
-            h.onActivity { a -> a.findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.cards).setCurrentItem(qa, false) }
-            Thread.sleep(800)
-            h.onActivity { a -> a.findViewById<View>(R.id.qaFocusCircle).performClick() }
-            Thread.sleep(800)
-            assertTrue(app.prefs.focusMode)
-            h.onActivity { a ->
-                assertFalse("tiles hidden", a.findViewById<View>(R.id.cardArea).isShown)
-                val grid = a.findViewById<WidgetGridView>(R.id.widgetGrid)
-                assertTrue("widgets hidden", (0 until grid.childCount).none { grid.getChildAt(it).isShown })
-                assertTrue("search", a.findViewById<View>(R.id.searchIcon).let { it.isShown || a.findViewById<View>(R.id.rail).isShown })
-                // No empty card frame left behind (unfolded, the search row waits for the rail's magnifier).
-                val card = a.findViewById<View>(R.id.homeCard)
-                assertTrue("empty card shown", !card.isShown || a.findViewById<View>(R.id.searchPill).isShown)
+            // Folded: start on another page, to check the page comes back too.
+            h.onActivity { a -> if (pager(a).adapter != null) pager(a).setCurrentItem(0, false) }
+            Thread.sleep(600)
+            val button = focusButton(h)
+            val before = on(h) { a ->
+                listOf(true, if (pager(a).adapter != null) pager(a).currentItem else -1,
+                    a.findViewById<WidgetGridView>(R.id.widgetGrid).let { g -> (0 until g.childCount).count { g.getChildAt(it).isShown } },
+                    app.prefs.favorites.toList())
             }
-            shell("screencap -p $dir/${prefix}_font1.0_44-focus-on.png")
 
-            // Search still works, and launches.
+            // 1. In with the button, out with the same button: no Settings.
+            tap(button)
+            assertFocused(h)
+            shell("screencap -p $dir/${prefix}_font1.0_44-focus-on.png")
+            // Search and favorites keep working while focused.
             type(h, "Settings")
             assertTrue(results(h).any { it is SearchResult.App })
             type(h, "")
-            // The favorites row still opens (folded: hold the magnifier; unfolded: the rail is there).
-            h.onActivity { a ->
-                if (a.findViewById<View>(R.id.rail).isShown) assertTrue(a.findViewById<ViewGroup>(R.id.railFavorites).childCount > 0)
-                else a.favoritesPopup.show(a.findViewById(R.id.homeCard))
-            }
-            Thread.sleep(600)
-            h.onActivity { a -> if (!a.findViewById<View>(R.id.rail).isShown) { assertTrue(a.favoritesPopup.isShowing); a.favoritesPopup.dismiss() } }
-            // The drawer is still reachable.
-            h.onActivity { it.openAppTable() }
-            Thread.sleep(800)
-            assertTrue(on(h) { it.findViewById<View>(R.id.appTable).isShown })
-            @Suppress("DEPRECATION") h.onActivity { it.onBackPressed() }
-            Thread.sleep(600)
-        }
-        // A restart keeps it on.
-        home { h -> assertFalse("still focused after restart", on(h) { it.findViewById<View>(R.id.cardArea).isShown }) }
+            tap(focusButton(h))
+            assertFalse(app.prefs.focusMode)
+            assertEquals("Focus mode off", on(h) { it.lastToast })
+            assertEquals("layout restored", before, layout(h))
+            h.onActivity { it.lastToast = null }
 
-        // Off from Settings: the full layout back.
+            // 3. In with the button, out with a two-finger tap.
+            tap(focusButton(h))
+            assertFocused(h)
+            twoFingerTap(h)
+            assertFalse("two-finger tap left Focus", app.prefs.focusMode)
+            assertEquals("Focus mode off", on(h) { it.lastToast })
+            assertEquals("layout restored", before, layout(h))
+            h.onActivity { it.lastToast = null }
+        }
+
+        // 2. In from Settings (and still on after a restart), out with the button.
+        ActivityScenario.launch(SettingsActivity::class.java).use { s ->
+            Thread.sleep(800)
+            s.onActivity { a -> a.findViewById<Switch>(R.id.focusSwitch).isChecked = true }
+        }
+        assertTrue(app.prefs.focusMode)
+        home { h ->
+            assertFocused(h)
+            tap(focusButton(h))
+            assertFalse(app.prefs.focusMode)
+            h.onActivity { a -> assertTrue("tiles back", a.findViewById<View>(R.id.cardArea).isShown) }
+            if (!unfoldedNow()) h.onActivity { a -> assertTrue("pager back", a.findViewById<View>(R.id.cards).isShown) }
+        }
+
+        // And Settings' switch still turns it off.
+        main { app.prefs.focusMode = true }
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             Thread.sleep(800)
             s.onActivity { a -> a.findViewById<Switch>(R.id.focusSwitch).isChecked = false }
         }
         assertFalse(app.prefs.focusMode)
-        home { h ->
-            h.onActivity { a ->
-                assertTrue("tiles back", a.findViewById<View>(R.id.cardArea).isShown)
-                val grid = a.findViewById<WidgetGridView>(R.id.widgetGrid)
-                assertTrue("widgets back", (0 until grid.childCount).all { grid.getChildAt(it).visibility == View.VISIBLE })
-            }
-        }
     }
+
+    private fun unfoldedNow() = io.github.iamth3doctor.searchlight.ui.Posture.of(app.resources.configuration) ==
+        io.github.iamth3doctor.searchlight.ui.Posture.UNFOLDED
 }
