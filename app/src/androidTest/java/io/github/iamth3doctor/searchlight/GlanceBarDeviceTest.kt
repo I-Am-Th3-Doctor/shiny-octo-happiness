@@ -10,7 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.iamth3doctor.searchlight.cards.CardType
 import io.github.iamth3doctor.searchlight.cards.QuickAction
-import io.github.iamth3doctor.searchlight.data.TempUnit
+import io.github.iamth3doctor.searchlight.weather.TempUnit
 import io.github.iamth3doctor.searchlight.ui.Posture
 import io.github.iamth3doctor.searchlight.widgets.WidgetGridView
 import org.junit.After
