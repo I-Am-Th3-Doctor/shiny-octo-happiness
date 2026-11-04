@@ -95,6 +95,7 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
         focus = Slot(root.findViewById(R.id.qaFocusCircle), root.findViewById(R.id.qaFocusIcon))
         cardRow = root.findViewById(R.id.card)
         focusSlot = root.findViewById(R.id.qaFocus)
+        showFocusOnly(focusOnly)
         // One tap on, one tap off (off is also in Settings: with Focus on this tile is hidden).
         focus.circle.setOnClickListener {
             prefs.focusMode = !prefs.focusMode
@@ -107,7 +108,13 @@ class QuickActionsCard(activity: Activity) : HomeCard(CardType.QUICK_ACTIONS, ac
      * that turned Focus on turns it off (the other toggles hide). Off: all five as before.
      */
     fun setFocusOnly(only: Boolean) {
-        if (!::cardRow.isInitialized) return
+        focusOnly = only
+        if (::cardRow.isInitialized) showFocusOnly(only) // else when the views are made (bind)
+    }
+
+    private var focusOnly = false
+
+    private fun showFocusOnly(only: Boolean) {
         listOf(R.id.qaSlot0, R.id.qaSlot1, R.id.qaSlot2, R.id.qaSlot3).forEach {
             cardRow.findViewById<View>(it).visibility = if (only) View.GONE else View.VISIBLE
         }
