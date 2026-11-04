@@ -377,6 +377,9 @@ class NewFeaturesDeviceTest {
                 val grid = a.findViewById<WidgetGridView>(R.id.widgetGrid)
                 assertTrue("widgets hidden", (0 until grid.childCount).none { grid.getChildAt(it).isShown })
                 assertTrue("search", a.findViewById<View>(R.id.searchIcon).let { it.isShown || a.findViewById<View>(R.id.rail).isShown })
+                // No empty card frame left behind (unfolded, the search row waits for the rail's magnifier).
+                val card = a.findViewById<View>(R.id.homeCard)
+                assertTrue("empty card shown", !card.isShown || a.findViewById<View>(R.id.searchPill).isShown)
             }
             shell("screencap -p $dir/${prefix}_font1.0_44-focus-on.png")
 

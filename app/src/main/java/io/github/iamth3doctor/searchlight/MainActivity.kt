@@ -284,6 +284,15 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     /** Folded: always there. Unfolded: once search is asked for (the rail's magnifier), or there's a query. */
     private fun updateSearchRow() {
         binding.searchPill.isVisible = posture == Posture.FOLDED || searchOpen || query().isNotEmpty()
+        syncHomeCard()
+    }
+
+    /**
+     * The card holds the tiles and the search row: with neither showing (unfolded, in Focus,
+     * search not asked for yet) it goes too, rather than leave an empty frame.
+     */
+    private fun syncHomeCard() {
+        binding.homeCard.isVisible = binding.cardArea.isVisible || binding.searchPill.isVisible
     }
 
     /**
@@ -1008,6 +1017,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.settingsButton.isVisible = q.isEmpty()
         // Focus: no tiles (search and the favorites are all home shows).
         binding.cardArea.isVisible = !searching && cards.isNotEmpty() && !prefs.focusMode
+        syncHomeCard()
         if (searching) widgets.exitEditMode()
         binding.widgetGrid.isVisible = !searching
         binding.resultsStack.isVisible = searching
