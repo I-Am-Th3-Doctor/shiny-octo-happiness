@@ -1,6 +1,7 @@
 package io.github.iamth3doctor.searchlight.data
 
 import io.github.iamth3doctor.searchlight.ui.GlassTint
+import io.github.iamth3doctor.searchlight.apps.FavoriteSlots
 import android.content.Context
 import io.github.iamth3doctor.searchlight.cards.CardType
 import io.github.iamth3doctor.searchlight.cards.QuickAction
@@ -193,6 +194,13 @@ class Prefs(context: Context) {
         favoriteListeners.toList().forEach { it() }
     }
 
+    /**
+     * Apps added from a long-press menu while Automatic shows: they go first in the row, ahead of
+     * the ranking, and come off with Remove. The manual six stay untouched underneath.
+     */
+    val autoAdded: List<String>
+        get() = sp.getString(KEY_AUTO_ADDED, "").orEmpty().split('\n').filter { it.isNotEmpty() }
+
     /** Automatic is on and has a ranking to show (needs usage access); otherwise the manual six show. */
     val autoFavoritesActive: Boolean get() = favoritesMode == FavoritesMode.AUTOMATIC && autoFavoritesAt > 0
 
@@ -202,9 +210,10 @@ class Prefs(context: Context) {
      * first six that are still installed.
      */
     val favorites: List<String>
-        get() = if (autoFavoritesActive) (autoFavorites + manualFavorites).distinct() else manualFavorites
+        get() = if (autoFavoritesActive) (autoAdded + autoFavorites + manualFavorites).distinct() else manualFavorites
 
-    fun isFavorite(key: String) = key in manualFavorites
+    /** Added by you (the long-press menu then offers Remove): to the manual picks, or in Automatic, [autoAdded]. */
+    fun isFavorite(key: String) = key in (if (autoFavoritesActive) autoAdded else manualFavorites)
 
     // ---- Predicted 6th slot (Manual mode): five picks plus a predicted app ----
 
@@ -240,16 +249,30 @@ class Prefs(context: Context) {
     }
 
 
-    /** @return false if the list is already full. */
-    fun addFavorite(key: String): Boolean {
-        val list = manualFavorites
-        if (key in list) return true
-        if (list.size >= MAX_FAVORITES) return false
-        saveFavorites(list + key)
-        return true
+    /**
+     * Adds [key] to the first free slot of the row: the manual picks (five of them while the
+     * predicted 6th slot is on, which stays the prediction), or in Automatic the apps you added.
+     */
+    fun addFavorite(key: String): FavoriteSlots.AddResult {
+        if (autoFavoritesActive) {
+            val (list, result) = FavoriteSlots.add(autoAdded, key, FavoriteSlots.COUNT)
+            if (result == FavoriteSlots.AddResult.ADDED) saveAutoAdded(list)
+            return result
+        }
+        val (list, result) = FavoriteSlots.add(manualFavorites, key, FavoriteSlots.capacity(predictedSlotActive))
+        if (result == FavoriteSlots.AddResult.ADDED) saveFavorites(list)
+        return result
     }
 
-    fun removeFavorite(key: String) = saveFavorites(manualFavorites - key)
+    /** Takes [key] off the row: from what you added in Automatic, else from the manual picks. */
+    fun removeFavorite(key: String) {
+        if (autoFavoritesActive && key in autoAdded) saveAutoAdded(autoAdded - key) else saveFavorites(manualFavorites - key)
+    }
+
+    private fun saveAutoAdded(list: List<String>) {
+        sp.edit().putString(KEY_AUTO_ADDED, list.joinToString("\n")).apply()
+        favoriteListeners.toList().forEach { it() }
+    }
 
     fun moveFavorite(key: String, delta: Int) {
         val list = manualFavorites.toMutableList()
@@ -321,6 +344,7 @@ class Prefs(context: Context) {
         private const val KEY_PREDICTIONS = "predictions"
         private const val KEY_PREDICTIONS_AT = "predictions_at"
         private const val KEY_AUTO_FAVORITES = "auto_favorites"
+        private const val KEY_AUTO_ADDED = "auto_favorites_added"
         private const val KEY_AUTO_FAVORITES_AT = "auto_favorites_at"
         private const val KEY_AUTO_KEYBOARD = "auto_keyboard_v2"
         private const val KEY_GREETING = "greeting"

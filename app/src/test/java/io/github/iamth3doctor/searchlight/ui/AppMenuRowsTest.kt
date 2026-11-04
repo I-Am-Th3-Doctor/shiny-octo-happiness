@@ -9,7 +9,7 @@ class AppMenuRowsTest {
     @Test fun fullMenuInOrder() {
         assertEquals(
             listOf(Action.APP_INFO, Action.WIDGETS, Action.UNINSTALL, Action.ADD_FAVORITE),
-            AppMenuRows.actions(hasWidgets = true, canUninstall = true, autoFavoritesActive = false, isFavorite = false),
+            AppMenuRows.actions(hasWidgets = true, canUninstall = true, isFavorite = false),
         )
     }
 
@@ -19,12 +19,16 @@ class AppMenuRowsTest {
         assertEquals(setOf("APP_INFO", "WIDGETS", "UNINSTALL", "ADD_FAVORITE", "REMOVE_FAVORITE"), Action.entries.map { it.name }.toSet())
         assertEquals(
             listOf(Action.APP_INFO, Action.UNINSTALL, Action.ADD_FAVORITE),
-            AppMenuRows.actions(hasWidgets = false, canUninstall = true, autoFavoritesActive = false, isFavorite = false),
+            AppMenuRows.actions(hasWidgets = false, canUninstall = true, isFavorite = false),
         )
     }
 
-    @Test fun favoriteToggleFollowsTheModeAndTheApp() {
-        assertEquals(Action.REMOVE_FAVORITE, AppMenuRows.actions(false, false, false, isFavorite = true).last())
-        assertEquals(listOf(Action.APP_INFO), AppMenuRows.actions(false, false, autoFavoritesActive = true, isFavorite = true))
+    @Test fun everyMenuOffersAddOrRemove() {
+        // Every surface builds its menu here, in either favorites mode: never without the toggle.
+        for (widgets in listOf(true, false)) for (uninstall in listOf(true, false)) {
+            assertEquals(Action.ADD_FAVORITE, AppMenuRows.actions(widgets, uninstall, isFavorite = false).last())
+            assertEquals(Action.REMOVE_FAVORITE, AppMenuRows.actions(widgets, uninstall, isFavorite = true).last())
+            assertEquals(Action.APP_INFO, AppMenuRows.actions(widgets, uninstall, isFavorite = false).first())
+        }
     }
 }

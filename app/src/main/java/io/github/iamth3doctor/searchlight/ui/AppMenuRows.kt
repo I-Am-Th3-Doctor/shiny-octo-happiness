@@ -10,18 +10,14 @@ object AppMenuRows {
     enum class Action { APP_INFO, WIDGETS, UNINSTALL, ADD_FAVORITE, REMOVE_FAVORITE }
 
     /**
-     * App info always; Widgets when the app has any; Uninstall when it can be; then add or
-     * remove favorite, except while automatic favorites show (the manual picks are hidden then).
+     * App info always; Widgets when the app has any; Uninstall when it can be; then Add to or
+     * Remove from favorites, always (in either favorites mode: see Prefs.addFavorite).
      */
-    fun actions(hasWidgets: Boolean, canUninstall: Boolean, autoFavoritesActive: Boolean, isFavorite: Boolean): List<Action> =
+    fun actions(hasWidgets: Boolean, canUninstall: Boolean, isFavorite: Boolean): List<Action> =
         listOfNotNull(
             Action.APP_INFO,
             Action.WIDGETS.takeIf { hasWidgets },
             Action.UNINSTALL.takeIf { canUninstall },
-            when {
-                autoFavoritesActive -> null
-                isFavorite -> Action.REMOVE_FAVORITE
-                else -> Action.ADD_FAVORITE
-            },
+            if (isFavorite) Action.REMOVE_FAVORITE else Action.ADD_FAVORITE,
         )
 }

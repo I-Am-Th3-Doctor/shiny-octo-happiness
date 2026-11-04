@@ -33,5 +33,23 @@ object FavoriteSlots {
         return firstFive.pad(COUNT - 1) + sixth
     }
 
+    enum class AddResult { ADDED, ALREADY, FULL }
+
+    /**
+     * How many picks the row has room for: six, or five while the predicted slot is on (slot 6
+     * always shows the live prediction, so a manual add never lands there).
+     */
+    fun capacity(predictedSlot: Boolean) = if (predictedSlot) COUNT - 1 else COUNT
+
+    /**
+     * [key] added to [picks] in the first free slot (the end: picks have no gaps), within
+     * [capacity]. The list back unchanged when it's already there or there's no room.
+     */
+    fun add(picks: List<String>, key: String, capacity: Int): Pair<List<String>, AddResult> = when {
+        key in picks -> picks to AddResult.ALREADY
+        picks.size >= capacity -> picks to AddResult.FULL
+        else -> (picks + key) to AddResult.ADDED
+    }
+
     private fun List<Slot?>.pad(n: Int = COUNT): List<Slot?> = this + List((n - size).coerceAtLeast(0)) { null }
 }

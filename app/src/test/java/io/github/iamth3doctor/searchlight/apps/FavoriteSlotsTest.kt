@@ -65,4 +65,31 @@ class FavoriteSlotsTest {
         val s = FavoriteSlots.compose(listOf("a"), true, predictions = emptyList(), installed = all)
         assertNull(s[5])
     }
+
+    // ---- Adding from the long-press menu ----
+
+    @Test fun addGoesToTheFirstFreeSlot() {
+        val (list, result) = FavoriteSlots.add(listOf("a", "b"), "c", FavoriteSlots.capacity(predictedSlot = false))
+        assertEquals(listOf("a", "b", "c"), list)
+        assertEquals(FavoriteSlots.AddResult.ADDED, result)
+        assertEquals(listOf("a", "b") to FavoriteSlots.AddResult.ALREADY, FavoriteSlots.add(listOf("a", "b"), "a", 6))
+    }
+
+    @Test fun fullWithoutThePredictionMeansSix() {
+        val six = listOf("a", "b", "c", "d", "e", "f")
+        assertEquals(six to FavoriteSlots.AddResult.FULL, FavoriteSlots.add(six, "g", FavoriteSlots.capacity(predictedSlot = false)))
+    }
+
+    @Test fun aManualAddNeverTakesThePredictedSlot() {
+        val five = listOf("a", "b", "c", "d", "e")
+        val cap = FavoriteSlots.capacity(predictedSlot = true)
+        assertEquals(5, cap)
+        assertEquals(five to FavoriteSlots.AddResult.FULL, FavoriteSlots.add(five, "g", cap))
+        // And with four picks, the add fills slot 5; slot 6 still shows the prediction.
+        val (list, _) = FavoriteSlots.add(five.take(4), "g", cap)
+        val slots = FavoriteSlots.compose(list, predictedSlot = true, predictions = listOf("p"), installed = { true })
+        assertEquals("g", slots[4]!!.key)
+        assertEquals("p", slots[5]!!.key)
+        assertEquals(FavoriteSlots.Kind.PREDICTED, slots[5]!!.kind)
+    }
 }

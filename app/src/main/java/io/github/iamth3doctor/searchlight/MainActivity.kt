@@ -33,6 +33,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.apps.AppEntry
+import io.github.iamth3doctor.searchlight.apps.FavoriteSlots
 import io.github.iamth3doctor.searchlight.cards.BatteryCard
 import io.github.iamth3doctor.searchlight.cards.CalendarCard
 import io.github.iamth3doctor.searchlight.cards.CardType
@@ -1082,7 +1083,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         val rows = AppMenuRows.actions(
             hasWidgets = cached.hasWidgets,
             canUninstall = app.apps.canUninstall(entry),
-            autoFavoritesActive = prefs.autoFavoritesActive,
             isFavorite = prefs.isFavorite(entry.key),
         )
         val actions = rows.map { row ->
@@ -1105,10 +1105,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                     prefs.removeFavorite(entry.key)
                 }
                 AppMenuRows.Action.ADD_FAVORITE -> AppMenu.Item(getString(R.string.menu_add_favorite), iconRes = R.drawable.ic_star) {
-                    if (prefs.addFavorite(entry.key)) {
-                        Toast.makeText(this, getString(R.string.favorite_added, entry.label), Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(this, R.string.favorites_full, Toast.LENGTH_LONG).show()
+                    when (prefs.addFavorite(entry.key)) {
+                        FavoriteSlots.AddResult.FULL -> Toast.makeText(this, R.string.favorites_full, Toast.LENGTH_LONG).show()
+                        else -> Toast.makeText(this, getString(R.string.favorite_added, entry.label), Toast.LENGTH_SHORT).show()
                     }
                 }
             }

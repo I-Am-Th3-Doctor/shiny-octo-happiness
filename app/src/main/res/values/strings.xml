@@ -48,7 +48,7 @@
     <string name="menu_launcher_settings">Launcher settings</string>
 
     <!-- Toasts -->
-    <string name="favorites_full">Favorites are full (6). Remove one first.</string>
+    <string name="favorites_full">Favorites full. Remove one first.</string>
     <string name="favorite_added">Added %1$s to favorites</string>
     <string name="favorites_empty_hint">Long-press any app in search results → Add to favorites</string>
     <string name="launch_failed">Couldn\'t open that app</string>
