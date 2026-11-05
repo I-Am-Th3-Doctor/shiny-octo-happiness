@@ -49,6 +49,7 @@ class AutoDefaultsDeviceTest {
     }
 
     @After fun restore() {
+        shell("input keyevent KEYCODE_HOME")
         app.autoFavorites.defaultsOverride = null
         main {
             app.prefs.saveAutoFavorites(emptyList(), 0)
@@ -67,10 +68,13 @@ class AutoDefaultsDeviceTest {
     private fun useOtherApps(avoid: Set<String>) {
         // Not Settings or the Clock: AutoFavoritesDeviceTest compares their launches (30 days of history).
         val keepOut = avoid + setOf("com.android.settings", "com.google.android.deskclock")
-        val picks = personalApps().map { it.packageName }.distinct().filter { it !in keepOut }.take(8)
+        // Plain launchable apps only (not the SIM toolkit or an icon pack), started with am start:
+        // monkey would also inject a random event, a system key included.
+        val skip = setOf("com.android.stk", "com.donnnno.arcticons", "io.github.iamth3doctor.testiconpack")
+        val picks = personalApps().filter { it.packageName !in keepOut && it.packageName !in skip }.distinctBy { it.packageName }.take(8)
         repeat(2) {
             for (p in picks) {
-                shell("monkey -p $p -c android.intent.category.LAUNCHER 1")
+                shell("am start -W -n ${p.component.flattenToShortString()}")
                 Thread.sleep(1200)
                 shell("input keyevent KEYCODE_HOME")
                 Thread.sleep(400)
