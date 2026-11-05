@@ -58,8 +58,10 @@ class AutoFavoritesDeviceTest {
             manual = app.prefs.manualFavorites
         }
 
-        // Settings three times, the clock once, going home in between (each is a launch).
-        repeat(3) {
+        // Settings eight times, the clock once, going home in between (each is a launch). Eight:
+        // well clear of what other tests launched lately (the six also hold the default Phone and
+        // Messaging apps now, whatever their use, so only four places go purely by usage).
+        repeat(8) {
             shell("am start -W -n ${settings.component.flattenToShortString()}")
             shell("input keyevent KEYCODE_HOME")
             Thread.sleep(500)
