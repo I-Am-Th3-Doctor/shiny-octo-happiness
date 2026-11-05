@@ -921,6 +921,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         val was = focusApplied
         focusApplied = on
         binding.widgetGrid.widgetsHidden = on
+        // Focus's clear glass (or, leaving it, the level from before): every surface redraws.
+        FrostedDrawable.setGlassLevel(prefs.glassLevel)
+        applyGlassShadows()
         if (was != null && was != on) {
             // Entering: remember the folded page. Leaving: every tile back, on that page.
             if (on && posture == Posture.FOLDED && binding.cards.adapter != null) pageBeforeFocus = binding.cards.currentItem

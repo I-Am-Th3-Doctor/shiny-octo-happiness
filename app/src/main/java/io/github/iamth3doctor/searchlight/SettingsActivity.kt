@@ -68,7 +68,13 @@ class SettingsActivity : Activity() {
 
         binding.setDefault.setOnClickListener { requestDefaultHome() }
         binding.focusSwitch.isChecked = prefs.focusMode
-        binding.focusSwitch.setOnCheckedChangeListener { _, checked -> prefs.focusMode = checked }
+        binding.focusSwitch.setOnCheckedChangeListener { _, checked ->
+            prefs.focusMode = checked
+            // Focus clears the glass, leaving it restores it: show (and draw) where it is now.
+            binding.glassSlider.progress = prefs.glassLevel
+            showGlassLevel(prefs.glassLevel)
+            FrostedDrawable.setGlassLevel(prefs.glassLevel)
+        }
         binding.autoKeyboard.isChecked = prefs.autoOpenKeyboard
         binding.autoKeyboard.setOnCheckedChangeListener { _, checked -> prefs.autoOpenKeyboard = checked }
         binding.greetingRow.setOnClickListener { editGreeting() }
@@ -544,7 +550,7 @@ class SettingsActivity : Activity() {
         slider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(s: SeekBar, value: Int, fromUser: Boolean) {
                 if (!fromUser) return
-                prefs.glassLevel = value
+                prefs.setGlassLevelByUser(value) // (in Focus, this level then stays after leaving it)
                 FrostedDrawable.setGlassLevel(value) // every glass surface redraws, here and on home
                 showGlassLevel(value)
             }

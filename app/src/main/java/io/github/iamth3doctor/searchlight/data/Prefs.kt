@@ -65,9 +65,29 @@ class Prefs(context: Context) {
     var focusMode: Boolean
         get() = sp.getBoolean(KEY_FOCUS, false)
         set(value) {
+            // Every way in or out comes through here: the glass goes clear on the way in and
+            // back to what it was on the way out (FocusGlass).
+            if (value != focusMode) saveGlass(if (value) FocusGlass.enter(glassState()) else FocusGlass.exit(glassState()))
             sp.edit().putBoolean(KEY_FOCUS, value).apply()
             focusListeners.toList().forEach { it() }
         }
+
+    /** The Glass transparency slider moved: in Focus, that level then stays after leaving it. */
+    fun setGlassLevelByUser(value: Int) = saveGlass(FocusGlass.userSet(glassState(), value.coerceIn(0, GlassTint.LEVEL_MAX)))
+
+    private fun glassState() = FocusGlass.State(
+        glassLevel,
+        sp.getInt(KEY_GLASS_BEFORE_FOCUS, -1).takeIf { it >= 0 },
+        sp.getBoolean(KEY_GLASS_CHANGED_IN_FOCUS, false),
+    )
+
+    private fun saveGlass(s: FocusGlass.State) {
+        sp.edit()
+            .putInt(KEY_GLASS_LEVEL, s.level.coerceIn(0, GlassTint.LEVEL_MAX))
+            .putInt(KEY_GLASS_BEFORE_FOCUS, s.saved ?: -1)
+            .putBoolean(KEY_GLASS_CHANGED_IN_FOCUS, s.changedInFocus)
+            .apply()
+    }
 
     private val focusListeners = mutableListOf<() -> Unit>()
     fun addFocusListener(l: () -> Unit) { focusListeners += l }
@@ -360,6 +380,8 @@ class Prefs(context: Context) {
         const val KEY_BADGE_ASKED = "badge_access_asked"
         const val KEY_LOCK_ASKED = "lock_access_asked"
         private const val KEY_FOCUS = "focus_mode"
+        private const val KEY_GLASS_BEFORE_FOCUS = "glass_level_before_focus"
+        private const val KEY_GLASS_CHANGED_IN_FOCUS = "glass_level_changed_in_focus"
         /** The glass setting's key: the slider writes it, every screen reads it on start. */
         const val KEY_GLASS_LEVEL = "glass_level"
         private const val KEY_GESTURE_APP = "gesture_app_"

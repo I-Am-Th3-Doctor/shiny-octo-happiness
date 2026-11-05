@@ -24,6 +24,7 @@ import io.github.iamth3doctor.searchlight.data.Prefs
 import io.github.iamth3doctor.searchlight.gestures.GestureService
 import io.github.iamth3doctor.searchlight.search.SearchResult
 import io.github.iamth3doctor.searchlight.ui.BadgedImageView
+import io.github.iamth3doctor.searchlight.ui.CollapsibleSections
 import io.github.iamth3doctor.searchlight.widgets.WidgetGridView
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -499,6 +500,140 @@ class NewFeaturesDeviceTest {
             s.onActivity { a -> a.findViewById<Switch>(R.id.focusSwitch).isChecked = false }
         }
         assertFalse(app.prefs.focusMode)
+    }
+
+    // ---- Focus wears clear glass ----
+
+    /** The glass setting as stored, as the surfaces use it, and the home card's drawn opacity. */
+    private fun glass(h: ActivityScenario<MainActivity>): Triple<Int, Int, Int> = on(h) { a ->
+        val card = a.findViewById<View>(R.id.homeCard).background as io.github.iamth3doctor.searchlight.ui.FrostedDrawable
+        Triple(app.prefs.glassLevel, io.github.iamth3doctor.searchlight.ui.FrostedDrawable.glassLevel, card.drawnColor ushr 24)
+    }
+
+    /** The home card's opacity at [level], for the way it draws (over the blur or not). */
+    private fun expectedCardAlpha(h: ActivityScenario<MainActivity>, level: Int): Int = on(h) { a ->
+        val card = a.findViewById<View>(R.id.homeCard).background as io.github.iamth3doctor.searchlight.ui.FrostedDrawable
+        val sample = io.github.iamth3doctor.searchlight.ui.WallpaperBlur.sampledColor()
+        val stock = when {
+            !card.drewBlur -> a.getColor(R.color.glass_card_fallback)
+            sample != null -> io.github.iamth3doctor.searchlight.ui.GlassTint.tint(sample, io.github.iamth3doctor.searchlight.ui.GlassTint.Layer.CARD)
+            else -> a.getColor(R.color.glass_card)
+        }
+        if (sample != null && card.drewBlur) io.github.iamth3doctor.searchlight.ui.GlassTint.tint(sample, io.github.iamth3doctor.searchlight.ui.GlassTint.Layer.CARD, level) ushr 24
+        else io.github.iamth3doctor.searchlight.ui.GlassTint.scale(stock, level) ushr 24
+    }
+
+    private fun assertGlass(h: ActivityScenario<MainActivity>, level: Int, what: String) {
+        Thread.sleep(500)
+        instrumentation.waitForIdleSync()
+        val (stored, drawnLevel, cardAlpha) = glass(h)
+        assertEquals("$what: stored", level, stored)
+        assertEquals("$what: surfaces", level, drawnLevel)
+        assertEquals("$what: card drawn", expectedCardAlpha(h, level), cardAlpha)
+    }
+
+    /** What Settings' Glass transparency slider and readout say. */
+    private fun settingsGlass(): Pair<Int, String> {
+        var out = 0 to ""
+        ActivityScenario.launch(SettingsActivity::class.java).use { s ->
+            Thread.sleep(800)
+            s.onActivity { a ->
+                out = a.findViewById<android.widget.SeekBar>(R.id.glassSlider).progress to
+                    a.findViewById<android.widget.TextView>(R.id.glassValue).text.toString()
+            }
+        }
+        return out
+    }
+
+    private fun setGlass(level: Int) = main {
+        app.prefs.setGlassLevelByUser(level)
+        io.github.iamth3doctor.searchlight.ui.FrostedDrawable.setGlassLevel(level)
+    }
+
+    @Test fun focusWearsClearGlassAndGivesItBack() {
+        main { app.prefs.focusMode = false }
+        try {
+            // At 70, 0 and 100: in with the button, everything clear (Settings says 0), out, exactly back.
+            for ((level, exitByTwoFingers) in listOf(70 to true, 0 to false, 100 to false)) {
+                setGlass(level)
+                home { h ->
+                    assertGlass(h, level, "before Focus")
+                    tap(focusButton(h))
+                    assertTrue(app.prefs.focusMode)
+                    assertGlass(h, 0, "in Focus (from $level)")
+                    if (level == 70) shell("screencap -p $dir/${prefix}_font1.0_46-focus-clear-glass.png")
+                }
+                assertEquals("Settings in Focus", 0 to "0%", settingsGlass())
+                home { h ->
+                    if (exitByTwoFingers) twoFingerTap(h) else tap(focusButton(h))
+                    assertFalse(app.prefs.focusMode)
+                    assertGlass(h, level, "after Focus (was $level)")
+                }
+                assertEquals("Settings after Focus", level to "$level%", settingsGlass())
+            }
+
+            // In from Settings, out with the dock button.
+            setGlass(70)
+            ActivityScenario.launch(SettingsActivity::class.java).use { s ->
+                Thread.sleep(800)
+                s.onActivity { a -> a.findViewById<Switch>(R.id.focusSwitch).isChecked = true }
+                Thread.sleep(400)
+                s.onActivity { a -> assertEquals("Settings shows 0 at once", 0, a.findViewById<android.widget.SeekBar>(R.id.glassSlider).progress) }
+            }
+            home { h ->
+                assertGlass(h, 0, "in Focus from Settings")
+                tap(focusButton(h))
+                assertGlass(h, 70, "out with the button")
+            }
+
+            // In, out, in, out: still the original.
+            home { h ->
+                tap(focusButton(h)); assertGlass(h, 0, "first time in")
+                tap(focusButton(h)); assertGlass(h, 70, "first time out")
+                tap(focusButton(h)); assertGlass(h, 0, "second time in")
+                tap(focusButton(h)); assertGlass(h, 70, "second time out")
+            }
+            // Turning it on again while on doesn't save the clear level.
+            main { app.prefs.focusMode = true; app.prefs.focusMode = true; app.prefs.focusMode = false }
+            assertEquals(70, app.prefs.glassLevel)
+
+            // The slider moved while in Focus: that level stays after leaving.
+            home { h -> tap(focusButton(h)); assertGlass(h, 0, "in") }
+            var moved = -1
+            ActivityScenario.launch(SettingsActivity::class.java).use { s ->
+                Thread.sleep(800)
+                s.onActivity { a ->
+                    if (CollapsibleSections.bodyOf(a.window.decorView, "appearance")!!.visibility != View.VISIBLE) {
+                        CollapsibleSections.headerOf(a.window.decorView, "appearance")!!.performClick()
+                    }
+                }
+                Thread.sleep(700)
+                s.onActivity { a -> a.findViewById<View>(R.id.glassRow).let { it.requestRectangleOnScreen(android.graphics.Rect(0, 0, it.width, it.height), true) } }
+                Thread.sleep(700)
+                val (x, y) = run {
+                    var p = 0 to 0
+                    s.onActivity { a ->
+                        val bar = a.findViewById<android.widget.SeekBar>(R.id.glassSlider)
+                        val l = IntArray(2)
+                        bar.getLocationOnScreen(l)
+                        p = (l[0] + bar.paddingLeft + ((bar.width - bar.paddingLeft - bar.paddingRight) * 0.35f).toInt()) to (l[1] + bar.height / 2)
+                    }
+                    p
+                }
+                shell("input tap $x $y")
+                Thread.sleep(800)
+                s.onActivity { a -> moved = a.findViewById<android.widget.SeekBar>(R.id.glassSlider).progress }
+            }
+            assertTrue("slider moved: $moved", moved in 20..50)
+            home { h ->
+                tap(focusButton(h))
+                assertFalse(app.prefs.focusMode)
+                assertGlass(h, moved, "manual level kept")
+            }
+        } finally {
+            main { app.prefs.focusMode = false }
+            setGlass(io.github.iamth3doctor.searchlight.ui.GlassTint.LEVEL_DEFAULT)
+        }
     }
 
     private fun unfoldedNow() = io.github.iamth3doctor.searchlight.ui.Posture.of(app.resources.configuration) ==
