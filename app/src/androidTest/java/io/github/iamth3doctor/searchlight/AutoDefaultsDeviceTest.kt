@@ -65,7 +65,9 @@ class AutoDefaultsDeviceTest {
 
     /** Several apps opened a few times each (none of them a dialer or messaging app), so seven-plus rank. */
     private fun useOtherApps(avoid: Set<String>) {
-        val picks = personalApps().map { it.packageName }.distinct().filter { it !in avoid }.take(8)
+        // Not Settings or the Clock: AutoFavoritesDeviceTest compares their launches (30 days of history).
+        val keepOut = avoid + setOf("com.android.settings", "com.google.android.deskclock")
+        val picks = personalApps().map { it.packageName }.distinct().filter { it !in keepOut }.take(8)
         repeat(2) {
             for (p in picks) {
                 shell("monkey -p $p -c android.intent.category.LAUNCHER 1")
