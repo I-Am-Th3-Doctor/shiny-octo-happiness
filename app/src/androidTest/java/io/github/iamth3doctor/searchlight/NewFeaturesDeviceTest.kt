@@ -72,6 +72,17 @@ class NewFeaturesDeviceTest {
     private fun resumed() = shell("dumpsys activity activities").lineSequence()
         .firstOrNull { it.contains("mResumedActivity") || it.contains("ResumedActivity:") }.orEmpty()
 
+    /**
+     * Did an app matching [names] open? Its screen on top, or its task in recents (on a first
+     * launch an app may put a permission dialog over itself, which is then what's on top).
+     */
+    private fun opened(vararg names: String): Boolean {
+        val top = resumed().lowercase()
+        if (names.any { it in top }) return true
+        return shell("dumpsys activity recents").lineSequence()
+            .filter { "Recent #" in it }.take(3).any { line -> names.any { it in line.lowercase() } }
+    }
+
     private fun home(block: (ActivityScenario<MainActivity>) -> Unit) {
         shell("mkdir -p $dir")
         shell("cmd role add-role-holder --user 0 android.app.role.HOME $pkg")
@@ -137,7 +148,7 @@ class NewFeaturesDeviceTest {
             val yt = results(h).filterIsInstance<SearchResult.Shortcut>().single()
             assertEquals("lofi", yt.match.query)
             h.onActivity { it.onClick(yt, it.findViewById(R.id.results)) }
-            waitFor("YouTube search (resumed: ${resumed()})", 20_000) { resumed().let { "youtube" in it || "chrome" in it || "browser" in it } }
+            waitFor("YouTube search (resumed: ${resumed()})", 20_000) { opened("youtube", "chrome", "browser") }
         }
         shell("input keyevent KEYCODE_HOME")
         Thread.sleep(1000)
@@ -146,7 +157,7 @@ class NewFeaturesDeviceTest {
             val maps = results(h).filterIsInstance<SearchResult.Shortcut>().single()
             assertEquals("tacos", maps.match.query)
             h.onActivity { it.onClick(maps, it.findViewById(R.id.results)) }
-            waitFor("Maps search (resumed: ${resumed()})", 20_000) { resumed().let { "maps" in it || "chrome" in it || "browser" in it } }
+            waitFor("Maps search (resumed: ${resumed()})", 20_000) { opened("maps", "chrome", "browser") }
         }
         shell("input keyevent KEYCODE_HOME")
         Thread.sleep(1000)
