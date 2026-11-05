@@ -107,6 +107,14 @@
             </intent-filter>
         </activity>
 
+        <!-- "Paused during focus": a restricted app opened from Searchlight while Focus blocks it. -->
+        <activity
+            android:name=".focus.PausedActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:label="@string/paused_title"
+            android:theme="@style/Theme.Searchlight.Settings" />
+
         <activity
             android:name=".SettingsActivity"
             android:exported="false"

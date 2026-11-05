@@ -35,6 +35,8 @@ import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.apps.AppEntry
 import io.github.iamth3doctor.searchlight.apps.FavoriteSlots
 import io.github.iamth3doctor.searchlight.ui.Permissions
+import io.github.iamth3doctor.searchlight.focus.PausedActivity
+import io.github.iamth3doctor.searchlight.focus.FocusRules
 import io.github.iamth3doctor.searchlight.ui.TwoFingerTap
 import io.github.iamth3doctor.searchlight.apps.Badges
 import io.github.iamth3doctor.searchlight.cards.BatteryCard
@@ -207,6 +209,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         applyGlassShadows()
         badgesChanged() // counts may have changed while away
         askBadgeAccessOnce()
+        app.focusDnd.sync() // DND access may have been granted while away
+        isResumedNow = true
+        focusDndPromptIfNeeded()
         // Permissions may have been granted in Settings since last time.
         app.startSources()
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
@@ -765,8 +770,28 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private fun sortedApps(): List<AppEntry> {
         val collator = Collator.getInstance()
-        return app.apps.apps.sortedWith { a, b -> collator.compare(a.label, b.label) }
+        return app.apps.apps.filter(::focusShows).sortedWith { a, b -> collator.compare(a.label, b.label) }
     }
+
+    /** Focus shows only allowed apps (drawer, search, favorites), Blocked or Hidden alike. */
+    private fun focusShows(e: AppEntry) = FocusRules.shows(e.packageName, prefs.focusMode, prefs.focusAllowlist)
+
+    /**
+     * Focus with Restricted apps set to Blocked: opening a restricted app from any of Searchlight's
+     * own surfaces shows "Paused during focus" instead (true: intercepted). Read at the moment of
+     * opening, so switching Blocked/Hidden applies at once.
+     */
+    private fun pausedByFocus(packageName: String, label: CharSequence): Boolean {
+        if (!FocusRules.blocks(packageName, prefs.focusMode, prefs.focusAllowlist, prefs.focusRestriction, this.packageName)) return false
+        lastPaused = packageName
+        startActivity(Intent(this, PausedActivity::class.java)
+            .putExtra(PausedActivity.EXTRA_LABEL, label.toString())
+            .putExtra(PausedActivity.EXTRA_PACKAGE, packageName))
+        return true
+    }
+
+    /** The last app Focus paused (device tests). */
+    internal var lastPaused: String? = null
 
     // ------------------------------------------------------------------ home gestures
 
@@ -924,7 +949,15 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         // Focus's clear glass (or, leaving it, the level from before): every surface redraws.
         FrostedDrawable.setGlassLevel(prefs.glassLevel)
         applyGlassShadows()
+        // Drawer, search and favorites follow the allowlist (and it can change mid-focus).
+        engine.appVisible = ::focusShows
+        engine.packageVisible = { p -> FocusRules.shows(p, prefs.focusMode, prefs.focusAllowlist) }
+        if (binding.appTable.isVisible) appTable.submit(sortedApps())
+        if (binding.allApps.isVisible) allApps.submit(sortedApps())
+        if (posture == Posture.UNFOLDED) rail.render()
+        if (favoritesPopup.isShowing) favoritesPopup.dismiss()
         if (was != null && was != on) {
+            if (on) focusDndPromptPending = true
             // Entering: remember the folded page. Leaving: every tile back, on that page.
             if (on && posture == Posture.FOLDED && binding.cards.adapter != null) pageBeforeFocus = binding.cards.currentItem
             applyTileMode(restorePage = if (on) -1 else pageBeforeFocus)
@@ -935,6 +968,39 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             }
         }
         refreshResults() // shows or hides the tiles, for the current query
+        if (isResumedNow) focusDndPromptIfNeeded()
+    }
+
+    /** A Focus entry waits to say (once) that Do Not Disturb needs access: shown when home is in front. */
+    private var focusDndPromptPending = false
+    private var isResumedNow = false
+
+    override fun onPause() {
+        isResumedNow = false
+        super.onPause()
+    }
+
+    /**
+     * Focus came on without Do Not Disturb access: the first time, a prompt to grant it; after
+     * that, once, a short notice that DND is unavailable. Focus itself works either way.
+     */
+    private fun focusDndPromptIfNeeded() {
+        if (!focusDndPromptPending || !prefs.focusMode) return
+        focusDndPromptPending = false
+        if (app.focusDnd.hasAccess()) return
+        if (!prefs.focusDndAsked) {
+            prefs.focusDndAsked = true
+            lastPrompt = android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.focus_dnd_ask_title)
+                .setMessage(R.string.focus_dnd_ask_message)
+                .setPositiveButton(R.string.lock_ask_open) { _, _ -> Permissions.openDndAccessSettings(this) }
+                .setNegativeButton(R.string.not_now, null)
+                .show()
+        } else if (!prefs.focusDndNoticeShown) {
+            prefs.focusDndNoticeShown = true
+            lastToast = getString(R.string.focus_dnd_unavailable)
+            Toast.makeText(this, R.string.focus_dnd_unavailable, Toast.LENGTH_LONG).show()
+        }
     }
 
     /** Focus as last applied (null before the first time), and the folded page it was entered from. */
@@ -1163,7 +1229,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             is SearchResult.Message -> opened { Actions.message(this, result.entry.address) }
             is SearchResult.Calc -> Actions.copy(this, result.value.replace(",", ""))
             is SearchResult.Convert -> if (result.copyText.isNotEmpty()) Actions.copy(this, result.copyText)
-            is SearchResult.Shortcut -> opened { Actions.prefixSearch(this, result.match) }
+            is SearchResult.Shortcut -> {
+                val target = result.match.target
+                if (target.packageName == null || !pausedByFocus(target.packageName, target.label)) opened { Actions.prefixSearch(this, result.match) }
+            }
             is SearchResult.ShortcutHint -> binding.searchInput.setText("${result.target.key} ").also {
                 binding.searchInput.setSelection(binding.searchInput.length())
             }
@@ -1207,6 +1276,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     private fun launchApp(entry: AppEntry, source: View?) {
         dismissPopups()
+        if (pausedByFocus(entry.packageName, entry.label)) return
         launchedSomething = true
         app.apps.launch(entry, source, this)
     }
@@ -1239,11 +1309,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * apps), and add/remove favorite, the only way to set favorites (not while automatic
      * favorites are showing: the manual six are hidden then, so editing them would look like a no-op).
      */
-    private fun showAppMenu(entry: AppEntry, anchor: View) {
+    internal fun showAppMenu(entry: AppEntry, anchor: View) {
         val cached = app.shortcuts.menuFor(entry)
         val shortcuts = cached.shortcuts.map { s ->
             AppMenu.Item(s.label, bitmap = s.icon ?: app.apps.icon(entry) {}) {
                 favoritesPopup.dismiss()
+                if (pausedByFocus(entry.packageName, entry.label)) return@Item
                 launchedSomething = true
                 app.shortcuts.launch(entry, s, anchor)
             }

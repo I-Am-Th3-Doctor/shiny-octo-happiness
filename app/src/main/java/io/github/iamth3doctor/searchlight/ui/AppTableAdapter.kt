@@ -22,6 +22,9 @@ class AppTableAdapter(
 
     private var apps: List<AppEntry> = emptyList()
 
+    /** What the list holds now (device tests). */
+    internal val items: List<AppEntry> get() = apps
+
     @SuppressLint("NotifyDataSetChanged") // the whole list is replaced
     fun submit(list: List<AppEntry>) {
         apps = list

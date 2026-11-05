@@ -24,13 +24,19 @@ class SearchEngine(
         fun currencyPending(query: String): String
     }
 
+    /** Which apps may show (Focus: only allowed ones); everything else in search is unaffected. */
+    var appVisible: (io.github.iamth3doctor.searchlight.apps.AppEntry) -> Boolean = { true }
+
+    /** Which packages a prefix shortcut may open (Focus: a restricted app's search doesn't show). */
+    var packageVisible: (String) -> Boolean = { true }
+
     fun local(query: String): List<SearchResult> {
         val out = ArrayList<SearchResult>()
         Calculator.evaluate(query)?.let { out += SearchResult.Calc(query.trim(), it) }
         answers(query, out)
 
         val scored = ArrayList<Pair<SearchResult, Int>>()
-        Ranking.rankScored(query, apps.apps, { it.matchKey }, { prefs.launchCount(it.key) }, limit = Int.MAX_VALUE)
+        Ranking.rankScored(query, apps.apps.filter(appVisible), { it.matchKey }, { prefs.launchCount(it.key) }, limit = Int.MAX_VALUE)
             .forEach { (app, score) -> scored += SearchResult.App(app) to score }
         if (searchesContacts(query)) {
             searchContacts(query).forEach { (c, score) -> scored += SearchResult.Contact(c) to score - CONTACT_PENALTY }
@@ -56,8 +62,8 @@ class SearchEngine(
                 SearchResult.Convert("${ask.from} → ${ask.to}", format.currencyPending(query.trim()), "")
             }
         }
-        PrefixShortcuts.match(query)?.let { out += SearchResult.Shortcut(it) }
-        PrefixShortcuts.hints(query).forEach { out += SearchResult.ShortcutHint(it) }
+        PrefixShortcuts.match(query)?.takeIf { m -> m.target.packageName?.let(packageVisible) ?: true }?.let { out += SearchResult.Shortcut(it) }
+        PrefixShortcuts.hints(query).filter { t -> t.packageName?.let(packageVisible) ?: true }.forEach { out += SearchResult.ShortcutHint(it) }
     }
 
     private fun searchContacts(query: String): List<Pair<ContactEntry, Int>> {

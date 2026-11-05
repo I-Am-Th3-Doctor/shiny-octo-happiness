@@ -16,5 +16,10 @@ fun homeFavorites(prefs: Prefs, repo: AppRepository): List<HomeFavorite?> =
         favorites = prefs.favorites,
         predictedSlot = prefs.predictedSlotActive,
         predictions = prefs.predictions,
-        installed = { key -> repo.find(key)?.isSelf == false },
+        // In Focus only allowed apps fill the row (FocusRules.shows).
+        installed = { key ->
+            repo.find(key)?.let { e ->
+                !e.isSelf && io.github.iamth3doctor.searchlight.focus.FocusRules.shows(e.packageName, prefs.focusMode, prefs.focusAllowlist)
+            } == true
+        },
     ).map { slot -> slot?.let { s -> repo.find(s.key)?.let { HomeFavorite(it, s.kind) } } }

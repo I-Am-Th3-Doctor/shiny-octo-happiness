@@ -460,8 +460,11 @@ class NewFeaturesDeviceTest {
             assertFocused(h)
             shell("screencap -p $dir/${prefix}_font1.0_44-focus-on.png")
             // Search and favorites keep working while focused.
-            type(h, "Settings")
-            assertTrue(results(h).any { it is SearchResult.App })
+            // (In Focus only allowed apps show: search for one of them.)
+            var allowedLabel = ""
+            main { allowedLabel = app.prefs.focusAllowlist.firstNotNullOf { app.apps.findByPackage(it) }.label }
+            type(h, allowedLabel)
+            assertTrue(results(h).any { it is SearchResult.App && it.entry.packageName in app.prefs.focusAllowlist })
             type(h, "")
             tap(focusButton(h))
             assertFalse(app.prefs.focusMode)
@@ -633,6 +636,187 @@ class NewFeaturesDeviceTest {
         } finally {
             main { app.prefs.focusMode = false }
             setGlass(io.github.iamth3doctor.searchlight.ui.GlassTint.LEVEL_DEFAULT)
+        }
+    }
+
+    // ---- Focus: Do Not Disturb, allowed apps, Blocked / Hidden ----
+
+    private val nm get() = app.getSystemService(android.app.NotificationManager::class.java)
+
+    /** The apps the drawer lists (all of them, not just those on screen). */
+    private fun drawerPackages(h: ActivityScenario<MainActivity>): List<String> {
+        h.onActivity { it.openAppTable() }
+        Thread.sleep(1000)
+        instrumentation.waitForIdleSync()
+        val shown = on(h) { a ->
+            (a.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.appTableList).adapter as io.github.iamth3doctor.searchlight.ui.AppTableAdapter)
+                .items.map { it.packageName }
+        }
+        @Suppress("DEPRECATION") h.onActivity { it.onBackPressed() }
+        Thread.sleep(600)
+        return shown
+    }
+
+    private fun entryOf(p: String): io.github.iamth3doctor.searchlight.apps.AppEntry {
+        var e: io.github.iamth3doctor.searchlight.apps.AppEntry? = null
+        main { e = app.apps.findByPackage(p) }
+        return e ?: throw AssertionError("$p not installed")
+    }
+
+    @Test fun focusTurnsOnDoNotDisturbAndRestoresIt() {
+        shell("cmd notification allow_dnd $pkg")
+        main {
+            app.prefs.focusMode = false
+            nm.setInterruptionFilter(android.app.NotificationManager.INTERRUPTION_FILTER_ALL)
+        }
+        val policy = nm.notificationPolicy.toString()
+        try {
+            home { h ->
+                // In with the dock button: DND on (priority: the person's own exceptions), rules untouched.
+                tap(focusButton(h))
+                waitFor("DND on") { nm.currentInterruptionFilter == android.app.NotificationManager.INTERRUPTION_FILTER_PRIORITY }
+                assertEquals("DND rules untouched", policy, nm.notificationPolicy.toString())
+                // Out with a two-finger tap: exactly as before.
+                twoFingerTap(h)
+                waitFor("DND back off") { nm.currentInterruptionFilter == android.app.NotificationManager.INTERRUPTION_FILTER_ALL }
+
+                // Already in DND (alarms only) before Focus: left as it was, and still that after.
+                main { nm.setInterruptionFilter(android.app.NotificationManager.INTERRUPTION_FILTER_ALARMS) }
+                tap(focusButton(h))
+                assertEquals(android.app.NotificationManager.INTERRUPTION_FILTER_ALARMS, nm.currentInterruptionFilter)
+                // Entering again while on doesn't overwrite what was saved.
+                main { app.prefs.focusMode = true }
+                tap(focusButton(h))
+                waitFor("alarms-only back") { nm.currentInterruptionFilter == android.app.NotificationManager.INTERRUPTION_FILTER_ALARMS }
+            }
+            // In and out from Settings: the same.
+            main { nm.setInterruptionFilter(android.app.NotificationManager.INTERRUPTION_FILTER_ALL) }
+            ActivityScenario.launch(SettingsActivity::class.java).use { s ->
+                Thread.sleep(800)
+                s.onActivity { a -> a.findViewById<Switch>(R.id.focusSwitch).isChecked = true }
+                waitFor("DND on from Settings") { nm.currentInterruptionFilter == android.app.NotificationManager.INTERRUPTION_FILTER_PRIORITY }
+                s.onActivity { a -> a.findViewById<Switch>(R.id.focusSwitch).isChecked = false }
+                waitFor("DND off from Settings") { nm.currentInterruptionFilter == android.app.NotificationManager.INTERRUPTION_FILTER_ALL }
+            }
+        } finally {
+            main { app.prefs.focusMode = false; nm.setInterruptionFilter(android.app.NotificationManager.INTERRUPTION_FILTER_ALL) }
+        }
+    }
+
+    @Test fun focusWithoutDndAccessStillWorksAndSaysSoOnce() {
+        main { app.prefs.focusMode = false }
+        shell("cmd notification disallow_dnd $pkg")
+        app.getSharedPreferences("searchlight", 0).edit()
+            .putBoolean(io.github.iamth3doctor.searchlight.data.Prefs.KEY_FOCUS_DND_ASKED, false)
+            .putBoolean(io.github.iamth3doctor.searchlight.data.Prefs.KEY_FOCUS_DND_NOTICE, false).commit()
+        val before = nm.currentInterruptionFilter
+        home { h ->
+            tap(focusButton(h))
+            assertTrue("Focus on", app.prefs.focusMode)
+            assertTrue("asked to grant access", on(h) { it.lastPrompt?.isShowing == true })
+            assertEquals("DND untouched", before, nm.currentInterruptionFilter)
+            h.onActivity { it.lastPrompt?.dismiss(); it.lastPrompt = null }
+            assertFocused(h) // the declutter works without DND
+            tap(focusButton(h))
+            // Next time: no prompt, a one-time notice instead.
+            h.onActivity { it.lastToast = null }
+            tap(focusButton(h))
+            assertFalse("asked twice", on(h) { it.lastPrompt?.isShowing == true })
+            assertEquals(app.getString(R.string.focus_dnd_unavailable), on(h) { it.lastToast })
+            tap(focusButton(h))
+            h.onActivity { it.lastToast = null }
+            tap(focusButton(h))
+            assertEquals("notice once", null, on(h) { it.lastToast })
+            tap(focusButton(h))
+        }
+    }
+
+    @Test fun allowedAppsOnlyAndBlockedOrHiddenForTheRest() {
+        main { app.prefs.focusMode = false; app.prefs.focusRestriction = io.github.iamth3doctor.searchlight.focus.FocusRules.Restriction.BLOCKED }
+        val allowed = app.autoFavorites.defaultPackages().filter { p -> app.apps.apps.any { it.packageName == p } }.toSet()
+        assertTrue("default phone/messaging apps: $allowed", allowed.isNotEmpty())
+        var savedAllow = emptySet<String>()
+        main { savedAllow = app.prefs.focusAllowlist; app.prefs.focusAllowlist = allowed }
+        val chrome = entryOf("com.android.chrome")
+        try {
+            home { h ->
+                val everyone = drawerPackages(h)
+                assertTrue(chrome.packageName in everyone)
+                tap(focusButton(h))
+                // Drawer, search and favorites: only the allowed apps.
+                assertEquals(allowed, drawerPackages(h).toSet())
+                type(h, "Chrome")
+                assertTrue("restricted in search: ${results(h)}", results(h).none { it is SearchResult.App })
+                type(h, "")
+                var row = emptyList<String>()
+                main { row = io.github.iamth3doctor.searchlight.ui.homeFavorites(app.prefs, app.apps).mapNotNull { it?.entry?.packageName } }
+                assertTrue("favorites: $row", row.all { it in allowed })
+
+                // Blocked: opening Chrome from Searchlight (its shortcut, or the app) is paused; it doesn't open.
+                h.onActivity { a -> a.showAppMenu(chrome, a.findViewById(R.id.searchPill)) }
+                Thread.sleep(800)
+                h.onActivity { a ->
+                    val rows = a.appMenu.rowsView!!
+                    (0 until rows.childCount).map(rows::getChildAt).first { it is ViewGroup }.performClick() // its first shortcut
+                }
+                waitFor("paused screen (resumed: ${resumed()})") { "PausedActivity" in resumed() }
+                assertFalse("Chrome opened", "com.android.chrome" in resumed())
+                shell("screencap -p $dir/${prefix}_font1.0_47-focus-paused.png")
+                shell("input keyevent KEYCODE_BACK") // "Go back"
+                Thread.sleep(1000)
+                h.onActivity { it.onClick(SearchResult.App(chrome), it.findViewById(R.id.results)) }
+                waitFor("paused again") { "PausedActivity" in resumed() }
+
+                // "Exit focus mode" on that screen: Focus off, everything back.
+                instrumentation.waitForIdleSync()
+                val monitor = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                main {
+                    monitor.getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED)
+                        .first { it is io.github.iamth3doctor.searchlight.focus.PausedActivity }
+                        .findViewById<View>(R.id.pausedExitFocus).performClick()
+                }
+                waitFor("Focus off from the paused screen") { !app.prefs.focusMode }
+                Thread.sleep(1200)
+                assertTrue("everything back in the drawer", drawerPackages(h).size == everyone.size)
+
+                // Hidden: still hidden, but nothing is intercepted, and switching applies at once.
+                tap(focusButton(h))
+                main { app.prefs.focusRestriction = io.github.iamth3doctor.searchlight.focus.FocusRules.Restriction.HIDDEN }
+                assertEquals(allowed, drawerPackages(h).toSet())
+                type(h, "Chrome")
+                assertTrue(results(h).none { it is SearchResult.App })
+                type(h, "")
+                h.onActivity { it.onClick(SearchResult.App(chrome), it.findViewById(R.id.results)) }
+                waitFor("Chrome opens in Hidden (resumed: ${resumed()})", 20_000) { opened("chrome") && "PausedActivity" !in resumed() }
+                shell("input keyevent KEYCODE_HOME")
+                Thread.sleep(1200)
+                // A notification tap (here: its PendingIntent) is outside Searchlight: it opens normally.
+                val pi = android.app.PendingIntent.getActivity(app, 7,
+                    app.packageManager.getLaunchIntentForPackage("com.android.chrome")!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    android.app.PendingIntent.FLAG_IMMUTABLE)
+                pi.send()
+                waitFor("Chrome from a notification", 20_000) { opened("chrome") }
+                shell("input keyevent KEYCODE_HOME")
+                Thread.sleep(1200)
+
+                // And back to Blocked mid-focus: at once.
+                main { app.prefs.focusRestriction = io.github.iamth3doctor.searchlight.focus.FocusRules.Restriction.BLOCKED }
+                h.onActivity { it.onClick(SearchResult.App(chrome), it.findViewById(R.id.results)) }
+                waitFor("paused at once") { "PausedActivity" in resumed() }
+                shell("input keyevent KEYCODE_BACK")
+                Thread.sleep(800)
+                tap(focusButton(h))
+                assertEquals(everyone.size, drawerPackages(h).size)
+            }
+            // The allowlist is the person's: a later "first setup" doesn't replace it.
+            main { app.prefs.ensureFocusAllowlist(listOf("some.other.app")) }
+            assertEquals(allowed, app.prefs.focusAllowlist)
+        } finally {
+            main {
+                app.prefs.focusMode = false
+                app.prefs.focusAllowlist = savedAllow
+                app.prefs.focusRestriction = io.github.iamth3doctor.searchlight.focus.FocusRules.Restriction.BLOCKED
+            }
         }
     }
 

@@ -42,6 +42,7 @@ import io.github.iamth3doctor.searchlight.ui.secondaryText
 import io.github.iamth3doctor.searchlight.ui.type
 import io.github.iamth3doctor.searchlight.databinding.ActivitySettingsBinding
 import io.github.iamth3doctor.searchlight.ui.Permissions
+import io.github.iamth3doctor.searchlight.focus.FocusRules
 import java.text.NumberFormat
 
 /** Settings + the permissions hub. Phase 4 adds looks and gestures. */
@@ -67,6 +68,7 @@ class SettingsActivity : Activity() {
             else intArrayOf(getColor(R.color.settings_page_dark_top), getColor(R.color.settings_page_dark_bottom)))
 
         binding.setDefault.setOnClickListener { requestDefaultHome() }
+        setupFocusApps()
         binding.focusSwitch.isChecked = prefs.focusMode
         binding.focusSwitch.setOnCheckedChangeListener { _, checked ->
             prefs.focusMode = checked
@@ -539,6 +541,57 @@ class SettingsActivity : Activity() {
             setOnClickListener { onClick() }
         }
 
+
+    // ------------------------------------------------------------------ Focus: allowed and restricted apps
+
+    private fun setupFocusApps() {
+        renderFocusApps()
+        binding.focusAllowedRow.setOnClickListener { pickFocusApps() }
+        binding.focusRestrictedRow.setOnClickListener { pickFocusRestriction() }
+    }
+
+    private fun renderFocusApps() {
+        val names = prefs.focusAllowlist.mapNotNull { app.apps.findByPackage(it)?.label }.sorted()
+        binding.focusAllowedValue.text = if (names.isEmpty()) getString(R.string.focus_allowed_none) else names.joinToString(", ")
+        val blocked = prefs.focusRestriction == FocusRules.Restriction.BLOCKED
+        binding.focusRestrictedValue.text = getString(if (blocked) R.string.focus_restricted_blocked else R.string.focus_restricted_hidden) +
+            " · " + getString(if (blocked) R.string.focus_restricted_blocked_desc else R.string.focus_restricted_hidden_desc)
+    }
+
+    /** Which apps stay available in Focus: every app, ticked if allowed. Applies at once (mid-focus too). */
+    private fun pickFocusApps() {
+        val collator = java.text.Collator.getInstance()
+        val apps = app.apps.apps.filter { !it.isSelf }.distinctBy { it.packageName }.sortedWith { a, b -> collator.compare(a.label, b.label) }
+        val checked = BooleanArray(apps.size) { apps[it].packageName in prefs.focusAllowlist }
+        focusAppsDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.focus_allowed_apps)
+            .setMultiChoiceItems(apps.map { it.label }.toTypedArray(), checked) { _, i, on -> checked[i] = on }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                prefs.focusAllowlist = apps.filterIndexed { i, _ -> checked[i] }.map { it.packageName }.toSet()
+                renderFocusApps()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** The open allowlist dialog (device tests). */
+    internal var focusAppsDialog: AlertDialog? = null
+
+    private fun pickFocusRestriction() {
+        val choices = FocusRules.Restriction.entries
+        val labels = choices.map { r ->
+            if (r == FocusRules.Restriction.BLOCKED) getString(R.string.focus_restricted_blocked) + "\n" + getString(R.string.focus_restricted_blocked_desc)
+            else getString(R.string.focus_restricted_hidden) + "\n" + getString(R.string.focus_restricted_hidden_desc)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.focus_restricted_apps)
+            .wrappingSingleChoice(labels, choices.indexOf(prefs.focusRestriction)) { d, which ->
+                prefs.focusRestriction = choices[which] // applies at once, mid-focus too
+                d.dismiss()
+                renderFocusApps()
+            }
+            .show()
+    }
 
     /** "Glass transparency": moving it redraws the glass here at once; home redraws on return. */
     private fun setupGlassSlider() {

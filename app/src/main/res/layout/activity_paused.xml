@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Paused during focus": a restricted app was opened from Searchlight (Blocked). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/pausedRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="@dimen/space_l">
+
+    <ImageView
+        android:layout_width="@dimen/size_avatar"
+        android:layout_height="@dimen/size_avatar"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_focus"
+        android:tint="?android:attr/colorAccent" />
+
+    <TextView
+        android:id="@+id/pausedTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_m"
+        android:text="@string/paused_title"
+        android:textAppearance="@style/TextAppearance.Searchlight.TileTitle"
+        android:textColor="?android:attr/textColorPrimary" />
+
+    <TextView
+        android:id="@+id/pausedMessage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_s"
+        android:gravity="center"
+        android:textAppearance="@style/TextAppearance.Searchlight.Body"
+        android:textColor="?android:attr/textColorSecondary" />
+
+    <Button
+        android:id="@+id/pausedBack"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_l"
+        android:minHeight="@dimen/size_touch"
+        android:text="@string/paused_back" />
+
+    <Button
+        android:id="@+id/pausedExitFocus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minHeight="@dimen/size_touch"
+        android:text="@string/paused_exit" />
+</LinearLayout>

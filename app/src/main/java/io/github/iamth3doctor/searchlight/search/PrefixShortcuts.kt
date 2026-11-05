@@ -6,10 +6,11 @@ package io.github.iamth3doctor.searchlight.search
  */
 object PrefixShortcuts {
 
-    enum class Target(val key: String, val label: String) {
-        YOUTUBE("y", "YouTube"),
-        MAPS("m", "Maps"),
-        WIKIPEDIA("w", "Wikipedia"),
+    /** [packageName]: the app the search opens in (null: the web), for Focus's allowlist. */
+    enum class Target(val key: String, val label: String, val packageName: String?) {
+        YOUTUBE("y", "YouTube", "com.google.android.youtube"),
+        MAPS("m", "Maps", "com.google.android.apps.maps"),
+        WIKIPEDIA("w", "Wikipedia", null),
     }
 
     class Match(val target: Target, val query: String)

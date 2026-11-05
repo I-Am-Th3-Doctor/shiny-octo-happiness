@@ -89,6 +89,45 @@ class Prefs(context: Context) {
             .apply()
     }
 
+    /**
+     * The apps that stay available in Focus (packages). Set once from the default Phone and
+     * Messaging apps ([ensureFocusAllowlist]); from then on it's the person's list.
+     */
+    var focusAllowlist: Set<String>
+        get() = sp.getStringSet(KEY_FOCUS_ALLOWLIST, null)?.toSet() ?: emptySet()
+        set(value) {
+            sp.edit().putStringSet(KEY_FOCUS_ALLOWLIST, value.toSet()).apply()
+            focusListeners.toList().forEach { it() }
+        }
+
+    /** First setup only: the default Phone and Messaging apps. Later default changes don't touch it. */
+    fun ensureFocusAllowlist(defaults: List<String>) {
+        if (!sp.contains(KEY_FOCUS_ALLOWLIST)) sp.edit().putStringSet(KEY_FOCUS_ALLOWLIST, defaults.toSet()).apply()
+    }
+
+    /** What happens to apps not on the allowlist in Focus: Blocked (default) or Hidden. */
+    var focusRestriction: io.github.iamth3doctor.searchlight.focus.FocusRules.Restriction
+        get() = io.github.iamth3doctor.searchlight.focus.FocusRules.Restriction.entries
+            .firstOrNull { it.name == sp.getString(KEY_FOCUS_RESTRICTION, null) }
+            ?: io.github.iamth3doctor.searchlight.focus.FocusRules.Restriction.BLOCKED
+        set(value) {
+            sp.edit().putString(KEY_FOCUS_RESTRICTION, value.name).apply()
+            focusListeners.toList().forEach { it() }
+        }
+
+    /** The interruption filter from before Focus turned DND on (FocusRules.NONE: none saved). */
+    var dndBeforeFocus: Int
+        get() = sp.getInt(KEY_DND_BEFORE_FOCUS, io.github.iamth3doctor.searchlight.focus.FocusRules.NONE)
+        set(value) = sp.edit().putInt(KEY_DND_BEFORE_FOCUS, value).apply()
+
+    /** Asked once to grant Do Not Disturb access for Focus; told once it's unavailable without it. */
+    var focusDndAsked: Boolean
+        get() = sp.getBoolean(KEY_FOCUS_DND_ASKED, false)
+        set(value) = sp.edit().putBoolean(KEY_FOCUS_DND_ASKED, value).apply()
+    var focusDndNoticeShown: Boolean
+        get() = sp.getBoolean(KEY_FOCUS_DND_NOTICE, false)
+        set(value) = sp.edit().putBoolean(KEY_FOCUS_DND_NOTICE, value).apply()
+
     private val focusListeners = mutableListOf<() -> Unit>()
     fun addFocusListener(l: () -> Unit) { focusListeners += l }
     fun removeFocusListener(l: () -> Unit) { focusListeners -= l }
@@ -396,6 +435,11 @@ class Prefs(context: Context) {
         const val KEY_BADGE_ASKED = "badge_access_asked"
         const val KEY_LOCK_ASKED = "lock_access_asked"
         private const val KEY_FOCUS = "focus_mode"
+        private const val KEY_FOCUS_ALLOWLIST = "focus_allowlist"
+        private const val KEY_FOCUS_RESTRICTION = "focus_restriction"
+        private const val KEY_DND_BEFORE_FOCUS = "focus_dnd_before"
+        const val KEY_FOCUS_DND_ASKED = "focus_dnd_asked"
+        const val KEY_FOCUS_DND_NOTICE = "focus_dnd_notice"
         private const val KEY_GLASS_BEFORE_FOCUS = "glass_level_before_focus"
         private const val KEY_GLASS_CHANGED_IN_FOCUS = "glass_level_changed_in_focus"
         /** The glass setting's key: the slider writes it, every screen reads it on start. */

@@ -44,6 +44,8 @@ class SearchlightApp : Application() {
         private set
     lateinit var currency: CurrencyRates
         private set
+    lateinit var focusDnd: io.github.iamth3doctor.searchlight.focus.FocusDnd
+        private set
     lateinit var calendar: CalendarSearch
         private set
 
@@ -62,6 +64,11 @@ class SearchlightApp : Application() {
         currency = CurrencyRates(this)
         background = BackgroundSearch(files, media, messages, calendar)
         weather = WeatherRepository(this, prefs)
+        // Focus: the allowlist starts as the default Phone and Messaging apps (once), and DND
+        // follows Focus whichever way it's turned on or off.
+        prefs.ensureFocusAllowlist(autoFavorites.defaultPackages())
+        focusDnd = io.github.iamth3doctor.searchlight.focus.FocusDnd(this, prefs)
+        prefs.addFocusListener { focusDnd.sync() }
         iconPacks = IconPacks(this, prefs, apps)
         iconPacks.start()
         apps.start()

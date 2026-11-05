@@ -14,6 +14,8 @@ class SearchlightTestRunner : AndroidJUnitRunner() {
         app.getSharedPreferences("searchlight", 0).edit()
             .putBoolean(Prefs.KEY_BADGE_ASKED, true)
             .putBoolean(Prefs.KEY_LOCK_ASKED, true)
+            .putBoolean(Prefs.KEY_FOCUS_DND_ASKED, true)
+            .putBoolean(Prefs.KEY_FOCUS_DND_NOTICE, true)
             .commit()
         super.callApplicationOnCreate(app)
     }
