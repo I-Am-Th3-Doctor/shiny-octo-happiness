@@ -12,7 +12,7 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.contacts.ContactEntry
-import io.github.iamth3doctor.searchlight.data.WebEngine
+import io.github.iamth3doctor.searchlight.data.WebTarget
 import java.io.File
 
 /** Intents for everything that isn't launching an app. */
@@ -89,8 +89,15 @@ object Actions {
     fun message(context: Context, number: String) =
         start(context, Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
-    fun webSearch(context: Context, engine: WebEngine, query: String) =
-        start(context, Intent(Intent.ACTION_VIEW, Uri.parse(engine.url(query))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    /** The last web search URL opened (device tests check it without loading anything). */
+    @Volatile var lastWebSearchUrl: String? = null
+        private set
+
+    fun webSearch(context: Context, engine: WebTarget, query: String): Boolean {
+        val url = engine.url(query)
+        lastWebSearchUrl = url
+        return start(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     /**
      * "y lofi" / "m tacos" / "w turing": the app's own search when it's installed (YouTube's

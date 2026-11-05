@@ -46,6 +46,27 @@ class Prefs(context: Context) {
         get() = WebEngine.entries.firstOrNull { it.name == sp.getString(KEY_WEB_ENGINE, null) } ?: WebEngine.GOOGLE
         set(value) = sp.edit().putString(KEY_WEB_ENGINE, value.name).apply()
 
+    /** The saved custom engine (empty until saved). Kept when another engine is picked. */
+    val customEngineName: String get() = sp.getString(KEY_CUSTOM_ENGINE_NAME, "").orEmpty()
+    val customEngineUrl: String get() = sp.getString(KEY_CUSTOM_ENGINE_URL, "").orEmpty()
+    val hasCustomEngine: Boolean get() = WebSearchUrl.check(customEngineName, customEngineUrl) == null
+
+    /** Saves the custom engine and selects it; refused (false, nothing changes) unless [WebSearchUrl.check] passes. */
+    fun saveCustomEngine(name: String, url: String): Boolean {
+        if (WebSearchUrl.check(name, url) != null) return false
+        sp.edit().putString(KEY_CUSTOM_ENGINE_NAME, name.trim()).putString(KEY_CUSTOM_ENGINE_URL, url.trim())
+            .putString(KEY_WEB_ENGINE, WebEngine.CUSTOM.name).apply()
+        return true
+    }
+
+    /** Where a web search goes: the chosen preset, or the saved custom engine (Google if there's none). */
+    val webTarget: WebTarget
+        get() {
+            val e = webEngine
+            if (e != WebEngine.CUSTOM) return WebTarget(e.label, e.template)
+            return if (hasCustomEngine) WebTarget(customEngineName, customEngineUrl) else WebTarget(WebEngine.GOOGLE.label, WebEngine.GOOGLE.template)
+        }
+
     /** The "grant access to search contacts & files" row in results, until dismissed. */
     var accessHintDismissed: Boolean
         get() = sp.getBoolean(KEY_ACCESS_HINT_DISMISSED, false)
@@ -458,6 +479,8 @@ class Prefs(context: Context) {
         private const val KEY_AUTO_KEYBOARD = "auto_keyboard_v2"
         private const val KEY_GREETING = "greeting"
         private const val KEY_WEB_ENGINE = "web_engine"
+        private const val KEY_CUSTOM_ENGINE_NAME = "custom_engine_name"
+        private const val KEY_CUSTOM_ENGINE_URL = "custom_engine_url"
         private const val KEY_ACCESS_HINT_DISMISSED = "access_hint_dismissed"
         private const val KEY_ASKED = "permissions_asked"
         private const val KEY_CARDS = "cards"
@@ -482,11 +505,22 @@ class Prefs(context: Context) {
 
 enum class FavoritesMode { MANUAL, AUTOMATIC }
 
-enum class WebEngine(val label: String, private val template: String) {
+/**
+ * Web search engines, in the Settings list's order (stored by name: new ones only go at the
+ * end). The first four are the originals. [CUSTOM] is the person's own: its name and URL are in
+ * Prefs ([Prefs.customEngineName], [Prefs.customEngineUrl]), see [Prefs.webTarget].
+ */
+enum class WebEngine(val label: String, val template: String) {
     GOOGLE("Google", "https://www.google.com/search?q=%s"),
     DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com/?q=%s"),
     BRAVE("Brave", "https://search.brave.com/search?q=%s"),
-    BING("Bing", "https://www.bing.com/search?q=%s");
+    BING("Bing", "https://www.bing.com/search?q=%s"),
+    STARTPAGE("Startpage", "https://www.startpage.com/sp/search?query=%s"),
+    ECOSIA("Ecosia", "https://www.ecosia.org/search?q=%s"),
+    QWANT("Qwant", "https://www.qwant.com/?q=%s"),
+    YAHOO("Yahoo", "https://search.yahoo.com/search?p=%s"),
+    MOJEEK("Mojeek", "https://www.mojeek.com/search?q=%s"),
+    CUSTOM("Custom", "");
 
-    fun url(query: String): String = template.format(java.net.URLEncoder.encode(query, "UTF-8"))
+    fun url(query: String): String = WebSearchUrl.build(template, query)
 }

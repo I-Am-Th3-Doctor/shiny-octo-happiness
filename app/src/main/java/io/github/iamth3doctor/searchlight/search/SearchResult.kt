@@ -3,7 +3,7 @@ package io.github.iamth3doctor.searchlight.search
 import io.github.iamth3doctor.searchlight.apps.AppEntry
 import io.github.iamth3doctor.searchlight.calendar.EventEntry
 import io.github.iamth3doctor.searchlight.contacts.ContactEntry
-import io.github.iamth3doctor.searchlight.data.WebEngine
+import io.github.iamth3doctor.searchlight.data.WebTarget
 import io.github.iamth3doctor.searchlight.files.FileEntry
 import io.github.iamth3doctor.searchlight.files.FileIndex
 import io.github.iamth3doctor.searchlight.media.PhotoEntry
@@ -26,7 +26,7 @@ sealed interface SearchResult {
     /** [matchIndex] is where the query matched in the body, or -1 if it matched the sender. */
     class Message(val entry: MessageEntry, val sender: String, val matchIndex: Int) : SearchResult
     class File(val index: FileIndex, val entry: FileEntry) : SearchResult
-    class Web(val query: String, val engine: WebEngine) : SearchResult
+    class Web(val query: String, val engine: WebTarget) : SearchResult
     /** "Search contacts, files & more" — shown until access is granted or the hint is dismissed. */
     data object AccessHint : SearchResult
 }

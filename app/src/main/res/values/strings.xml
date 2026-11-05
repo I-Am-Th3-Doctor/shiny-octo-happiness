@@ -297,6 +297,15 @@
     <string name="badges_ask_allow">Allow</string>
     <string name="qa_focus">Focus</string>
     <string name="focus_off">Focus mode off</string>
+    <string name="custom_engine">Custom</string>
+    <string name="custom_engine_named">Custom: %1$s</string>
+    <string name="custom_engine_name_hint">Name, e.g. My Search</string>
+    <string name="custom_engine_url_hint">Search URL, e.g. https://search.example.com/?q=%%s</string>
+    <string name="custom_engine_save">Save</string>
+    <string name="custom_engine_error_name">Enter a name</string>
+    <string name="custom_engine_error_https">The URL must start with https://</string>
+    <string name="custom_engine_error_none">Put %%s where the search words go</string>
+    <string name="custom_engine_error_many">Use %%s just once</string>
     <string name="paused_title">Paused during focus</string>
     <string name="paused_message">%1$s is paused while Focus mode is on.</string>
     <string name="paused_back">Go back</string>

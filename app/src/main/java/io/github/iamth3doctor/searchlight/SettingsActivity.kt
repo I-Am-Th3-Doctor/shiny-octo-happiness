@@ -20,6 +20,7 @@ import android.widget.SeekBar
 import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
 import io.github.iamth3doctor.searchlight.ui.GlassTint
 import android.widget.TextView
+import androidx.core.view.isVisible
 import io.github.iamth3doctor.searchlight.cards.QuickAction
 import io.github.iamth3doctor.searchlight.data.FavoritesMode
 import io.github.iamth3doctor.searchlight.databinding.ItemGestureRowBinding
@@ -29,6 +30,7 @@ import io.github.iamth3doctor.searchlight.gestures.HomeGesture
 import io.github.iamth3doctor.searchlight.iconpack.IconPackActivity
 import io.github.iamth3doctor.searchlight.data.Prefs
 import io.github.iamth3doctor.searchlight.data.WebEngine
+import io.github.iamth3doctor.searchlight.data.WebSearchUrl
 import io.github.iamth3doctor.searchlight.media.MusicApps
 import io.github.iamth3doctor.searchlight.ui.CollapsibleSections
 import io.github.iamth3doctor.searchlight.ui.Type
@@ -118,7 +120,7 @@ class SettingsActivity : Activity() {
     private fun render() {
         binding.setDefault.setText(if (isDefaultHome()) R.string.settings_is_default else R.string.settings_set_default)
         binding.greetingValue.text = prefs.greeting.ifEmpty { getString(R.string.settings_greeting_auto) }
-        binding.webEngineValue.text = prefs.webEngine.label
+        binding.webEngineValue.text = prefs.webTarget.label
         binding.iconPackValue.text = app.iconPacks.selected
             ?.let { pkg -> runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)) }.getOrNull() }
             ?: getString(R.string.icon_pack_system)
@@ -169,16 +171,65 @@ class SettingsActivity : Activity() {
             .show()
     }
 
+    /**
+     * The engine list: the presets, then Custom (with its saved name). A preset is picked at
+     * once; Custom opens its two fields, filled with what was saved (and is picked at once if
+     * there is a saved one). Nothing touches the network: the URL only opens on a search.
+     */
     private fun pickWebEngine() {
         val engines = WebEngine.entries
-        AlertDialog.Builder(this)
+        val labels = engines.map {
+            if (it != WebEngine.CUSTOM) it.label
+            else if (prefs.hasCustomEngine) getString(R.string.custom_engine_named, prefs.customEngineName) else getString(R.string.custom_engine)
+        }
+        engineDialog = AlertDialog.Builder(this)
             .setTitle(R.string.settings_web_engine)
-            .wrappingSingleChoice(engines.map { it.label }, engines.indexOf(prefs.webEngine)) { d, which ->
-                prefs.webEngine = engines[which]
+            .wrappingSingleChoice(labels, engines.indexOf(prefs.webEngine)) { d, which ->
+                val e = engines[which]
+                if (e == WebEngine.CUSTOM) {
+                    if (prefs.hasCustomEngine) prefs.webEngine = WebEngine.CUSTOM
+                    showCustomEngineForm()
+                } else {
+                    prefs.webEngine = e // the saved custom engine stays, for switching back
+                    binding.customEngineForm.isVisible = false
+                }
                 render()
                 d.dismiss()
             }
             .show()
+    }
+
+    /** The open engine list (device tests). */
+    internal var engineDialog: AlertDialog? = null
+
+    private fun showCustomEngineForm() {
+        binding.customEngineName.setText(prefs.customEngineName)
+        binding.customEngineUrl.setText(prefs.customEngineUrl)
+        binding.customEngineNameError.isVisible = false
+        binding.customEngineUrlError.isVisible = false
+        binding.customEngineForm.isVisible = true
+        binding.customEngineSave.setOnClickListener { saveCustomEngine() }
+    }
+
+    /** Checked first: a wrong field gets its error underneath and nothing is saved. */
+    private fun saveCustomEngine() {
+        val name = binding.customEngineName.text.toString()
+        val url = binding.customEngineUrl.text.toString()
+        val problem = WebSearchUrl.check(name, url)
+        binding.customEngineNameError.isVisible = problem == WebSearchUrl.Problem.NAME_MISSING
+        binding.customEngineNameError.setText(R.string.custom_engine_error_name)
+        val urlError = when (WebSearchUrl.checkUrl(url)) {
+            WebSearchUrl.Problem.NOT_HTTPS -> R.string.custom_engine_error_https
+            WebSearchUrl.Problem.NO_PLACEHOLDER -> R.string.custom_engine_error_none
+            WebSearchUrl.Problem.MANY_PLACEHOLDERS -> R.string.custom_engine_error_many
+            else -> null
+        }
+        binding.customEngineUrlError.isVisible = urlError != null
+        urlError?.let { binding.customEngineUrlError.setText(it) }
+        if (problem != null || urlError != null) return
+        prefs.saveCustomEngine(name, url)
+        binding.customEngineForm.isVisible = false
+        render()
     }
 
     // ------------------------------------------------------------------ Music Player + Quick Actions

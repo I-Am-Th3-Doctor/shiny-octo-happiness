@@ -499,7 +499,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                 (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
             if (enter) {
                 // The highlighted result, or the web search when nothing else matched.
-                val result = adapter.selectedResult() ?: SearchResult.Web(query().trim(), prefs.webEngine)
+                val result = adapter.selectedResult() ?: SearchResult.Web(query().trim(), prefs.webTarget)
                 onClick(result, binding.results.findViewHolderForAdapterPosition(adapter.selectedPosition())?.itemView ?: input)
             }
             enter
@@ -913,7 +913,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.resultsPanel.clipToOutline = true // scrolled results slide under the rounded corners
         binding.webPill.background = frosted(binding.webPill, R.dimen.radius_pill)
         binding.webPill.clipToOutline = true
-        binding.webPill.setOnClickListener { onClick(SearchResult.Web(query().trim(), prefs.webEngine), it) }
+        binding.webPill.setOnClickListener { onClick(SearchResult.Web(query().trim(), prefs.webTarget), it) }
         // Nothing in the results may take focus: key events (Backspace from the on-screen
         // keyboard, arrows from a hardware one) go to the focused view, and that must stay the
         // search field; if the field ever loses focus, this keeps the results from catching it.
@@ -1183,7 +1183,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         binding.results.scrollToPosition(0)
         binding.resultsPanel.isVisible = list.isNotEmpty()
         // Web search has its own pill under the panel (and Enter goes there when nothing matched).
-        binding.webPillText.text = getString(R.string.web_search_for, prefs.webEngine.label, q)
+        binding.webPillText.text = getString(R.string.web_search_for, prefs.webTarget.label, q)
     }
 
     private fun resetHome() {
