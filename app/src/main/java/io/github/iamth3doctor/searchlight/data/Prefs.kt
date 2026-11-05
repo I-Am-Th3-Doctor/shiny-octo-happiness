@@ -231,10 +231,24 @@ class Prefs(context: Context) {
     /** When [autoFavorites] was last ranked; 0 = never, or usage access was lost. */
     val autoFavoritesAt: Long get() = sp.getLong(KEY_AUTO_FAVORITES_AT, 0)
 
-    fun saveAutoFavorites(keys: List<String>, at: Long) {
-        sp.edit().putString(KEY_AUTO_FAVORITES, keys.joinToString("\n")).putLong(KEY_AUTO_FAVORITES_AT, at).apply()
+    /**
+     * The ranking, and the default Phone and Messaging apps it was made with ([defaultPackages],
+     * to notice a change; [defaultKeys], the same as app keys, kept within the six).
+     */
+    fun saveAutoFavorites(keys: List<String>, at: Long, defaultPackages: List<String> = emptyList(), defaultKeys: List<String> = emptyList()) {
+        sp.edit().putString(KEY_AUTO_FAVORITES, keys.joinToString("\n")).putLong(KEY_AUTO_FAVORITES_AT, at)
+            .putString(KEY_AUTO_DEFAULTS, defaultPackages.joinToString("\n"))
+            .putString(KEY_AUTO_DEFAULT_KEYS, defaultKeys.joinToString("\n"))
+            .apply()
         favoriteListeners.toList().forEach { it() }
     }
+
+    /** The default Phone and Messaging packages the ranking was last made with. */
+    val autoDefaultPackages: List<String>
+        get() = sp.getString(KEY_AUTO_DEFAULTS, "").orEmpty().split('\n').filter { it.isNotEmpty() }
+
+    private val autoDefaultKeys: List<String>
+        get() = sp.getString(KEY_AUTO_DEFAULT_KEYS, "").orEmpty().split('\n').filter { it.isNotEmpty() }
 
     /**
      * Apps added from a long-press menu while Automatic shows: they go first in the row, ahead of
@@ -252,7 +266,9 @@ class Prefs(context: Context) {
      * first six that are still installed.
      */
     val favorites: List<String>
-        get() = if (autoFavoritesActive) (autoAdded + autoFavorites + manualFavorites).distinct() else manualFavorites
+        get() = if (!autoFavoritesActive) manualFavorites else io.github.iamth3doctor.searchlight.apps.AutoFavorites.keepDefaultsInSix(
+            (autoAdded + autoFavorites + manualFavorites).distinct(), autoAdded, autoFavorites, autoDefaultKeys,
+        )
 
     /** Added by you (the long-press menu then offers Remove): to the manual picks, or in Automatic, [autoAdded]. */
     fun isFavorite(key: String) = key in (if (autoFavoritesActive) autoAdded else manualFavorites)
@@ -393,6 +409,8 @@ class Prefs(context: Context) {
         private const val KEY_AUTO_FAVORITES = "auto_favorites"
         private const val KEY_AUTO_ADDED = "auto_favorites_added"
         private const val KEY_AUTO_FAVORITES_AT = "auto_favorites_at"
+        private const val KEY_AUTO_DEFAULTS = "auto_favorites_defaults"
+        private const val KEY_AUTO_DEFAULT_KEYS = "auto_favorites_default_keys"
         private const val KEY_AUTO_KEYBOARD = "auto_keyboard_v2"
         private const val KEY_GREETING = "greeting"
         private const val KEY_WEB_ENGINE = "web_engine"

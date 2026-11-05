@@ -19,6 +19,10 @@ import java.util.concurrent.Executors
  * popup opens. Without usage access the ranking is cleared, so the manual six show.
  *
  * Usage stats only cover the personal profile, so work apps never rank.
+ *
+ * The default Phone and Messaging apps (as the system says now, looked up at every ranking) are
+ * always among the six, however little they're used; they still sit where their usage puts
+ * them (see [rank]). A change of either default re-ranks on the next return home.
  */
 class AutoFavorites(private val context: Context, private val prefs: Prefs, private val repo: AppRepository) {
 
@@ -32,15 +36,33 @@ class AutoFavorites(private val context: Context, private val prefs: Prefs, priv
             AppOpsManager.MODE_ALLOWED
     }
 
-    /** Re-ranks if Automatic is on and the ranking is missing or older than a day. Main thread. */
+    /**
+     * Re-ranks if Automatic is on and the ranking is missing or older than a day, or the default
+     * Phone or Messaging app changed since it was made. Main thread.
+     */
     fun refreshIfStale() {
         if (prefs.favoritesMode != FavoritesMode.AUTOMATIC) return
         if (!hasAccess()) {
             if (prefs.autoFavoritesAt != 0L) prefs.saveAutoFavorites(emptyList(), 0)
             return
         }
-        if (System.currentTimeMillis() - prefs.autoFavoritesAt < MAX_AGE_MS) return
+        val defaultsChanged = defaultPackages() != prefs.autoDefaultPackages
+        if (!defaultsChanged && System.currentTimeMillis() - prefs.autoFavoritesAt < MAX_AGE_MS) return
         refresh()
+    }
+
+    /** Device tests: stand-ins for the system's default Phone and Messaging apps (null: the real ones). */
+    @Volatile internal var defaultsOverride: List<String?>? = null
+
+    /**
+     * The default Phone (dialer) and Messaging (SMS) apps' packages, as the system says now; an
+     * unset or unreadable one is left out (its slot goes to usage). One app can be both.
+     */
+    fun defaultPackages(): List<String> {
+        defaultsOverride?.let { return it.filterNotNull().distinct() }
+        val dialer = runCatching { context.getSystemService(android.telecom.TelecomManager::class.java)?.defaultDialerPackage }.getOrNull()
+        val sms = runCatching { android.provider.Telephony.Sms.getDefaultSmsPackage(context) }.getOrNull()
+        return listOfNotNull(dialer, sms).distinct()
     }
 
     /** Re-ranks now (in the background); the favorites listeners fire when it's saved. Main thread. */
@@ -48,17 +70,21 @@ class AutoFavorites(private val context: Context, private val prefs: Prefs, priv
         if (running || prefs.favoritesMode != FavoritesMode.AUTOMATIC || !hasAccess()) return
         running = true
         val apps = repo.apps
+        val defaults = defaultPackages() // looked up afresh every time: a changed default follows
         worker.execute {
             val now = System.currentTimeMillis()
+            val cands = candidates(apps)
             val keys = try {
-                rank(launches(now - WINDOW_MS, now), candidates(apps))
+                rank(launches(now - WINDOW_MS, now), cands, defaults)
             } catch (e: Exception) {
                 Log.w(TAG, "Couldn't read usage stats", e)
                 null
             }
             main.post {
                 running = false
-                if (keys != null && prefs.favoritesMode == FavoritesMode.AUTOMATIC) prefs.saveAutoFavorites(keys, now)
+                if (keys != null && prefs.favoritesMode == FavoritesMode.AUTOMATIC) {
+                    prefs.saveAutoFavorites(keys, now, defaults, defaults.mapNotNull { cands[it] })
+                }
             }
         }
     }
@@ -219,12 +245,21 @@ class AutoFavorites(private val context: Context, private val prefs: Prefs, priv
                 .take(KEEP)
                 .map { candidates.getValue(it) }
 
+        /** The favorites row's length. */
+        const val SIX = 6
+
         /**
          * App keys, most launches first (ties: most recent). A launch is coming to the foreground
          * from a different app, so moving between screens inside one app counts once. Only
          * packages in [candidates] (installed, personal profile, not Searchlight) rank.
+         *
+         * [defaults] (the default Phone and Messaging apps' packages) are always in the first six:
+         * one that isn't takes the place of the lowest-ranked app there that isn't a default, then
+         * the six are sorted by usage again, so they float like any other app. One app that is both
+         * takes one place; a default that isn't a candidate (not installed) is skipped. Apps pushed
+         * out of the six follow it, in order.
          */
-        fun rank(foreground: List<Pair<String, Long>>, candidates: Map<String, String>): List<String> {
+        fun rank(foreground: List<Pair<String, Long>>, candidates: Map<String, String>, defaults: Collection<String> = emptyList()): List<String> {
             val counts = HashMap<String, Int>()
             val last = HashMap<String, Long>()
             var previous: String? = null
@@ -233,10 +268,38 @@ class AutoFavorites(private val context: Context, private val prefs: Prefs, priv
                 last[pkg] = time
                 previous = pkg
             }
-            return counts.keys.filter { it in candidates }
-                .sortedWith(compareByDescending<String> { counts[it] }.thenByDescending { last[it] })
-                .take(KEEP)
-                .map { candidates.getValue(it) }
+            val byUsage = compareByDescending<String> { counts[it] ?: 0 }.thenByDescending { last[it] ?: 0L }
+            val ranked = counts.keys.filter { it in candidates }.sortedWith(byUsage)
+            val guaranteed = defaults.filter { it in candidates }.distinct()
+            val six = ranked.take(SIX).toMutableList()
+            for (d in guaranteed) {
+                if (d in six) continue
+                if (six.size < SIX) { six += d; continue }
+                // The lowest-ranked app in the six that isn't a default gives up its place.
+                val out = six.indices.reversed().firstOrNull { six[it] !in guaranteed } ?: continue
+                six[out] = d
+            }
+            val top = six.sortedWith(byUsage)
+            return (top + ranked.filter { it !in top }).take(KEEP).map { candidates.getValue(it) }
+        }
+
+        /**
+         * What the row shows in Automatic: [list] (apps you added, then the ranking, then manual
+         * picks to fill gaps) with every [defaults] key kept within the first six. If added apps
+         * pushed one past six, it takes the place of the last ranked (not added, not default) app
+         * there, and the ranked part keeps its usage order.
+         */
+        fun keepDefaultsInSix(list: List<String>, added: List<String>, ranking: List<String>, defaults: List<String>): List<String> {
+            val six = list.take(SIX).toMutableList()
+            for (d in defaults.distinct()) {
+                if (d in six || d !in list) continue
+                val out = six.indices.reversed().firstOrNull { six[it] !in added && six[it] !in defaults } ?: continue
+                six[out] = d
+            }
+            val (fixed, ranked) = six.partition { it in added }
+            val order = { k: String -> ranking.indexOf(k).let { if (it < 0) Int.MAX_VALUE else it } }
+            val top = fixed + ranked.sortedBy(order)
+            return top + list.filter { it !in top }
         }
     }
 }

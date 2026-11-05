@@ -132,4 +132,65 @@ class AutoFavoritesTest {
         assertEquals("manual6", slots[5]!!.key)
         assertEquals(FavoriteSlots.Kind.MANUAL_SIXTH, slots[5]!!.kind)
     }
+
+    // ---- The default Phone and Messaging apps are always in the six ----
+
+    /** Ten apps a..j launched 20, 19, ... 11 times; phone and sms launched [phone] and [sms] times. */
+    private val ten = ('a'..'j').toList()
+    private val cands = (ten.map { "$it" } + listOf("phone", "sms", "both")).associateWith { "k:$it" }
+    private fun usage(phone: Int, sms: Int): List<Pair<String, Long>> {
+        var t = 0L
+        val out = ArrayList<Pair<String, Long>>()
+        ten.forEachIndexed { i, c -> repeat(20 - i) { out += "$c" to ++t; out += "home" to ++t } }
+        repeat(phone) { out += "phone" to ++t; out += "home" to ++t }
+        repeat(sms) { out += "sms" to ++t; out += "home" to ++t }
+        return out
+    }
+
+    @Test fun barelyUsedDefaultsTakeTheLowestPlaces() {
+        val six = AutoFavorites.rank(usage(phone = 1, sms = 0), cands, listOf("phone", "sms")).take(6)
+        assertEquals(listOf("k:a", "k:b", "k:c", "k:d", "k:phone", "k:sms"), six)
+    }
+
+    @Test fun theyFloatByUsage() {
+        // Phone used more than all but a: it's second, not pinned to a fixed place.
+        val six = AutoFavorites.rank(usage(phone = 19, sms = 12), cands, listOf("phone", "sms")).take(6)
+        assertEquals(listOf("k:a", "k:phone", "k:b", "k:c", "k:d", "k:sms"), six)
+    }
+
+    @Test fun alreadyInTheSixChangesNothing() {
+        val plain = AutoFavorites.rank(usage(phone = 25, sms = 24), cands)
+        assertEquals(plain, AutoFavorites.rank(usage(phone = 25, sms = 24), cands, listOf("phone", "sms")))
+    }
+
+    @Test fun oneAppForBothTakesOnePlace() {
+        val six = AutoFavorites.rank(usage(phone = 0, sms = 0), cands, listOf("both", "both")).take(6)
+        assertEquals(listOf("k:a", "k:b", "k:c", "k:d", "k:e", "k:both"), six)
+    }
+
+    @Test fun noDefaultOrNotInstalledLeavesUsageAlone() {
+        val plain = AutoFavorites.rank(usage(phone = 0, sms = 0), cands)
+        assertEquals(plain, AutoFavorites.rank(usage(phone = 0, sms = 0), cands, emptyList()))
+        assertEquals(plain, AutoFavorites.rank(usage(phone = 0, sms = 0), cands, listOf("uninstalled.dialer")))
+    }
+
+    @Test fun displacedAppsFollowTheSix() {
+        val all = AutoFavorites.rank(usage(phone = 0, sms = 0), cands, listOf("phone", "sms"))
+        assertEquals(listOf("k:e", "k:f"), all.subList(6, 8)) // the two pushed out, next in line
+    }
+
+    @Test fun aChangedDefaultFollows() {
+        val before = AutoFavorites.rank(usage(0, 0), cands, listOf("phone", "sms")).take(6)
+        val after = AutoFavorites.rank(usage(0, 0), cands, listOf("both", "sms")).take(6)
+        assert("k:phone" in before && "k:phone" !in after && "k:both" in after)
+    }
+
+    @Test fun addedAppsFirstAndTheDefaultsStillInTheSix() {
+        val ranking = listOf("k:a", "k:b", "k:c", "k:d", "k:phone", "k:sms", "k:e")
+        val added = listOf("x", "y", "z")
+        val shown = AutoFavorites.keepDefaultsInSix((added + ranking).distinct(), added, ranking, listOf("k:phone", "k:sms"))
+        assertEquals(listOf("x", "y", "z", "k:a", "k:phone", "k:sms"), shown.take(6))
+        // Without added apps it's the ranking as is.
+        assertEquals(ranking, AutoFavorites.keepDefaultsInSix(ranking, emptyList(), ranking, listOf("k:phone", "k:sms")))
+    }
 }
