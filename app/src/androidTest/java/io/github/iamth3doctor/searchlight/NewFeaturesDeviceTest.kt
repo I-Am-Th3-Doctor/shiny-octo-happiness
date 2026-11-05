@@ -779,7 +779,12 @@ class NewFeaturesDeviceTest {
                 Thread.sleep(1200)
                 assertTrue("everything back in the drawer", drawerPackages(h).size == everyone.size)
 
-                // Hidden: still hidden, but nothing is intercepted, and switching applies at once.
+            }
+            // Hidden: still hidden, but nothing is intercepted, and switching applies at once.
+            // (A fresh home screen after each other app opens: Home brings back a new one.)
+            var everyone = 0
+            home { h ->
+                everyone = drawerPackages(h).size
                 tap(focusButton(h))
                 main { app.prefs.focusRestriction = io.github.iamth3doctor.searchlight.focus.FocusRules.Restriction.HIDDEN }
                 assertEquals(allowed, drawerPackages(h).toSet())
@@ -788,25 +793,29 @@ class NewFeaturesDeviceTest {
                 type(h, "")
                 h.onActivity { it.onClick(SearchResult.App(chrome), it.findViewById(R.id.results)) }
                 waitFor("Chrome opens in Hidden (resumed: ${resumed()})", 20_000) { opened("chrome") && "PausedActivity" !in resumed() }
-                shell("input keyevent KEYCODE_HOME")
-                Thread.sleep(1200)
-                // A notification tap (here: its PendingIntent) is outside Searchlight: it opens normally.
-                val pi = android.app.PendingIntent.getActivity(app, 7,
-                    app.packageManager.getLaunchIntentForPackage("com.android.chrome")!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                    android.app.PendingIntent.FLAG_IMMUTABLE)
-                pi.send()
-                waitFor("Chrome from a notification", 20_000) { opened("chrome") }
-                shell("input keyevent KEYCODE_HOME")
-                Thread.sleep(1200)
+            }
+            shell("input keyevent KEYCODE_HOME")
+            Thread.sleep(1500)
+            // A notification tap (here: its PendingIntent) is outside Searchlight: it opens normally.
+            val pi = android.app.PendingIntent.getActivity(app, 7,
+                app.packageManager.getLaunchIntentForPackage("com.android.chrome")!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                android.app.PendingIntent.FLAG_IMMUTABLE)
+            pi.send()
+            waitFor("Chrome from a notification", 20_000) { opened("chrome") }
+            shell("input keyevent KEYCODE_HOME")
+            Thread.sleep(1500)
 
-                // And back to Blocked mid-focus: at once.
+            // Back to Blocked mid-focus (still on): at once.
+            home { h ->
+                assertTrue(app.prefs.focusMode)
                 main { app.prefs.focusRestriction = io.github.iamth3doctor.searchlight.focus.FocusRules.Restriction.BLOCKED }
                 h.onActivity { it.onClick(SearchResult.App(chrome), it.findViewById(R.id.results)) }
                 waitFor("paused at once") { "PausedActivity" in resumed() }
                 shell("input keyevent KEYCODE_BACK")
-                Thread.sleep(800)
+                Thread.sleep(1000)
                 tap(focusButton(h))
-                assertEquals(everyone.size, drawerPackages(h).size)
+                assertFalse(app.prefs.focusMode)
+                assertEquals(everyone, drawerPackages(h).size)
             }
             // The allowlist is the person's: a later "first setup" doesn't replace it.
             main { app.prefs.ensureFocusAllowlist(listOf("some.other.app")) }
