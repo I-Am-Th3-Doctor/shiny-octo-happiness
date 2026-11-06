@@ -366,6 +366,8 @@
     <string name="settings_section_favorites">Favorites (up to 6)</string>
     <string name="settings_favorites_help">Long-press the magnifier to open them. Add one by long-pressing any app in search results.</string>
     <string name="settings_no_favorites">No favorites yet.</string>
+    <string name="settings_empty_slot">Empty slot</string>
+    <string name="settings_add_favorite">Add a favorite</string>
     <string name="settings_favorites_help_auto">Picked for you: the apps you launched most over the last 30 days, updated daily. Your manual picks are kept for when you switch back.</string>
     <string name="settings_favorites_mode">Favorites mode</string>
     <string name="favorites_mode_manual">Manual</string>

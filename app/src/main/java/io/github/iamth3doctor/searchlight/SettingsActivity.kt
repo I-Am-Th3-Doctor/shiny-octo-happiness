@@ -12,6 +12,9 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.format.DateUtils
 import android.view.Gravity
+import io.github.iamth3doctor.searchlight.ui.pxF
+import io.github.iamth3doctor.searchlight.ui.wrappingItems
+import android.view.View
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -619,13 +622,6 @@ class SettingsActivity : Activity() {
             return
         }
         val keys = prefs.manualFavorites
-        if (keys.isEmpty()) {
-            list.addView(TextView(this).apply {
-                setText(R.string.settings_no_favorites)
-                setPadding(0, px(R.dimen.space_s), 0, px(R.dimen.space_s))
-            })
-            return
-        }
         keys.forEachIndexed { index, key ->
             val row = favoriteRow(key)
             val label = row.getChildAt(1) as TextView
@@ -640,7 +636,64 @@ class SettingsActivity : Activity() {
             })
             list.addView(row)
         }
+        // A free slot for each favorite missing, each with "+". With the predicted 6th slot on,
+        // slot 6 is the prediction's (a manual pick can't go there), so five are offered.
+        val capacity = io.github.iamth3doctor.searchlight.apps.FavoriteSlots.capacity(prefs.predictedSlotActive)
+        repeat((capacity - keys.size).coerceAtLeast(0)) { list.addView(emptySlotRow()) }
     }
+
+    /** "Empty slot" with a "+": tap either to pick an app for the first free slot. */
+    private fun emptySlotRow(): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = px(R.dimen.size_row)
+            tag = EMPTY_SLOT_TAG
+        }
+        val dim = secondaryText()
+        row.addView(View(this).apply {
+            // Dashed ring in the page's own secondary text color (readable light or dark).
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setStroke(px(R.dimen.stroke_hairline), dim.defaultColor, pxF(R.dimen.stroke_dash), pxF(R.dimen.stroke_dash))
+            }
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            layoutParams = LinearLayout.LayoutParams(px(R.dimen.size_avatar), px(R.dimen.size_avatar))
+        })
+        val label = TextView(this).apply {
+            setText(R.string.settings_empty_slot)
+            type(Type.BODY)
+            setTextColor(dim)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = px(R.dimen.space_m)
+            }
+        }
+        row.addView(label)
+        val add = button(R.drawable.ic_add, R.string.settings_add_favorite, label, enabled = true) { pickFavorite() }
+        add.imageTintList = primaryText()
+        row.addView(add)
+        row.setOnClickListener { pickFavorite() }
+        return row
+    }
+
+    /** The installed apps that aren't favorites yet; the pick fills the first empty slot. */
+    private fun pickFavorite() {
+        val collator = java.text.Collator.getInstance()
+        val taken = prefs.manualFavorites.toSet()
+        val apps = app.apps.apps.filter { !it.isSelf && it.key !in taken }.distinctBy { it.key }
+            .sortedWith { a, b -> collator.compare(a.label, b.label) }
+        favoritePicker = AlertDialog.Builder(this)
+            .setTitle(R.string.settings_add_favorite)
+            .wrappingItems(apps.map { it.label }) { d, which ->
+                d.dismiss()
+                prefs.addFavorite(apps[which].key) // the listener re-renders the list
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** The app picker last opened from an empty slot (tests). */
+    internal var favoritePicker: AlertDialog? = null
 
     /** Icon + label; the manual list adds its reorder/remove buttons after. */
     private fun favoriteRow(key: String): LinearLayout {
@@ -771,5 +824,7 @@ class SettingsActivity : Activity() {
         )
         const val REQUEST_HOME_ROLE = 1
         const val REQUEST_RUNTIME = 2
+        /** Tags each empty favorite slot row (tests). */
+        const val EMPTY_SLOT_TAG = "favorite_empty_slot"
     }
 }
