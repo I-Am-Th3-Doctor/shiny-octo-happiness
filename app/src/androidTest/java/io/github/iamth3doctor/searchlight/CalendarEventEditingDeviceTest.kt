@@ -432,6 +432,144 @@ class CalendarEventEditingDeviceTest {
         }
     }
 
+    // ---- 6. Readable sheets: dark text on the light sheet, in every state ----
+
+    private fun lum(c: Int): Double {
+        fun ch(v: Int): Double { val x = v / 255.0; return if (x <= 0.03928) x / 12.92 else Math.pow((x + 0.055) / 1.055, 2.4) }
+        return 0.2126 * ch(android.graphics.Color.red(c)) + 0.7152 * ch(android.graphics.Color.green(c)) + 0.0722 * ch(android.graphics.Color.blue(c))
+    }
+
+    /** [fg] as it shows over [bg] (its own alpha blended in). */
+    private fun over(fg: Int, bg: Int): Int {
+        val a = android.graphics.Color.alpha(fg) / 255.0
+        fun mix(f: Int, b: Int) = (f * a + b * (1 - a)).toInt()
+        return android.graphics.Color.rgb(mix(android.graphics.Color.red(fg), android.graphics.Color.red(bg)),
+            mix(android.graphics.Color.green(fg), android.graphics.Color.green(bg)), mix(android.graphics.Color.blue(fg), android.graphics.Color.blue(bg)))
+    }
+
+    /** WCAG contrast ratio of [fg] (with its alpha) on the opaque [bg] (1 to 21). */
+    private fun contrast(fg: Int, bg: Int): Double {
+        val (x, y) = lum(over(fg, bg)) to lum(bg)
+        return (maxOf(x, y) + 0.05) / (minOf(x, y) + 0.05)
+    }
+
+    /** The sheet's own background color (its theme's). */
+    private fun sheetBackground(ctx: android.content.Context): Int {
+        val a = ctx.obtainStyledAttributes(intArrayOf(android.R.attr.colorBackground))
+        try { return a.getColor(0, android.graphics.Color.WHITE) } finally { a.recycle() }
+    }
+
+    /** Every shown text in [root]: its text (or, empty, its hint) readable on [bg]. */
+    private fun assertLegible(h: ActivityScenario<MainActivity>, root: View, bg: Int, what: String) {
+        val problems = on(h) {
+            val out = ArrayList<String>()
+            fun walk(v: View) {
+                if (v is TextView && v.isShown) {
+                    val label = v.text?.toString().orEmpty().ifEmpty { v.hint?.toString().orEmpty() }
+                    val textOk = contrast(v.currentTextColor, bg) >= 4.5
+                    val hintOk = v.hint.isNullOrEmpty() || contrast(v.currentHintTextColor, bg) >= 3.0
+                    if (!textOk || !hintOk) out += "\"$label\" text ${"%.1f".format(contrast(v.currentTextColor, bg))}:1 hint ${"%.1f".format(contrast(v.currentHintTextColor, bg))}:1"
+                }
+                if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+            }
+            walk(root)
+            out
+        }
+        assertTrue("$what: $problems", problems.isEmpty())
+    }
+
+    @Test fun newEventSheetTextIsReadableEmptyTypedAndWithTheKeyboard() = home { h ->
+        val v = addCalendar(h)
+        h.onActivity { v.addButton.performClick() }
+        waitFor("add sheet") { EventEditSheet.current?.dialog?.isShowing == true }
+        val sheet = EventEditSheet.current!!
+        val bg = sheetBackground(sheet.ui)
+        assertTrue("the sheet is light", lum(bg) > 0.6)
+        val form = on(h) { sheet.titleField.parent as View }
+        // Empty: the "Title" and "Location" placeholders, and every row's label and value.
+        assertEquals("", on(h) { sheet.titleField.text.toString() })
+        assertLegible(h, form, bg, "empty")
+        for (r in listOf(sheet.dateRow, sheet.repeatRow, sheet.calendarRow, sheet.reminderRow)) {
+            val t = on(h) { r.text.toString() }
+            assertTrue("row shows label and value: $t", ": " in t && t.substringAfter(": ").isNotBlank())
+        }
+        assertTrue(on(h) { sheet.calendarRow.text.toString() }, on(h) { sheet.calendarRow.text.toString() }.endsWith(googleAccount))
+        shot("87-calendar-sheet-empty")
+        // Keyboard open, typing: the typed text stays readable.
+        h.onActivity {
+            sheet.titleField.requestFocus()
+            it.getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(sheet.titleField, 0)
+        }
+        Thread.sleep(800)
+        shell("input text Gym")
+        waitFor("typed") { on(h) { sheet.titleField.text.toString() } == "Gym" }
+        assertLegible(h, form, bg, "typing")
+        shot("88-calendar-sheet-typing")
+        // All day on: the switch, rows and fields still readable.
+        h.onActivity { sheet.allDaySwitch.isChecked = true }
+        assertLegible(h, form, bg, "all day")
+        h.onActivity { sheet.dialog.dismiss() }
+    }
+
+    @Test fun editSheetAndDetailViewAreReadable() = home { h ->
+        val day = otherDay()
+        insertOnGoogle("Review", day, 11, location = "Room 4")
+        val v = addCalendar(h)
+        select(h, v, day)
+        rowView(h, v, "Review").let { rv -> h.onActivity { rv.performClick() } }
+        val details = dialog()
+        val msg = on(h) { details.findViewById<TextView>(android.R.id.message) }
+        assertLegible(h, msg, sheetBackground(details.context), "detail view")
+        press(h, details, AlertDialog.BUTTON_POSITIVE)
+        waitFor("edit sheet") { EventEditSheet.current?.dialog?.isShowing == true }
+        val sheet = EventEditSheet.current!!
+        val form = on(h) { sheet.titleField.parent as View }
+        assertLegible(h, form, sheetBackground(sheet.ui), "edit, filled")
+        h.onActivity { sheet.titleField.setText(""); sheet.locationField.setText("") }
+        assertLegible(h, form, sheetBackground(sheet.ui), "edit, emptied")
+        shot("89-calendar-edit-sheet")
+        h.onActivity { sheet.dialog.dismiss() }
+    }
+
+    @Test fun theDefaultIsTheFirstGoogleAccountAndAPickSticks() {
+        // A second Google account, added later, whose address sorts first: not the default.
+        var second = -1L
+        automation.adoptShellPermissionIdentity(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
+        try {
+            second = makeCalendar("aaa.second@gmail.com", CalendarWriter.GOOGLE, "aaa.second@gmail.com", primary = true)
+        } finally {
+            automation.dropShellPermissionIdentity()
+        }
+        try {
+            assertEquals("the phone's first Google account", googleCal, writer.target(-1L)!!.id)
+            home { h ->
+                val v = addCalendar(h)
+                h.onActivity { v.addButton.performClick() }
+                waitFor("add sheet") { EventEditSheet.current?.dialog?.isShowing == true }
+                val sheet = EventEditSheet.current!!
+                assertTrue(on(h) { sheet.calendarRow.text.toString() }.endsWith(googleAccount))
+                // Pick the other one: the row shows it, readably.
+                h.onActivity { sheet.calendarRow.performClick() }
+                waitFor("calendar picker") { EventEditSheet.lastPicker?.isShowing == true }
+                val picker = EventEditSheet.lastPicker!!
+                val labels = on(h) { (0 until picker.listView.adapter.count).map { picker.listView.adapter.getItem(it).toString() } }
+                h.onActivity { picker.listView.performItemClick(null, labels.indexOf("aaa.second@gmail.com"), 0) }
+                waitFor("picked") { on(h) { sheet.calendarRow.text.toString() }.endsWith("aaa.second@gmail.com") }
+                assertLegible(h, on(h) { sheet.calendarRow }, sheetBackground(sheet.ui), "calendar row")
+                CalendarEventActions.lastSavedId = -1
+                h.onActivity { sheet.titleField.setText("On the second"); sheet.save() }
+                waitFor("saved") { CalendarEventActions.lastSavedId > 0 }
+                assertEquals(second, row(CalendarEventActions.lastSavedId)!!.calendar)
+                // The pick is where the next event goes.
+                assertEquals(second, app.prefs.calendarTarget)
+            }
+        } finally {
+            automation.adoptShellPermissionIdentity(Manifest.permission.WRITE_CALENDAR)
+            runCatching { app.contentResolver.delete(asSyncAdapter(Calendars.CONTENT_URI, "aaa.second@gmail.com", CalendarWriter.GOOGLE), "${Calendars._ID}=?", arrayOf(second.toString())) }
+            automation.dropShellPermissionIdentity()
+        }
+    }
+
     // ---- 5. A long-pressed day: Add event, prefilled ----
 
     @Test fun aLongPressedDayAddsOnThatDay() = home { h ->

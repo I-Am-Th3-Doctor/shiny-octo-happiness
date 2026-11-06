@@ -44,10 +44,35 @@ class EventEditSheet(
         private set
 
     private val locale get() = activity.resources.configuration.locales[0]
-    val titleField = EditText(activity)
-    val locationField = EditText(activity)
+
+    /**
+     * The sheet's own (dialog) theme: light, with dark text. Every view in it is built with this,
+     * never with the activity, whose dark home theme would give white text on the white sheet.
+     */
+    private val builder = AlertDialog.Builder(activity)
+    val ui: android.content.Context = builder.context
+    private val textColor = themeColor(android.R.attr.textColorPrimary)
+    private val hintColor = themeColor(android.R.attr.textColorSecondary)
+
+    private fun themeColor(attr: Int): android.content.res.ColorStateList {
+        val a = ui.obtainStyledAttributes(intArrayOf(attr))
+        try {
+            return a.getColorStateList(0) ?: android.content.res.ColorStateList.valueOf(android.graphics.Color.BLACK)
+        } finally {
+            a.recycle()
+        }
+    }
+
+    /** Dark text and a dimmed (still readable) hint, whatever the state. */
+    private fun TextView.legible() {
+        setTextColor(textColor)
+        setHintTextColor(hintColor)
+    }
+
+    val titleField = EditText(ui)
+    val locationField = EditText(ui)
     private val editing get() = draft.eventId >= 0
-    val allDaySwitch = Switch(activity)
+    val allDaySwitch = Switch(ui)
     val dateRow = row(R.string.cal_edit_date) { pickDate() }
     val startRow = row(R.string.cal_edit_start) { pickTime(start = true) }
     val endRow = row(R.string.cal_edit_end) { pickTime(start = false) }
@@ -59,12 +84,13 @@ class EventEditSheet(
 
     fun show(): EventEditSheet {
         val pad = activity.px(R.dimen.space_l)
-        val form = LinearLayout(activity).apply {
+        val form = LinearLayout(ui).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, activity.px(R.dimen.space_s), pad, 0)
         }
         titleField.apply {
             type(Type.BODY)
+            legible()
             setHint(R.string.cal_edit_name_hint)
             setText(draft.title)
             isSingleLine = true
@@ -74,6 +100,7 @@ class EventEditSheet(
         form.addView(titleField, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         locationField.apply {
             type(Type.BODY)
+            legible()
             setHint(R.string.cal_edit_location_hint)
             setText(draft.location)
             isSingleLine = true
@@ -81,13 +108,15 @@ class EventEditSheet(
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
         }
         form.addView(locationField, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        if (editing && draft.repeats) form.addView(TextView(activity).apply {
+        if (editing && draft.repeats) form.addView(TextView(ui).apply {
             type(Type.CAPTION)
+            setTextColor(hintColor)
             setText(R.string.cal_edit_series_note)
         })
         allDaySwitch.apply {
             setText(R.string.cal_edit_all_day)
             type(Type.BODY)
+            legible()
             minHeight = activity.px(R.dimen.size_touch)
             isChecked = draft.allDay
             setOnCheckedChangeListener { _, on ->
@@ -99,9 +128,9 @@ class EventEditSheet(
         form.addView(allDaySwitch, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         for (r in listOf(dateRow, startRow, endRow, repeatRow, calendarRow, reminderRow)) form.addView(r)
         render()
-        dialog = AlertDialog.Builder(activity)
+        dialog = builder
             .setTitle(if (editing) R.string.cal_edit_title_edit else R.string.cal_edit_title_new)
-            .setView(ScrollView(activity).apply { addView(form) })
+            .setView(ScrollView(ui).apply { addView(form) })
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(R.string.cal_save_button, null)
             .create()
@@ -126,14 +155,15 @@ class EventEditSheet(
         onSave(draft)
     }
 
-    private fun row(label: Int, click: () -> Unit) = TextView(activity).apply {
+    private fun row(label: Int, click: () -> Unit) = TextView(ui).apply {
         type(Type.BODY)
+        legible()
         minHeight = activity.px(R.dimen.size_touch)
         gravity = android.view.Gravity.CENTER_VERTICAL
         tag = activity.getString(label)
         val tv = TypedValue()
-        activity.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
-        if (tv.resourceId != 0) background = activity.getDrawable(tv.resourceId)
+        ui.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+        if (tv.resourceId != 0) background = ui.getDrawable(tv.resourceId)
         setOnClickListener { click() }
     }
 
@@ -217,7 +247,7 @@ class EventEditSheet(
     private fun pickCalendar() {
         if (calendars.isEmpty()) return
         val checked = calendars.indexOfFirst { it.id == draft.calendarId }.coerceAtLeast(0)
-        AlertDialog.Builder(activity).setTitle(R.string.cal_edit_calendar)
+        lastPicker = AlertDialog.Builder(activity).setTitle(R.string.cal_edit_calendar)
             .wrappingSingleChoice(calendars.map { if (it.account.isNotEmpty() && it.account != it.name) "${it.name} · ${it.account}" else it.name }, checked) { d, which ->
                 d.dismiss()
                 draft = draft.copy(calendarId = calendars[which].id)
@@ -246,6 +276,10 @@ class EventEditSheet(
     companion object {
         /** The sheet showing (tests). */
         var current: EventEditSheet? = null
+            private set
+
+        /** The calendar picker last opened (tests). */
+        var lastPicker: AlertDialog? = null
             private set
     }
 }

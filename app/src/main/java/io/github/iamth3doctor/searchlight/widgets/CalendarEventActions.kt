@@ -104,6 +104,8 @@ class CalendarEventActions(
 
     private fun saveNew(d: EventDraft) = bg {
         val cal = if (d.calendarId >= 0) d.calendarId else writer.target(prefs.calendarTarget)?.id ?: error("no calendar")
+        // A calendar picked in the sheet is where the next event goes too (Settings shows it).
+        if (cal != writer.target(prefs.calendarTarget)?.id) prefs.calendarTarget = cal
         val id = writer.insert(d, cal, zone)
         lastSavedId = id
         ui {

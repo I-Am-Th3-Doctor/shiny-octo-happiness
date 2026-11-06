@@ -77,10 +77,13 @@ class CalendarWriter(private val context: Context) {
 
     /**
      * Calendars new events may go on: synced with an account (never phone-only) and open to new
-     * events. The primary Google calendar first, then other Google ones, then the rest.
+     * events. Primary Google calendars first, then other Google ones, then the rest. With several
+     * Google accounts each has a primary calendar: the one first on the phone (its calendar was
+     * made first, so has the lowest id) leads, as the phone's main account, never the
+     * alphabetically first.
      */
     fun writable(): List<Cal> = all().filter { it.canWrite && !it.localOnly }
-        .sortedWith(compareByDescending<Cal> { it.google && it.primary }.thenByDescending { it.google }.thenByDescending { it.primary }.thenBy { it.name.lowercase() })
+        .sortedWith(compareByDescending<Cal> { it.google && it.primary }.thenByDescending { it.google }.thenByDescending { it.primary }.thenBy { it.id })
 
     /** Where new events go: [preferred] while it's still writable, else the primary Google calendar (or the first synced one). */
     fun target(preferred: Long): Cal? {
