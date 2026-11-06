@@ -98,6 +98,7 @@ class CalendarWidgetDeviceTest {
     }
 
     @After fun restore() {
+        Actions.startCalendar = true
         app.calendarEvents.permissionOverride = null
         app.calendarEvents.eventsOverride = null
         main {
@@ -393,6 +394,9 @@ class CalendarWidgetDeviceTest {
         app.calendarEvents.permissionOverride = true
         val extra = ArrayList<DayEvent>()
         app.calendarEvents.eventsOverride = { _, _ -> fakeEvents() + extra }
+        // What would open is recorded, not started: leaving home mid-test and coming back can
+        // hand the test a new activity. (The provider test below opens the real Calendar app.)
+        Actions.startCalendar = false
         home { h ->
             val v = addCalendar(h)
             loaded(h, v)
@@ -401,15 +405,11 @@ class CalendarWidgetDeviceTest {
             Actions.lastCalendarUri = null
             on(h) { (0 until v.eventList.childCount).map(v.eventList::getChildAt).first { r -> collectTexts(r).first().text == "Standup" }.performClick() }
             assertEquals(android.content.ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, 101L), Actions.lastCalendarUri)
-            shell("input keyevent KEYCODE_HOME")
-            Thread.sleep(1500)
 
             // Empty agenda space (below the rows) opens the calendar on the day.
             Actions.lastCalendarUri = null
             on(h) { v.eventList.performClick() }
             assertEquals(today, Actions.lastCalendarUri?.lastPathSegment?.toLong()?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() })
-            shell("input keyevent KEYCODE_HOME")
-            Thread.sleep(1500)
 
             // A day with nothing: "No events"; tapping it opens the calendar there.
             tap(dayView(h, v, emptyDay()))
@@ -420,8 +420,6 @@ class CalendarWidgetDeviceTest {
             Actions.lastCalendarUri = null
             tap(v.emptyView)
             assertEquals(emptyDay(), Actions.lastCalendarUri?.lastPathSegment?.toLong()?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() })
-            shell("input keyevent KEYCODE_HOME")
-            Thread.sleep(1500)
 
             // The refresh icon re-reads: an event added since shows up.
             extra += DayEvent(900, "Added later", at(emptyDay(), 12), at(emptyDay(), 13), false, "Work", 0xFF4285F4.toInt())
@@ -435,7 +433,6 @@ class CalendarWidgetDeviceTest {
             Actions.lastCalendarUri = null
             tap(v.gearButton)
             assertNotNull(Actions.lastCalendarUri)
-            shell("input keyevent KEYCODE_HOME")
         }
     }
 

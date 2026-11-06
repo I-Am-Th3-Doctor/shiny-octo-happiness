@@ -123,6 +123,9 @@ object Actions {
     /** The last calendar intent's data (tests: which event or day was opened). */
     @Volatile var lastCalendarUri: Uri? = null
 
+    /** Tests: false records [lastCalendarUri] without starting the calendar app. */
+    @Volatile var startCalendar = true
+
     /** The calendar app on this event, at this occurrence. */
     fun openEvent(context: Context, e: io.github.iamth3doctor.searchlight.calendar.EventEntry) =
         openEvent(context, e.eventId, e.begin, e.end)
@@ -130,6 +133,7 @@ object Actions {
     fun openEvent(context: Context, eventId: Long, begin: Long, end: Long): Boolean {
         val uri = android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, eventId)
         lastCalendarUri = uri
+        if (!startCalendar) return true
         return start(
             context,
             Intent(Intent.ACTION_VIEW, uri)
@@ -143,6 +147,7 @@ object Actions {
     fun openCalendarAt(context: Context, timeMs: Long): Boolean {
         val uri = android.provider.CalendarContract.CONTENT_URI.buildUpon().appendPath("time").appendPath(timeMs.toString()).build()
         lastCalendarUri = uri
+        if (!startCalendar) return true
         return start(context, Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
