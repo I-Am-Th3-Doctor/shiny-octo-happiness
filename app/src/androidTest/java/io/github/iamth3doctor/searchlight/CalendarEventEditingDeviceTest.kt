@@ -380,7 +380,13 @@ class CalendarEventEditingDeviceTest {
         assertTrue("next week's there before: ${providerDay(next)}", "Standup#$series" in providerDay(next))
         h.onActivity { ask.listView.performItemClick(null, 0, 0) } // this event only
         // Today's occurrence is excluded from the series (EXDATE, synced like any edit); the rest stay.
-        waitFor("today's gone") { on(h) { v.byDay[today].orEmpty().none { it.title == "Standup" } } }
+        try {
+            waitFor("today's gone") { on(h) { v.byDay[today].orEmpty().none { it.title == "Standup" } } }
+        } catch (e: AssertionError) {
+            val ex = app.contentResolver.query(ContentUris.withAppendedId(Events.CONTENT_URI, series), arrayOf(Events.EXDATE, Events.DTSTART), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) "exdate=${c.getString(0)} start=${java.time.Instant.ofEpochMilli(c.getLong(1))}" else "none" }
+            throw AssertionError("today's occurrence still shown. series: $ex; provider today: ${providerDay(today)}", e)
+        }
         val exdate = app.contentResolver.query(ContentUris.withAppendedId(Events.CONTENT_URI, series), arrayOf(Events.EXDATE), null, null, null)
             ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
         assertEquals(CalendarWriter.exdateWith(null, at(today, 9), false), exdate)

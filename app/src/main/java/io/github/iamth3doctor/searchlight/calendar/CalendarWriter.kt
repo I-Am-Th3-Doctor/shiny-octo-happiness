@@ -215,9 +215,19 @@ class CalendarWriter(private val context: Context) {
     fun deleteOccurrence(eventId: Long, instanceBegin: Long): Boolean {
         val cr = context.contentResolver
         val uri = ContentUris.withAppendedId(Events.CONTENT_URI, eventId)
-        val (existing, allDay) = cr.query(uri, arrayOf(Events.EXDATE, Events.ALL_DAY), null, null, null)
-            ?.use { c -> if (c.moveToFirst()) c.getString(0) to (c.getInt(1) == 1) else null } ?: return false
-        val n = cr.update(uri, ContentValues().apply { put(Events.EXDATE, exdateWith(existing, instanceBegin, allDay)) }, null, null)
+        val v = cr.query(uri, arrayOf(Events.EXDATE, Events.ALL_DAY, Events.DTSTART, Events.RRULE, Events.DURATION), null, null, null)
+            ?.use { c ->
+                if (!c.moveToFirst()) return@use null
+                ContentValues().apply {
+                    put(Events.EXDATE, exdateWith(c.getString(0), instanceBegin, c.getInt(1) == 1))
+                    // Sent again, unchanged: the provider re-expands a series' occurrences when its
+                    // timing fields are written, not for an EXDATE alone.
+                    put(Events.DTSTART, c.getLong(2))
+                    put(Events.RRULE, c.getString(3))
+                    put(Events.DURATION, c.getString(4))
+                }
+            } ?: return false
+        val n = cr.update(uri, v, null, null)
         calendarOf(eventId)?.takeIf { !it.localOnly }?.let(::requestSync)
         return n > 0
     }
