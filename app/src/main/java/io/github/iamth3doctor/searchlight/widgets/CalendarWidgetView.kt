@@ -225,7 +225,7 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
 
         // ---- agenda: Fri, Jun 5  ⟳ ⚙, then the events
         agendaPane.orientation = VERTICAL
-        val dayHeader = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val dayHeader = DayHeader(context)
         dayTitle.apply {
             type(Type.BODY)
             typeface = Typeface.create(typeface, Typeface.BOLD)
@@ -234,12 +234,15 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
             ellipsize = TextUtils.TruncateAt.END
             setPadding(xs, 0, 0, 0)
         }
-        dayHeader.addView(dayTitle, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        dayHeader.addView(dayTitle, LayoutParams(0, px(R.dimen.size_cal_header), 1f))
+        dayTitle.gravity = Gravity.CENTER_VERTICAL
+        val icons = dayHeader.icons
         addButton.visibility = GONE
-        dayHeader.addView(addButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
-        dayHeader.addView(refreshButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
-        dayHeader.addView(gearButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
-        agendaPane.addView(dayHeader, LayoutParams(LayoutParams.MATCH_PARENT, px(R.dimen.size_cal_header)))
+        icons.addView(addButton, LayoutParams(px(R.dimen.size_cal_chevron), px(R.dimen.size_cal_header)))
+        icons.addView(refreshButton, LayoutParams(px(R.dimen.size_cal_chevron), px(R.dimen.size_cal_header)))
+        icons.addView(gearButton, LayoutParams(px(R.dimen.size_cal_chevron), px(R.dimen.size_cal_header)))
+        dayHeader.addView(icons, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        agendaPane.addView(dayHeader, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         eventList.orientation = VERTICAL
         // Empty agenda space (below the events) opens the calendar on the day.
@@ -811,6 +814,41 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean = longPressed || super.onTouchEvent(event)
+
+    // ------------------------------------------------------------------ the agenda header
+
+    /**
+     * The day's title and its icons (+, refresh, gear) in one row; when the agenda half is too
+     * narrow for both (a three-cell widget on the unfolded screen), the title gets its own line
+     * and the icons sit under it, at the end.
+     */
+    inner class DayHeader(context: Context) : LinearLayout(context) {
+        val icons = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        private val minTitle = px(R.dimen.size_cal_title_min)
+
+        init {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val width = MeasureSpec.getSize(widthMeasureSpec)
+            val iconsWidth = (0 until icons.childCount).map(icons::getChildAt).filter { it.visibility != GONE }
+                .sumOf { (it.layoutParams as LayoutParams).width }
+            val narrow = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED && width < minTitle + iconsWidth
+            val title = getChildAt(0)
+            val want = if (narrow) VERTICAL else HORIZONTAL
+            if (orientation != want) {
+                orientation = want
+                title.layoutParams = if (narrow) LayoutParams(LayoutParams.MATCH_PARENT, px(R.dimen.size_cal_header))
+                else LayoutParams(0, px(R.dimen.size_cal_header), 1f)
+                icons.layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    gravity = if (narrow) Gravity.END else Gravity.CENTER_VERTICAL
+                }
+            }
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        }
+    }
 
     // ------------------------------------------------------------------ a day in the grid
 
