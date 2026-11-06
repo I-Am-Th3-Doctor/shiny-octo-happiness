@@ -28,7 +28,7 @@ class SettingsSectionsDeviceTest {
     private val app = instrumentation.targetContext.applicationContext as SearchlightApp
     private val prefix = InstrumentationRegistry.getArguments().getString("shotPrefix") ?: "device"
     private val dir = "/sdcard/Download/searchlight-shots"
-    private val settingsKeys = listOf("home", "appearance", "gestures", "permissions", "favorites", "about")
+    private val settingsKeys = listOf("home", "appearance", "gestures", "permissions", "favorites", "calendar", "ai", "about")
     private val widgetCenterKeys = listOf("cards", "idle", "weather")
     private val settingsRows = listOf(
         Triple("home", "Home", "Layout, tiles and search bar"),
@@ -36,6 +36,8 @@ class SettingsSectionsDeviceTest {
         Triple("gestures", "Gestures", "Swipes, taps and shortcuts"),
         Triple("permissions", "Permissions", "Access and privacy"),
         Triple("favorites", "Favorites (up to 6)", "Your six quick apps"),
+        Triple("calendar", "Calendar widget", "Where new events go, preview before saving"),
+        Triple("ai", "AI", "Claude API key for typed events"),
         Triple("about", "About", "Version and details"),
     )
 

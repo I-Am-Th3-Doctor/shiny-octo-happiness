@@ -25,6 +25,7 @@ import io.github.iamth3doctor.searchlight.calendar.CalendarEvents
 import io.github.iamth3doctor.searchlight.calendar.CalendarModel
 import io.github.iamth3doctor.searchlight.calendar.CalendarModel.Rel
 import io.github.iamth3doctor.searchlight.calendar.DayEvent
+import io.github.iamth3doctor.searchlight.calendar.EventDraft
 import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
 import io.github.iamth3doctor.searchlight.ui.GlassTint
@@ -65,6 +66,29 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
 
     /** Now, in ms (tests set a fixed one). */
     var clock: () -> Long = System::currentTimeMillis
+
+    /** Adding events (parse, preview, save, edit): null hides the "+" and the long-press entry. */
+    var addHost: AddEventHost? = null
+        set(value) {
+            field = value
+            addButton.visibility = if (value != null) VISIBLE else GONE
+        }
+
+    /** What the Calendar widget needs to add an event; the home screen supplies it. */
+    interface AddEventHost {
+        /** Typed text to an event ([done](null): not understood), with [defaultDate] when it names no day. */
+        fun parse(text: String, defaultDate: LocalDate, done: (EventDraft?) -> Unit)
+        /** Preview first ("Confirm before saving"), or save straight away. */
+        val confirmBeforeSaving: Boolean
+        /** The calendar it'll go on, for the preview. */
+        fun calendarName(draft: EventDraft): String
+        /** Saves it (asking for calendar access first if needed); [done](true) once saved. */
+        fun save(draft: EventDraft, done: (Boolean) -> Unit)
+        /** The full edit sheet; [done](true) once it saved the event. */
+        fun edit(draft: EventDraft, done: (Boolean) -> Unit)
+        /** A long press on a day offered "Arrange widgets". */
+        fun arrange()
+    }
 
     // Design tokens (this is a View, not a Context).
     private fun px(token: Int) = context.px(token)
@@ -120,6 +144,23 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
     val dayTitle = TextView(context)
     val refreshButton = iconButton(R.drawable.ic_refresh, R.string.cal_refresh, flip = false) { userRefresh() }
     val gearButton = iconButton(R.drawable.ic_settings, R.string.cal_open_app, flip = false) { openDay(selected) }
+    val addButton = iconButton(R.drawable.ic_add, R.string.cal_add_event, flip = false) { openComposer() }
+
+    // ---- adding an event: the text field, then the preview card
+    val composer = LinearLayout(context)
+    val addInput = android.widget.EditText(context)
+    val addStatus = TextView(context)
+    val previewCard = LinearLayout(context)
+    val previewTitle = TextView(context)
+    val previewWhen = TextView(context)
+    val previewCalendar = TextView(context)
+    val previewRepeat = TextView(context)
+    val previewSave = TextView(context)
+    val previewEdit = TextView(context)
+    /** The parsed event the preview shows. */
+    var pendingDraft: EventDraft? = null
+        private set
+    val composing get() = composer.visibility == VISIBLE
     private val agendaBody = FrameLayout(context)
     private val scroll = ScrollView(context)
     val eventList = LinearLayout(context)
@@ -194,6 +235,8 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
             setPadding(xs, 0, 0, 0)
         }
         dayHeader.addView(dayTitle, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        addButton.visibility = GONE
+        dayHeader.addView(addButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
         dayHeader.addView(refreshButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
         dayHeader.addView(gearButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
         agendaPane.addView(dayHeader, LayoutParams(LayoutParams.MATCH_PARENT, px(R.dimen.size_cal_header)))
@@ -247,6 +290,8 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
             addView(allowButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = s })
         }
         agendaBody.addView(permissionRow, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        buildComposer()
+        agendaBody.addView(composer, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         agendaPane.addView(agendaBody, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
         addView(monthPane)
@@ -388,11 +433,11 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
         val allowed = events.hasPermission()
         val loaded = loadedMonth == month
         dayTitle.text = CalendarModel.dayLabel(selected, locale)
-        permissionRow.visibility = if (allowed) GONE else VISIBLE
+        permissionRow.visibility = if (allowed || composing) GONE else VISIBLE
         refreshButton.visibility = if (allowed) VISIBLE else INVISIBLE
         val list = if (allowed && loaded) byDay[selected].orEmpty() else emptyList()
-        emptyView.visibility = if (allowed && loaded && list.isEmpty()) VISIBLE else GONE
-        scroll.visibility = if (list.isEmpty()) GONE else VISIBLE
+        emptyView.visibility = if (allowed && loaded && list.isEmpty() && !composing) VISIBLE else GONE
+        scroll.visibility = if (list.isEmpty() || composing) GONE else VISIBLE
         val now = clock()
         eventList.removeAllViews()
         for (e in list) eventList.addView(eventRow(e, now))
@@ -477,6 +522,204 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
         }
     }
 
+    // ------------------------------------------------------------------ adding an event
+
+    private fun buildComposer() {
+        val s = px(R.dimen.space_s)
+        val xs = px(R.dimen.space_xs)
+        composer.orientation = VERTICAL
+        composer.visibility = GONE
+        val row = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        addInput.apply {
+            type(Type.BODY)
+            setTextColor(color(R.color.on_surface))
+            setHintTextColor(color(R.color.on_surface_dim))
+            setHint(R.string.cal_add_hint)
+            isSingleLine = true
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            importantForAutofill = IMPORTANT_FOR_AUTOFILL_NO
+            background = GradientDrawable().apply {
+                setColor(color(R.color.surface_inset))
+                cornerRadius = pxF(R.dimen.radius_tile)
+            }
+            setPadding(px(R.dimen.space_m) / 2 + xs, xs, s, xs)
+            minHeight = px(R.dimen.size_cal_chevron)
+            setOnEditorActionListener { _, _, _ -> submitComposer(); true }
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(e: android.text.Editable?) {
+                    if (addStatus.text.isNotEmpty() && !parsing) addStatus.visibility = GONE
+                }
+                override fun beforeTextChanged(c: CharSequence?, a: Int, b: Int, d: Int) = Unit
+                override fun onTextChanged(c: CharSequence?, a: Int, b: Int, d: Int) = Unit
+            })
+        }
+        row.addView(addInput, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(iconButton(R.drawable.ic_close, R.string.cal_add_close, flip = false) { closeComposer() },
+            LayoutParams(px(R.dimen.size_cal_chevron), px(R.dimen.size_cal_chevron)))
+        composer.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        addStatus.apply {
+            type(Type.CAPTION)
+            setTextColor(color(R.color.on_surface_dim))
+            visibility = GONE
+            setPadding(xs, xs, xs, 0)
+        }
+        composer.addView(addStatus, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+
+        // The preview card: title, day / time, calendar, repeat; Edit and Save.
+        previewCard.apply {
+            orientation = VERTICAL
+            visibility = GONE
+            setPadding(s, s, s, s)
+            background = GradientDrawable().apply {
+                setColor(color(R.color.surface_inset))
+                cornerRadius = pxF(R.dimen.radius_tile)
+            }
+        }
+        previewTitle.apply {
+            type(Type.BODY)
+            typeface = Typeface.create(typeface, Typeface.BOLD)
+            setTextColor(color(R.color.on_surface))
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+        }
+        previewCard.addView(previewTitle)
+        for (t in listOf(previewWhen, previewCalendar, previewRepeat)) {
+            t.type(Type.CAPTION)
+            t.setTextColor(color(R.color.on_surface_dim))
+            t.isSingleLine = true
+            t.ellipsize = TextUtils.TruncateAt.END
+            previewCard.addView(t)
+        }
+        val buttons = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.END }
+        previewEdit.apply {
+            type(Type.BODY)
+            setText(R.string.cal_add_edit)
+            setTextColor(color(R.color.on_surface))
+            gravity = Gravity.CENTER
+            minHeight = px(R.dimen.size_cal_day)
+            setPadding(px(R.dimen.space_m), 0, px(R.dimen.space_m), 0)
+            background = ripple(borderless = false)
+            setOnClickListener { pendingDraft?.let(::editDraft) }
+        }
+        previewSave.apply {
+            type(Type.BODY)
+            typeface = Typeface.create(typeface, Typeface.BOLD)
+            setText(R.string.cal_add_save)
+            setTextColor(color(R.color.on_gold))
+            gravity = Gravity.CENTER
+            minHeight = px(R.dimen.size_cal_day)
+            setPadding(px(R.dimen.space_m), 0, px(R.dimen.space_m), 0)
+            background = GradientDrawable().apply {
+                setColor(color(R.color.gold))
+                cornerRadius = pxF(R.dimen.radius_pill)
+            }
+            foreground = ripple(borderless = false)
+            setOnClickListener { pendingDraft?.let(::saveDraft) }
+        }
+        buttons.addView(previewEdit)
+        buttons.addView(previewSave, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = xs })
+        previewCard.addView(buttons, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = s })
+        composer.addView(ScrollView(context).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = OVER_SCROLL_NEVER
+            addView(previewCard)
+        }, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = xs })
+    }
+
+    private var parsing = false
+
+    /** The "+" (or "Add event" on a long-pressed day): the text field, for the selected day. */
+    fun openComposer() {
+        if (addHost == null) return
+        composer.visibility = VISIBLE
+        previewCard.visibility = GONE
+        addStatus.visibility = GONE
+        pendingDraft = null
+        renderAgenda()
+        addInput.requestFocus()
+        val imm = context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+        addInput.post { imm?.showSoftInput(addInput, 0) }
+    }
+
+    fun closeComposer() {
+        composer.visibility = GONE
+        pendingDraft = null
+        parsing = false
+        addInput.text = null
+        addInput.clearFocus()
+        context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+            ?.hideSoftInputFromWindow(addInput.windowToken, 0)
+        renderAgenda()
+    }
+
+    /** Enter in the text field: parse it, then preview (or save, with "Confirm before saving" off). */
+    fun submitComposer() {
+        val host = addHost ?: return
+        val text = addInput.text?.toString().orEmpty().trim()
+        if (text.isEmpty() || parsing) return
+        parsing = true
+        previewCard.visibility = GONE
+        addStatus.setTextColor(color(R.color.on_surface_dim))
+        addStatus.setText(R.string.cal_add_parsing)
+        addStatus.visibility = VISIBLE
+        host.parse(text, selected) { draft ->
+            parsing = false
+            if (!composing) return@parse
+            if (draft == null) {
+                // Not understood: say how to put it, and keep the text to fix.
+                addStatus.setTextColor(color(R.color.gold))
+                addStatus.setText(R.string.cal_add_failed)
+                addStatus.visibility = VISIBLE
+                addInput.requestFocus()
+                addInput.setSelection(addInput.text?.length ?: 0)
+                return@parse
+            }
+            addStatus.visibility = GONE
+            if (host.confirmBeforeSaving) showPreview(draft) else saveDraft(draft)
+        }
+    }
+
+    private fun showPreview(d: EventDraft) {
+        val host = addHost ?: return
+        pendingDraft = d
+        val timeFmt = DateFormat.getTimeFormat(context)
+        fun t(x: java.time.LocalTime) = timeFmt.format(java.util.Date.from(d.date.atTime(x).atZone(zone).toInstant()))
+        previewTitle.text = d.title
+        val day = io.github.iamth3doctor.searchlight.calendar.EventText.day(d.date, locale)
+        previewWhen.text = if (d.timed) "$day · ${io.github.iamth3doctor.searchlight.calendar.EventText.range(t(d.start!!), t(d.end ?: d.start.plusHours(1)))}"
+        else "$day · ${context.getString(R.string.cal_all_day)}"
+        previewCalendar.text = host.calendarName(d)
+        previewCalendar.visibility = if (previewCalendar.text.isNullOrEmpty()) GONE else VISIBLE
+        previewRepeat.text = d.recurrence?.let { io.github.iamth3doctor.searchlight.calendar.EventText.repeat(it, locale, repeatWords()) }
+        previewRepeat.visibility = if (d.recurrence == null) GONE else VISIBLE
+        previewCard.visibility = VISIBLE
+        onContentChanged?.invoke(this)
+    }
+
+    fun repeatWords() = io.github.iamth3doctor.searchlight.calendar.EventText.Words(
+        context.getString(R.string.cal_repeat_daily), context.getString(R.string.cal_repeat_weekdays),
+        { context.getString(R.string.cal_repeat_every, it) }, context.getString(R.string.cal_repeat_and),
+    )
+
+    private fun saveDraft(d: EventDraft) {
+        addHost?.save(d) { saved -> if (saved) afterSaved(d) }
+    }
+
+    private fun editDraft(d: EventDraft) {
+        addHost?.edit(d) { saved -> if (saved) afterSaved(d) }
+    }
+
+    /** Saved: close the field, show the event's day, reload. */
+    private fun afterSaved(d: EventDraft) {
+        closeComposer()
+        followingToday = d.date == today
+        selected = d.date
+        month = YearMonth.from(d.date)
+        refresh()
+    }
+
     private fun caption(text: String, colorToken: Int) = TextView(context).apply {
         type(Type.CAPTION)
         setTextColor(color(colorToken))
@@ -510,12 +753,42 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
     private var downX = 0f
     private var downY = 0f
+    private var downRawX = 0f
+    private var downRawY = 0f
     private var longPressed = false
     private val longPressCheck = Runnable {
         longPressed = true
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        onLongPress?.invoke()
+        val day = dayAt(downRawX, downRawY)
+        if (day != null && addHost != null) dayMenu(day) else onLongPress?.invoke()
     }
+
+    /** The grid's day under a screen point, if any. */
+    private fun dayAt(rawX: Float, rawY: Float): DayView? {
+        val r = android.graphics.Rect()
+        return dayViews.firstOrNull { v -> v.day != null && v.isShown && v.getGlobalVisibleRect(r) && r.contains(rawX.toInt(), rawY.toInt()) }
+    }
+
+    /** A long-pressed day: "Add event" (on that day), or the usual widget arranging. */
+    private fun dayMenu(v: DayView) {
+        val d = v.day ?: return
+        lastDayMenu = android.widget.PopupMenu(context, v).apply {
+            menu.add(0, MENU_ADD, 0, R.string.cal_add_event)
+            menu.add(0, MENU_ARRANGE, 1, R.string.cal_arrange_widgets)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    MENU_ADD -> { tapDay(d); openComposer() }
+                    else -> addHost?.arrange()
+                }
+                true
+            }
+            show()
+        }
+    }
+
+    /** The day long-press menu last shown (tests). */
+    var lastDayMenu: android.widget.PopupMenu? = null
+        private set
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         when (ev.actionMasked) {
@@ -523,6 +796,8 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
                 longPressed = false
                 downX = ev.x
                 downY = ev.y
+                downRawX = ev.rawX
+                downRawY = ev.rawY
                 postDelayed(longPressCheck, ViewConfiguration.getLongPressTimeout().toLong())
             }
             MotionEvent.ACTION_MOVE -> if (abs(ev.x - downX) > slop || abs(ev.y - downY) > slop) removeCallbacks(longPressCheck)
@@ -623,5 +898,7 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
 
     private companion object {
         const val ENDED_ALPHA = 0.45f
+        const val MENU_ADD = 1
+        const val MENU_ARRANGE = 2
     }
 }

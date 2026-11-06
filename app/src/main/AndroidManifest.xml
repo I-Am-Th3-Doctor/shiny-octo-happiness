@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!-- Upcoming calendar events in search results (optional, asked from the permissions hub). -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- The Calendar widget's "Add event": writes the new event to the chosen calendar. -->
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <!-- Search ALL files in shared storage (granted by you in Android settings, optional).
          Fine for a sideloaded app; Play would require a justification. -->
     <uses-permission

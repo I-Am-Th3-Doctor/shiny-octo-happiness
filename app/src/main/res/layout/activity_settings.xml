@@ -305,6 +305,77 @@
             android:layout_marginTop="@dimen/space_s"
             android:orientation="vertical" />
 
+        <TextView style="@style/SettingsSection" android:tag="section:calendar" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_calendar" />
+
+        <LinearLayout
+            android:id="@+id/calendarTargetRow"
+            style="@style/SettingsRow">
+            <TextView style="@style/SettingsRowTitle" android:text="@string/settings_calendar_target" />
+            <TextView android:id="@+id/calendarTargetValue" style="@style/SettingsRowSummary" />
+        </LinearLayout>
+
+        <Switch
+            android:id="@+id/calendarConfirmSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="@dimen/size_touch"
+            android:text="@string/settings_calendar_confirm"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
+
+        <TextView style="@style/SettingsSection" android:tag="section:ai" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_ai" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_ai_help"
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption"
+            android:textColor="?android:attr/textColorSecondary" />
+
+        <EditText
+            android:id="@+id/aiKeyField"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/settings_ai_key_hint"
+            android:importantForAutofill="no"
+            android:inputType="textPassword"
+            android:minHeight="@dimen/size_touch"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/aiKeyRemove"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/size_touch"
+                android:text="@string/settings_ai_remove" />
+            <Button
+                android:id="@+id/aiKeyTest"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/size_touch"
+                android:text="@string/settings_ai_test" />
+            <Button
+                android:id="@+id/aiKeySave"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/size_touch"
+                android:text="@string/settings_ai_save" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/aiKeyStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="@dimen/space_s"
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption"
+            android:textColor="?android:attr/textColorSecondary" />
+
         <TextView style="@style/SettingsSection" android:tag="section:about" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_section_about" />
 
         <TextView
