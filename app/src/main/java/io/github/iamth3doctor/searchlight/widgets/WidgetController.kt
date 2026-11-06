@@ -113,7 +113,8 @@ class WidgetController(
     private var pendingPin = AppWidgetManager.INVALID_APPWIDGET_ID
 
     fun start() {
-        calendarEvents.watch(::calendarDataChanged)
+        calendarEvents.stopWatching(calendarWatch)
+        calendarWatch = calendarEvents.watch(::calendarDataChanged)
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_DATE_CHANGED)
             addAction(Intent.ACTION_TIME_CHANGED)
@@ -131,7 +132,8 @@ class WidgetController(
 
     fun stop() {
         exitEditMode()
-        calendarEvents.stopWatching()
+        calendarEvents.stopWatching(calendarWatch)
+        calendarWatch = null
         grid.removeCallbacks(refreshCalendarsNow)
         try { activity.unregisterReceiver(dateReceiver) } catch (e: Exception) { /* not registered */ }
         try {
@@ -152,6 +154,9 @@ class WidgetController(
     fun refreshCalendars() = calendarViews().forEach { it.refresh() }
 
     private val refreshCalendarsNow = Runnable { refreshCalendars() }
+
+    /** This home screen's own watch on calendar data (see CalendarEvents.watch). */
+    private var calendarWatch: Any? = null
 
     /** Calendar data changes come in bursts (a sync): one reload once they settle. */
     private fun calendarDataChanged() {

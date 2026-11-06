@@ -150,10 +150,11 @@ class CalendarWidgetDeviceTest {
     private fun loaded(h: ActivityScenario<MainActivity>, v: CalendarWidgetView) =
         waitFor("events loaded") { on(h) { v.loadedWeek == v.weekStart } }
 
+    /** The middle of [v] as drawn (getLocationOnScreen of a rotated view is its rotated corner). */
     private fun center(v: View): Pair<Int, Int> {
-        val loc = IntArray(2)
+        val r = android.graphics.Rect()
         var out = 0 to 0
-        main { v.getLocationOnScreen(loc); out = (loc[0] + v.width / 2) to (loc[1] + v.height / 2) }
+        main { v.getGlobalVisibleRect(r); out = r.centerX() to r.centerY() }
         return out
     }
 
@@ -396,7 +397,16 @@ class CalendarWidgetDeviceTest {
                 } finally {
                     automation.dropShellPermissionIdentity()
                 }
-                waitFor("new event on today", 15_000) { on(h) { v.byDay[today].orEmpty().any { it.title == title } } }
+                val seen = app.calendarEvents.changesSeen
+                try {
+                    waitFor("new event on today", 15_000) { on(h) { v.byDay[today].orEmpty().any { it.title == title } } }
+                } catch (e: AssertionError) {
+                    val (from, to) = WeekModel.queryRange(on(h) { v.weekStart }, zone)
+                    val direct = runCatching { app.calendarEvents.queryNow(from, to).map { it.title } }
+                    throw AssertionError("not shown: watching=${app.calendarEvents.watching} " +
+                        "changes ${seen}->${app.calendarEvents.changesSeen}, widget today=${on(h) { v.byDay[today].orEmpty().map { it.title } }}, " +
+                        "direct query=$direct, loaded=${on(h) { v.loadedWeek }} week=${on(h) { v.weekStart }}")
+                }
                 assertEquals(before + 1, on(h) { v.byDay[today].orEmpty().size })
                 if (on(h) { v.selected } != today) tap(v.title)
                 val row = on(h) { (0 until v.eventList.childCount).map(v.eventList::getChildAt).first { r -> r.contentDescription?.contains(title) == true } }

@@ -31,6 +31,10 @@ class CalendarEvents(private val context: Context) {
     /** How often the widget has asked Android for calendar access (tests). */
     var permissionRequests = 0
 
+    /** Calendar-data change notifications seen while watching (tests). */
+    @Volatile var changesSeen = 0
+        private set
+
     fun hasPermission(): Boolean = permissionOverride
         ?: (context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED)
 
@@ -46,6 +50,9 @@ class CalendarEvents(private val context: Context) {
             main.post { done(list) }
         }
     }
+
+    /** The provider's occurrences in [from, to), on this thread (tests). */
+    fun queryNow(from: Long, to: Long): List<DayEvent> = query(from, to)
 
     private fun query(from: Long, to: Long): List<DayEvent> {
         val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
@@ -79,25 +86,37 @@ class CalendarEvents(private val context: Context) {
         return out
     }
 
-    private var observer: ContentObserver? = null
+    private val observers = java.util.Collections.synchronizedSet(HashSet<ContentObserver>())
 
-    /** [onChange] (main thread) whenever calendar data changes, until [stopWatching]. */
-    fun watch(onChange: () -> Unit) {
-        stopWatching()
+    /** Whether any watch is registered right now (tests). */
+    val watching get() = observers.isNotEmpty()
+
+    /**
+     * [onChange] (main thread) whenever calendar data changes, until [stopWatching] with the
+     * returned handle. Each caller's watch is its own: one home screen stopping (say, the old
+     * one while a new one starts) never ends another's.
+     */
+    fun watch(onChange: () -> Unit): Any? {
         val o = object : ContentObserver(main) {
-            override fun onChange(selfChange: Boolean) = onChange()
+            override fun onChange(selfChange: Boolean) {
+                changesSeen++
+                onChange()
+            }
         }
-        try {
+        return try {
             context.contentResolver.registerContentObserver(CalendarContract.CONTENT_URI, true, o)
-            observer = o
+            observers += o
+            o
         } catch (e: Exception) {
             Log.w(TAG, "Can't watch the calendar", e)
+            null
         }
     }
 
-    fun stopWatching() {
-        observer?.let { runCatching { context.contentResolver.unregisterContentObserver(it) } }
-        observer = null
+    fun stopWatching(handle: Any?) {
+        val o = handle as? ContentObserver ?: return
+        observers -= o
+        runCatching { context.contentResolver.unregisterContentObserver(o) }
     }
 
     private companion object {
