@@ -414,20 +414,23 @@ class CalendarWidgetDeviceTest {
             on(h) { v.eventList.performClick() }
             assertEquals(today, Actions.lastCalendarUri?.lastPathSegment?.toLong()?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() })
 
-            // A day with nothing: "No events"; tapping it opens the calendar there.
-            tap(dayView(h, v, emptyDay()))
+            // A day with nothing: "No events"; tapping it opens the calendar there. (Direct
+            // taps: closing the detail view gives home focus back, and its "open keyboard"
+            // setting can raise the keyboard over the widget's lower rows.)
+            h.onActivity { v.tapDay(emptyDay()) }
+            waitFor("empty day loaded") { on(h) { v.loadedMonth == v.month } }
             assertEquals(emptyDay(), on(h) { v.selected })
             assertTrue(on(h) { v.emptyView.isShown && v.eventList.childCount == 0 })
             assertEquals(app.getString(R.string.cal_no_events), on(h) { v.emptyView.text.toString() })
             shot("65-calendar-empty-day")
             Actions.lastCalendarUri = null
-            tap(v.emptyView)
+            h.onActivity { v.emptyView.performClick() }
             assertEquals(emptyDay(), Actions.lastCalendarUri?.lastPathSegment?.toLong()?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() })
 
             // The refresh icon re-reads: an event added since shows up.
             extra += DayEvent(900, "Added later", at(emptyDay(), 12), at(emptyDay(), 13), false, "Work", 0xFF4285F4.toInt())
             assertEquals(0, on(h) { v.eventList.childCount })
-            tap(v.refreshButton)
+            h.onActivity { v.refreshButton.performClick() }
             waitFor("refreshed") { on(h) { v.eventList.childCount == 1 } }
             assertEquals("Added later", rows(h, v).single().first())
             assertEquals(1, dayView(h, v, emptyDay()).dots)

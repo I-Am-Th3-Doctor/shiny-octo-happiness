@@ -150,9 +150,10 @@ class CalendarEventEditingDeviceTest {
             app.prefs.widgetGrid = savedFolded
             app.prefs.widgetGridUnfolded = savedUnfolded
             app.prefs.calendarTarget = savedTarget
-            Snackbar.current?.dismiss()
-            CalendarEventActions.lastDialog?.dismiss()
-            EventEditSheet.current?.dialog?.dismiss()
+            // Anything still open from a test whose activity is already gone: tolerate it.
+            runCatching { Snackbar.current?.dismiss() }
+            runCatching { CalendarEventActions.lastDialog?.dismiss() }
+            runCatching { EventEditSheet.current?.dialog?.dismiss() }
         }
         automation.adoptShellPermissionIdentity(Manifest.permission.WRITE_CALENDAR)
         runCatching {
@@ -336,6 +337,20 @@ class CalendarEventEditingDeviceTest {
         assertEquals("FREQ=WEEKLY;BYDAY=" + Recurrence.CODES.getValue(dow), row(series)!!.rrule)
         val v = addCalendar(h)
         select(h, v, today)
+        try {
+            rowView(h, v, "Standup")
+        } catch (e: AssertionError) {
+            // What the provider itself expands for the series, and what the widget holds.
+            val (from, to) = io.github.iamth3doctor.searchlight.calendar.CalendarModel.queryRange(today.minusDays(7), today.plusDays(7), zone)
+            val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also { ContentUris.appendId(it, from); ContentUris.appendId(it, to) }.build()
+            val inst = app.contentResolver.query(uri, arrayOf(CalendarContract.Instances.BEGIN, CalendarContract.Instances.VISIBLE, CalendarContract.Instances.STATUS),
+                "${CalendarContract.Instances.EVENT_ID} = ?", arrayOf(series.toString()), null)
+                ?.use { c -> generateSequence { if (c.moveToNext()) "${java.time.Instant.ofEpochMilli(c.getLong(0))} vis=${c.getInt(1)} st=${if (c.isNull(2)) "null" else c.getInt(2)}" else null }.toList() }
+            val ev = app.contentResolver.query(ContentUris.withAppendedId(Events.CONTENT_URI, series),
+                arrayOf(Events.DTSTART, Events.DURATION, Events.DTEND, Events.EVENT_TIMEZONE, Events.LAST_DATE), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) "start=${java.time.Instant.ofEpochMilli(c.getLong(0))} dur=${c.getString(1)} end=${c.getString(2)} tz=${c.getString(3)} last=${c.getString(4)}" else "none" }
+            throw AssertionError("Standup not shown. event: $ev; instances: $inst; widget today: ${on(h) { v.byDay[today].orEmpty().map { it.title } }}", e)
+        }
         rowView(h, v, "Standup").let { rv -> h.onActivity { rv.performClick() } }
         press(h, dialog(), AlertDialog.BUTTON_NEGATIVE)
         val ask = dialog()
@@ -588,5 +603,6 @@ class CalendarEventEditingDeviceTest {
         waitFor("add sheet") { EventEditSheet.current?.dialog?.isShowing == true }
         assertEquals(day, on(h) { EventEditSheet.current!!.draft.date })
         assertEquals(googleCal, on(h) { EventEditSheet.current!!.draft.calendarId })
+        h.onActivity { EventEditSheet.current!!.dialog.dismiss() }
     }
 }
