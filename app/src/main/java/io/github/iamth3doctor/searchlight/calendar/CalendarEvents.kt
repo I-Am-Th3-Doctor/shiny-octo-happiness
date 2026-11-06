@@ -67,8 +67,13 @@ class CalendarEvents(private val context: Context) {
                 CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY,
                 CalendarContract.Instances.CALENDAR_DISPLAY_NAME, CalendarContract.Instances.DISPLAY_COLOR,
                 CalendarContract.Instances.EVENT_LOCATION, CalendarContract.Instances.DESCRIPTION,
+                CalendarContract.Instances.CALENDAR_ID, CalendarContract.Instances.CALENDAR_ACCESS_LEVEL,
+                CalendarContract.Instances.RRULE, CalendarContract.Instances.RDATE, CalendarContract.Instances.ORIGINAL_ID,
             ),
-            "${CalendarContract.Instances.VISIBLE} = 1",
+            // Visible calendars, and phone-only ones even when hidden: events stranded there must show (and be deletable).
+            "(${CalendarContract.Instances.VISIBLE} = 1" + localCalendarIds().let { ids ->
+                if (ids.isEmpty()) ")" else " OR ${CalendarContract.Instances.CALENDAR_ID} IN (${ids.joinToString(",")}))"
+            } + " AND (${CalendarContract.Instances.STATUS} IS NULL OR ${CalendarContract.Instances.STATUS} != ${CalendarContract.Instances.STATUS_CANCELED})",
             null,
             "${CalendarContract.Instances.BEGIN} ASC",
         )?.use { c ->
@@ -82,10 +87,24 @@ class CalendarEvents(private val context: Context) {
                     calendarName = c.getString(5).orEmpty(),
                     color = if (c.isNull(6)) 0 else c.getInt(6),
                     detail = CalendarModel.detail(c.getString(7), c.getString(8)),
+                    calendarId = c.getLong(9),
+                    accessLevel = if (c.isNull(10)) 0 else c.getInt(10),
+                    recurring = !c.isNull(11) || !c.isNull(12) || !c.isNull(13),
+                    location = c.getString(7).orEmpty(),
+                    originalId = if (c.isNull(13)) -1 else c.getLong(13),
                 )
             }
         }
         return out
+    }
+
+    /** Calendars that live only on this phone (account type LOCAL). */
+    private fun localCalendarIds(): List<Long> = try {
+        context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, arrayOf(CalendarContract.Calendars._ID),
+            "${CalendarContract.Calendars.ACCOUNT_TYPE} = ?", arrayOf(CalendarContract.ACCOUNT_TYPE_LOCAL), null)
+            ?.use { c -> generateSequence { if (c.moveToNext()) c.getLong(0) else null }.toList() }.orEmpty()
+    } catch (e: Exception) {
+        emptyList()
     }
 
     private val observers = java.util.Collections.synchronizedSet(HashSet<ContentObserver>())

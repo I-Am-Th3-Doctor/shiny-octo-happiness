@@ -3,6 +3,7 @@ package io.github.iamth3doctor.searchlight
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.widget.Toast
 import android.app.role.RoleManager
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
@@ -97,6 +98,8 @@ class SettingsActivity : Activity() {
         binding.widgetCenterRow.setOnClickListener { startActivity(Intent(this, WidgetCenterActivity::class.java)) }
         binding.reindex.setOnClickListener { app.files.rescan() }
         binding.about.text = getString(R.string.settings_about, BuildConfig.VERSION_NAME)
+        binding.calendarTargetRow.setOnClickListener { pickCalendarTarget() }
+        binding.calendarMoveLocal.setOnClickListener { confirmMoveLocal() }
 
         prefs.addFavoritesListener(favoritesChanged)
         app.apps.addListener(favoritesChanged)
@@ -115,7 +118,91 @@ class SettingsActivity : Activity() {
         app.startSources()
         app.autoFavorites.refreshIfStale() // usage access may have just been granted
         render()
+        renderCalendarWidget()
     }
+
+    // ------------------------------------------------------------------ Calendar widget
+
+    private val calendarWriter by lazy { io.github.iamth3doctor.searchlight.calendar.CalendarWriter(this) }
+    private val calendarWorker by lazy { java.util.concurrent.Executors.newSingleThreadExecutor() }
+
+    /** Where new events go, and any events stranded on phone-only calendars (with the move). */
+    private fun renderCalendarWidget() {
+        calendarWorker.execute {
+            val target = calendarWriter.target(prefs.calendarTarget)
+            val chosen = calendarWriter.writable().firstOrNull { it.id == prefs.calendarTarget }
+            val local = calendarWriter.localEventCount()
+            val readable = calendarWriter.canRead()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                binding.calendarTargetValue.text = when {
+                    !readable -> getString(R.string.settings_calendar_needs_access)
+                    chosen != null -> chosen.name
+                    target != null -> getString(R.string.settings_calendar_target_default) + " (" + target.name + ")"
+                    else -> getString(R.string.cal_no_google)
+                }
+                binding.calendarLocalInfo.text = if (local > 0) resources.getQuantityString(R.plurals.settings_calendar_move_count, local, local)
+                else getString(R.string.settings_calendar_move_none)
+                binding.calendarLocalInfo.visibility = if (readable) android.view.View.VISIBLE else android.view.View.GONE
+                binding.calendarMoveLocal.visibility = if (local > 0 && target != null) android.view.View.VISIBLE else android.view.View.GONE
+            }
+        }
+    }
+
+    /** Synced calendars only: a phone-only calendar is never offered. */
+    private fun pickCalendarTarget() {
+        calendarWorker.execute {
+            val cals = calendarWriter.writable()
+            runOnUiThread {
+                if (cals.isEmpty()) {
+                    Toast.makeText(this, if (calendarWriter.canRead()) R.string.cal_no_google else R.string.settings_calendar_needs_access, Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                val labels = listOf(getString(R.string.settings_calendar_target_default)) +
+                    cals.map { if (it.account.isNotEmpty() && it.account != it.name) "${it.name} · ${it.account}" else it.name }
+                val checked = cals.indexOfFirst { it.id == prefs.calendarTarget }.let { if (it < 0) 0 else it + 1 }
+                AlertDialog.Builder(this).setTitle(R.string.settings_calendar_target)
+                    .wrappingSingleChoice(labels, checked) { d, which ->
+                        d.dismiss()
+                        prefs.calendarTarget = if (which == 0) -1L else cals[which - 1].id
+                        renderCalendarWidget()
+                    }.show()
+            }
+        }
+    }
+
+    /** One time: events on phone-only calendars to the Google calendar (copied, then the originals removed). */
+    private fun confirmMoveLocal() {
+        if (!calendarWriter.canWrite()) {
+            requestPermissions(arrayOf(android.Manifest.permission.READ_CALENDAR, android.Manifest.permission.WRITE_CALENDAR), REQUEST_RUNTIME)
+            return
+        }
+        calendarWorker.execute {
+            val target = calendarWriter.target(prefs.calendarTarget)
+            runOnUiThread {
+                if (target == null) return@runOnUiThread
+                moveDialog = AlertDialog.Builder(this)
+                    .setTitle(R.string.settings_calendar_move)
+                    .setMessage(getString(R.string.settings_calendar_move_confirm, target.name))
+                    .setPositiveButton(R.string.settings_calendar_move_go) { _, _ ->
+                        calendarWorker.execute {
+                            val result = calendarWriter.moveLocalEvents(target.id)
+                            runOnUiThread {
+                                var msg = resources.getQuantityString(R.plurals.settings_calendar_moved, result.moved, result.moved, target.name)
+                                if (result.failed > 0) msg += " " + getString(R.string.settings_calendar_move_failed, result.failed)
+                                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                                renderCalendarWidget()
+                            }
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+    }
+
+    /** The move confirmation last shown (tests). */
+    internal var moveDialog: AlertDialog? = null
 
     private fun render() {
         binding.setDefault.setText(if (isDefaultHome()) R.string.settings_is_default else R.string.settings_set_default)
@@ -679,6 +766,7 @@ class SettingsActivity : Activity() {
             "gestures" to CollapsibleSections.Menu(R.drawable.ic_gesture_hand, R.string.settings_sub_gestures),
             "permissions" to CollapsibleSections.Menu(R.drawable.ic_shield, R.string.settings_sub_permissions),
             "favorites" to CollapsibleSections.Menu(R.drawable.ic_star, R.string.settings_sub_favorites),
+            "calendar" to CollapsibleSections.Menu(R.drawable.ic_calendar, R.string.settings_sub_calendar),
             "about" to CollapsibleSections.Menu(R.drawable.ic_info, R.string.settings_sub_about),
         )
         const val REQUEST_HOME_ROLE = 1

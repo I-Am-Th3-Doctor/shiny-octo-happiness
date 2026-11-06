@@ -66,6 +66,27 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
     /** Now, in ms (tests set a fixed one). */
     var clock: () -> Long = System::currentTimeMillis
 
+    /**
+     * What tapping and long-pressing events, "+" and a long-pressed day do (the home screen
+     * supplies it). Null: "+" is hidden and an event opens in the calendar app.
+     */
+    var actions: EventActions? = null
+        set(value) {
+            field = value
+            addButton.visibility = if (value != null) VISIBLE else GONE
+        }
+
+    interface EventActions {
+        /** "+" or "Add event": the add sheet, for [date]. */
+        fun add(date: LocalDate)
+        /** A tapped event: its detail view (Edit, Delete, Open in Calendar). */
+        fun details(e: DayEvent)
+        fun edit(e: DayEvent)
+        fun delete(e: DayEvent)
+        /** A long-pressed day's "Arrange widgets". */
+        fun arrange()
+    }
+
     // Design tokens (this is a View, not a Context).
     private fun px(token: Int) = context.px(token)
     private fun pxF(token: Int) = context.pxF(token)
@@ -120,6 +141,7 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
     val dayTitle = TextView(context)
     val refreshButton = iconButton(R.drawable.ic_refresh, R.string.cal_refresh, flip = false) { userRefresh() }
     val gearButton = iconButton(R.drawable.ic_settings, R.string.cal_open_app, flip = false) { openDay(selected) }
+    val addButton = iconButton(R.drawable.ic_add, R.string.cal_add_event, flip = false) { actions?.add(selected) }
     private val agendaBody = FrameLayout(context)
     private val scroll = ScrollView(context)
     val eventList = LinearLayout(context)
@@ -184,7 +206,7 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
 
         // ---- agenda: Fri, Jun 5  ⟳ ⚙, then the events
         agendaPane.orientation = VERTICAL
-        val dayHeader = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val dayHeader = DayHeader(context)
         dayTitle.apply {
             type(Type.BODY)
             typeface = Typeface.create(typeface, Typeface.BOLD)
@@ -193,10 +215,15 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
             ellipsize = TextUtils.TruncateAt.END
             setPadding(xs, 0, 0, 0)
         }
-        dayHeader.addView(dayTitle, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        dayHeader.addView(refreshButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
-        dayHeader.addView(gearButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
-        agendaPane.addView(dayHeader, LayoutParams(LayoutParams.MATCH_PARENT, px(R.dimen.size_cal_header)))
+        dayHeader.addView(dayTitle, LayoutParams(0, px(R.dimen.size_cal_header), 1f))
+        dayTitle.gravity = Gravity.CENTER_VERTICAL
+        val icons = dayHeader.icons
+        addButton.visibility = GONE
+        icons.addView(addButton, LayoutParams(px(R.dimen.size_cal_chevron), px(R.dimen.size_cal_header)))
+        icons.addView(refreshButton, LayoutParams(px(R.dimen.size_cal_chevron), px(R.dimen.size_cal_header)))
+        icons.addView(gearButton, LayoutParams(px(R.dimen.size_cal_chevron), px(R.dimen.size_cal_header)))
+        dayHeader.addView(icons, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        agendaPane.addView(dayHeader, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         eventList.orientation = VERTICAL
         // Empty agenda space (below the events) opens the calendar on the day.
@@ -351,8 +378,10 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
         Actions.openCalendarAt(context, day.atTime(12, 0).atZone(zone).toInstant().toEpochMilli())
     }
 
+    /** A tapped event: its detail view (never a dead end); without actions, the calendar app. */
     private fun open(e: DayEvent) {
-        Actions.openEvent(context, e.eventId, e.begin, e.end)
+        val a = actions
+        if (a != null) a.details(e) else Actions.openEvent(context, e.eventId, e.begin, e.end)
     }
 
     // ------------------------------------------------------------------ drawing
@@ -435,6 +464,7 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
             background = ripple(borderless = false)
             alpha = if (ended) ENDED_ALPHA else 1f
             tag = rel
+            setTag(R.id.calendar_event, e)
             contentDescription = listOfNotNull(name, range, e.detail.ifBlank { null }, label, sub).joinToString(", ")
             setOnClickListener { open(e) }
             val dot = px(R.dimen.size_cal_color)
@@ -510,11 +540,72 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
     private var downX = 0f
     private var downY = 0f
+    private var downRawX = 0f
+    private var downRawY = 0f
     private var longPressed = false
     private val longPressCheck = Runnable {
         longPressed = true
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        onLongPress?.invoke()
+        val a = actions
+        val event = if (a != null) eventRowAt(downRawX, downRawY) else null
+        val day = if (a != null && event == null) dayAt(downRawX, downRawY) else null
+        when {
+            event != null -> eventMenu(event)
+            day != null -> dayMenu(day)
+            else -> onLongPress?.invoke()
+        }
+    }
+
+    private fun under(v: View, rawX: Float, rawY: Float): Boolean {
+        val r = android.graphics.Rect()
+        return v.isShown && v.getGlobalVisibleRect(r) && r.contains(rawX.toInt(), rawY.toInt())
+    }
+
+    /** The grid's day under a screen point, if any. */
+    private fun dayAt(rawX: Float, rawY: Float): DayView? = dayViews.firstOrNull { it.day != null && under(it, rawX, rawY) }
+
+    /** The agenda row under a screen point, if any. */
+    private fun eventRowAt(rawX: Float, rawY: Float): View? =
+        (0 until eventList.childCount).map(eventList::getChildAt).firstOrNull { it.getTag(R.id.calendar_event) != null && under(it, rawX, rawY) }
+
+    /** The menu a long press opened last (tests). */
+    var lastMenu: android.widget.PopupMenu? = null
+        private set
+
+    /** A long-pressed day: "Add event" (on that day), or the usual widget arranging. */
+    private fun dayMenu(v: DayView) {
+        val d = v.day ?: return
+        lastMenu = android.widget.PopupMenu(context, v).apply {
+            menu.add(0, MENU_ADD, 0, R.string.cal_add_event)
+            menu.add(0, MENU_ARRANGE, 1, R.string.cal_arrange_widgets)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    MENU_ADD -> { tapDay(d); actions?.add(d) }
+                    else -> actions?.arrange()
+                }
+                true
+            }
+            show()
+        }
+    }
+
+    /** A long-pressed event: its details, Edit, Delete. */
+    private fun eventMenu(row: View) {
+        val e = row.getTag(R.id.calendar_event) as? DayEvent ?: return
+        lastMenu = android.widget.PopupMenu(context, row).apply {
+            menu.add(0, MENU_DETAILS, 0, R.string.cal_event_details)
+            menu.add(0, MENU_EDIT, 1, R.string.cal_event_edit)
+            menu.add(0, MENU_DELETE, 2, R.string.cal_event_delete)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    MENU_DETAILS -> actions?.details(e)
+                    MENU_EDIT -> actions?.edit(e)
+                    MENU_DELETE -> actions?.delete(e)
+                }
+                true
+            }
+            show()
+        }
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
@@ -523,6 +614,8 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
                 longPressed = false
                 downX = ev.x
                 downY = ev.y
+                downRawX = ev.rawX
+                downRawY = ev.rawY
                 postDelayed(longPressCheck, ViewConfiguration.getLongPressTimeout().toLong())
             }
             MotionEvent.ACTION_MOVE -> if (abs(ev.x - downX) > slop || abs(ev.y - downY) > slop) removeCallbacks(longPressCheck)
@@ -536,6 +629,40 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean = longPressed || super.onTouchEvent(event)
+
+    // ------------------------------------------------------------------ the agenda header
+
+    /**
+     * The day's title and its icons (+, refresh, gear) in one row; when the agenda half is too
+     * narrow for both (a three-cell widget on the unfolded screen), the title gets its own line
+     * and the icons sit under it, at the end.
+     */
+    inner class DayHeader(context: Context) : LinearLayout(context) {
+        val icons = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        private val minTitle = px(R.dimen.size_cal_title_min)
+
+        init {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val width = MeasureSpec.getSize(widthMeasureSpec)
+            val iconsWidth = (0 until icons.childCount).map(icons::getChildAt).filter { it.visibility != GONE }
+                .sumOf { (it.layoutParams as LayoutParams).width }
+            val narrow = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED && width < minTitle + iconsWidth
+            val want = if (narrow) VERTICAL else HORIZONTAL
+            if (orientation != want) {
+                orientation = want
+                getChildAt(0).layoutParams = if (narrow) LayoutParams(LayoutParams.MATCH_PARENT, px(R.dimen.size_cal_header))
+                else LayoutParams(0, px(R.dimen.size_cal_header), 1f)
+                icons.layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    gravity = if (narrow) Gravity.END else Gravity.CENTER_VERTICAL
+                }
+            }
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        }
+    }
 
     // ------------------------------------------------------------------ a day in the grid
 
@@ -623,5 +750,10 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
 
     private companion object {
         const val ENDED_ALPHA = 0.45f
+        const val MENU_ADD = 1
+        const val MENU_ARRANGE = 2
+        const val MENU_DETAILS = 3
+        const val MENU_EDIT = 4
+        const val MENU_DELETE = 5
     }
 }

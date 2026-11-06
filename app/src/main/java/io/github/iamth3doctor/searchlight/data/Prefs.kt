@@ -219,6 +219,11 @@ class Prefs(context: Context) {
         get() = WidgetGrid.parse(sp.getString(KEY_WIDGET_GRID_UNFOLDED, null))
         set(value) = sp.edit().putString(KEY_WIDGET_GRID_UNFOLDED, WidgetGrid.serialize(value)).apply()
 
+    /** The calendar the Calendar widget adds events to (-1: the primary Google calendar). */
+    var calendarTarget: Long
+        get() = sp.getLong(KEY_CALENDAR_TARGET, -1L)
+        set(value) = sp.edit().putLong(KEY_CALENDAR_TARGET, value).apply()
+
     /** The Calendar widget has asked Android for calendar access at least once. */
     var calendarPermissionAsked: Boolean
         get() = sp.getBoolean(KEY_CALENDAR_PERMISSION_ASKED, false)
@@ -499,6 +504,7 @@ class Prefs(context: Context) {
         private const val KEY_WIDGET_GRID = "widget_grid"
         private const val KEY_WIDGET_GRID_UNFOLDED = "widget_grid_unfolded"
         private const val KEY_CALENDAR_PERMISSION_ASKED = "calendar_permission_asked"
+        private const val KEY_CALENDAR_TARGET = "calendar_target"
         private const val KEY_TEMP_UNIT = "temp_unit"
         private const val KEY_PLACE_NAME = "place_name"
         private const val KEY_PLACE_ADMIN = "place_admin"

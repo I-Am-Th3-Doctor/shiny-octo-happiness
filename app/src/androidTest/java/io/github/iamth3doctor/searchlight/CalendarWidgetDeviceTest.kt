@@ -401,9 +401,12 @@ class CalendarWidgetDeviceTest {
             val v = addCalendar(h)
             loaded(h, v)
 
-            // An event opens in the calendar app.
+            // An event opens its detail view; "Open in Calendar" there opens it in the calendar app.
             Actions.lastCalendarUri = null
+            io.github.iamth3doctor.searchlight.widgets.CalendarEventActions.lastDialog = null
             on(h) { (0 until v.eventList.childCount).map(v.eventList::getChildAt).first { r -> collectTexts(r).first().text == "Standup" }.performClick() }
+            waitFor("detail view") { io.github.iamth3doctor.searchlight.widgets.CalendarEventActions.lastDialog?.isShowing == true }
+            h.onActivity { io.github.iamth3doctor.searchlight.widgets.CalendarEventActions.lastDialog!!.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).performClick() }
             assertEquals(android.content.ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, 101L), Actions.lastCalendarUri)
 
             // Empty agenda space (below the rows) opens the calendar on the day.
@@ -487,6 +490,9 @@ class CalendarWidgetDeviceTest {
                 shot("66-calendar-real-event")
                 val rowView = on(h) { (0 until v.eventList.childCount).map(v.eventList::getChildAt).first { x -> collectTexts(x).first().text == title } }
                 tap(rowView)
+                // The detail view, then "Open in Calendar".
+                waitFor("detail view") { io.github.iamth3doctor.searchlight.widgets.CalendarEventActions.lastDialog?.isShowing == true }
+                h.onActivity { io.github.iamth3doctor.searchlight.widgets.CalendarEventActions.lastDialog!!.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).performClick() }
                 waitFor("calendar app opened", 20_000) { "calendar" in shell("dumpsys activity activities").lineSequence().firstOrNull { "ResumedActivity" in it }.orEmpty().lowercase() }
             }
         } finally {

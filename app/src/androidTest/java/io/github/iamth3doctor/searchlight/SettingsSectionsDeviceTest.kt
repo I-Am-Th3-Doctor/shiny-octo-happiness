@@ -28,7 +28,7 @@ class SettingsSectionsDeviceTest {
     private val app = instrumentation.targetContext.applicationContext as SearchlightApp
     private val prefix = InstrumentationRegistry.getArguments().getString("shotPrefix") ?: "device"
     private val dir = "/sdcard/Download/searchlight-shots"
-    private val settingsKeys = listOf("home", "appearance", "gestures", "permissions", "favorites", "about")
+    private val settingsKeys = listOf("home", "appearance", "gestures", "permissions", "favorites", "calendar", "about")
     private val widgetCenterKeys = listOf("cards", "idle", "weather")
     private val settingsRows = listOf(
         Triple("home", "Home", "Layout, tiles and search bar"),
@@ -36,6 +36,7 @@ class SettingsSectionsDeviceTest {
         Triple("gestures", "Gestures", "Swipes, taps and shortcuts"),
         Triple("permissions", "Permissions", "Access and privacy"),
         Triple("favorites", "Favorites (up to 6)", "Your six quick apps"),
+        Triple("calendar", "Calendar widget", "Where new events go, phone-only events"),
         Triple("about", "About", "Version and details"),
     )
 
@@ -81,7 +82,7 @@ class SettingsSectionsDeviceTest {
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             Thread.sleep(1000)
             // Every section has a header; first open, the rest closed.
-            assertEquals(listOf(true, false, false, false, false, false), open(s))
+            assertEquals(listOf(true, false, false, false, false, false, false), open(s))
             // Each section in its own frosted card, 28dp corners, its title over its subtitle.
             s.onActivity { a ->
                 val r = a.resources.getDimension(R.dimen.radius_card)
@@ -96,22 +97,22 @@ class SettingsSectionsDeviceTest {
 
             // A header toggles its own section only.
             tap(s, "gestures")
-            assertEquals(listOf(true, false, true, false, false, false), open(s))
+            assertEquals(listOf(true, false, true, false, false, false, false), open(s))
             tap(s, "home")
-            assertEquals(listOf(false, false, true, false, false, false), open(s))
+            assertEquals(listOf(false, false, true, false, false, false, false), open(s))
             tap(s, "gestures")
             tap(s, "favorites")
-            assertEquals(listOf(false, false, false, false, true, false), open(s))
+            assertEquals(listOf(false, false, false, false, true, false, false), open(s))
 
             // Leaving and coming back (the screen rebuilt): the same.
             s.recreate()
             Thread.sleep(800)
-            assertEquals(listOf(false, false, false, false, true, false), open(s))
+            assertEquals(listOf(false, false, false, false, true, false, false), open(s))
         }
         // A new launch reads it back from storage (what a restart does).
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             Thread.sleep(800)
-            assertEquals(listOf(false, false, false, false, true, false), open(s))
+            assertEquals(listOf(false, false, false, false, true, false, false), open(s))
         }
     }
 

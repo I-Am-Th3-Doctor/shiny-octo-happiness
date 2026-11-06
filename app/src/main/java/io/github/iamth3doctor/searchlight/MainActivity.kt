@@ -90,6 +90,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private lateinit var adapter: ResultsAdapter
     internal lateinit var favoritesPopup: FavoritesPopup // internal: the device tests long-press its cells
     private lateinit var widgets: WidgetController
+    /** The Calendar widget's add / details / edit / delete (tests reach it too). */
+    internal lateinit var calendarActions: io.github.iamth3doctor.searchlight.widgets.CalendarEventActions
+
     /** Tests: the home grid's widgets. */
     internal val widgetController: WidgetController get() = widgets
     private lateinit var appTable: AppTableAdapter
@@ -144,6 +147,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             decorate = { shadeTexts(it, GlassTint.textShadow(FrostedDrawable.glassLevel)) },
         )
         savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
+        calendarActions = io.github.iamth3doctor.searchlight.widgets.CalendarEventActions(
+            this, prefs, io.github.iamth3doctor.searchlight.calendar.CalendarWriter(this),
+            refresh = { widgets.refreshCalendars() },
+            arrangeWidgets = { binding.widgetGrid.setEditMode(true) },
+        )
+        widgets.eventActions = calendarActions
         widgets.cleanUpOrphans()
 
         setupResultsGrid()
@@ -212,6 +221,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == WidgetController.REQUEST_CALENDAR_PERMISSION) widgets.refreshCalendars()
+        if (requestCode == io.github.iamth3doctor.searchlight.widgets.CalendarEventActions.REQUEST_WRITE) {
+            widgets.refreshCalendars() // reading may have been granted with it
+            calendarActions.onPermissionResult(grantResults.isNotEmpty() && grantResults.all { it == android.content.pm.PackageManager.PERMISSION_GRANTED })
+        }
     }
 
     override fun onResume() {

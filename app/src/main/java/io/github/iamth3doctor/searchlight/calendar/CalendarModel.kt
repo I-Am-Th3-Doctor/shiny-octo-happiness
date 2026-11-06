@@ -24,6 +24,16 @@ class DayEvent(
     val calendarName: String,
     val color: Int,
     val detail: String = "",
+    /** The calendar it's on (-1: unknown). */
+    val calendarId: Long = -1,
+    /** The calendar's access level (CalendarContract.Calendars.CAL_ACCESS_*): below contributor it's read-only. */
+    val accessLevel: Int = 700,
+    /** One occurrence of a repeating event. */
+    val recurring: Boolean = false,
+    /** Where it is (the detail view shows it). */
+    val location: String = "",
+    /** For an occurrence changed on its own (an exception row): its series' event id, else -1. */
+    val originalId: Long = -1,
 )
 
 /**

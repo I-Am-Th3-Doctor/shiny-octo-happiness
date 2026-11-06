@@ -4,4 +4,6 @@
     <item name="section_anim" type="id" />
     <item name="glass_text_shadow" type="id" />
     <item name="tile_flexible" type="id" />
+    <!-- The event an agenda row of the Calendar widget shows. -->
+    <item name="calendar_event" type="id" />
 </resources>

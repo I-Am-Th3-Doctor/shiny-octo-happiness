@@ -208,10 +208,18 @@ class WidgetController(
         if (v is CalendarWidgetView) v.stacked = spec.colSpan < SPLIT_MIN_COLS
     }
 
+    /** Add / details / edit / delete for Calendar widgets' events (set by the home screen). */
+    var eventActions: CalendarWidgetView.EventActions? = null
+        set(value) {
+            field = value
+            calendarViews().forEach { it.actions = value }
+        }
+
     private fun builtInView(id: Int): View = CalendarWidgetView(activity, calendarEvents).also { v ->
         v.onLongPress = { grid.enterEditModeFromLongPress() }
         v.onRequestPermission = ::requestCalendarPermission
         v.onContentChanged = decorate
+        v.actions = eventActions
         v.refresh()
     }
 
