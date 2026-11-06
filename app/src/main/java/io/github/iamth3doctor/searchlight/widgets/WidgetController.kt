@@ -1,6 +1,14 @@
 package io.github.iamth3doctor.searchlight.widgets
 
+import android.Manifest
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.view.View
+import androidx.core.content.ContextCompat
+import io.github.iamth3doctor.searchlight.calendar.CalendarEvents
+import io.github.iamth3doctor.searchlight.ui.Permissions
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -35,10 +43,13 @@ class WidgetController(
     private val grid: WidgetGridView,
     private val prefs: Prefs,
     private val onEditModeChanged: (Boolean) -> Unit,
+    private val calendarEvents: CalendarEvents,
+    /** Shades a built-in widget's texts for the current glass level (see MainActivity.applyGlassShadows). */
+    private val decorate: (View) -> Unit = {},
 ) : WidgetGridView.Listener {
     private val manager = AppWidgetManager.getInstance(activity)
     private val host = SearchlightWidgetHost(activity.applicationContext, HOST_ID)
-    private val views = HashMap<Int, AppWidgetHostView>()
+    private val views = HashMap<Int, View>()
     private val reportedSizes = HashMap<Int, Pair<Int, Int>>()
     private val density = activity.resources.displayMetrics.density
 
@@ -81,7 +92,8 @@ class WidgetController(
     private fun refreshProviders() {
         for (id in views.keys.toList()) {
             val now = manager.getAppWidgetInfo(id)
-            val shown = views[id]?.appWidgetInfo
+            if (BuiltInWidget.isBuiltIn(id)) continue
+            val shown = (views[id] as? AppWidgetHostView)?.appWidgetInfo
             if (now == null || shown == null || now.provider != shown.provider || now.initialLayout != shown.initialLayout) {
                 views.remove(id)
                 reportedSizes.remove(id)
@@ -101,6 +113,13 @@ class WidgetController(
     private var pendingPin = AppWidgetManager.INVALID_APPWIDGET_ID
 
     fun start() {
+        calendarEvents.watch(::calendarDataChanged)
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_DATE_CHANGED)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        ContextCompat.registerReceiver(activity, dateReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         try {
             host.startListening()
         } catch (e: Exception) {
@@ -112,6 +131,9 @@ class WidgetController(
 
     fun stop() {
         exitEditMode()
+        calendarEvents.stopWatching()
+        grid.removeCallbacks(refreshCalendarsNow)
+        try { activity.unregisterReceiver(dateReceiver) } catch (e: Exception) { /* not registered */ }
         try {
             host.stopListening()
         } catch (e: Exception) {
@@ -120,6 +142,62 @@ class WidgetController(
     }
 
     fun exitEditMode() = grid.setEditMode(false)
+
+    // ------------------------------------------------------------------ built-in widgets
+
+    /** The Calendar widgets on the grid (either posture), live. */
+    fun calendarViews(): List<CalendarWidgetView> = views.values.filterIsInstance<CalendarWidgetView>()
+
+    /** Returning home, calendar access granted, or the date changed: every Calendar widget reloads. */
+    fun refreshCalendars() = calendarViews().forEach { it.refresh() }
+
+    private val refreshCalendarsNow = Runnable { refreshCalendars() }
+
+    /** Calendar data changes come in bursts (a sync): one reload once they settle. */
+    private fun calendarDataChanged() {
+        grid.removeCallbacks(refreshCalendarsNow)
+        grid.postDelayed(refreshCalendarsNow, CALENDAR_SETTLE_MS)
+    }
+
+    private val dateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, intent: Intent) = refreshCalendars()
+    }
+
+    /**
+     * "Allow" in a Calendar widget: Android's permission dialog, or, once it has been turned down
+     * for good (Android won't show it again), Searchlight's page in Settings.
+     */
+    private fun requestCalendarPermission() {
+        calendarEvents.permissionRequests++
+        val p = Manifest.permission.READ_CALENDAR
+        if (prefs.calendarPermissionAsked && !activity.shouldShowRequestPermissionRationale(p)) {
+            Permissions.openAppDetails(activity)
+            return
+        }
+        prefs.calendarPermissionAsked = true
+        activity.requestPermissions(arrayOf(p), REQUEST_CALENDAR_PERMISSION)
+    }
+
+    /** Places a built-in widget (from the picker) in the first free space that fits it. */
+    private fun placeBuiltIn(type: BuiltInWidget) {
+        val id = BuiltInWidget.newId(prefs.widgetGrid + prefs.widgetGridUnfolded)
+        val (w, h) = type.defaultCols.coerceAtMost(grid.cols) to type.defaultRows.coerceAtMost(grid.rows)
+        val (minW, minH) = minSpan(id)
+        val spot = WidgetGrid.place(grid.placedSpecs(), id, w, h, minW, minH, grid.cols, grid.rows)
+        if (spot == null) {
+            Toast.makeText(activity, R.string.widget_no_room, Toast.LENGTH_LONG).show()
+            return
+        }
+        layout = WidgetGrid.upsert(layout, spot)
+        render()
+    }
+
+    private fun builtInView(id: Int): View = CalendarWidgetView(activity, calendarEvents).also { v ->
+        v.onLongPress = { grid.enterEditModeFromLongPress() }
+        v.onRequestPermission = ::requestCalendarPermission
+        v.onContentChanged = decorate
+        v.refresh()
+    }
 
     /** Frees ids the system still has for us but that aren't on the grid (e.g. an add that was abandoned). */
     fun cleanUpOrphans() {
@@ -140,7 +218,7 @@ class WidgetController(
     fun render() {
         // The app behind a widget was uninstalled: take it off both layouts.
         val gone = (prefs.widgetGrid + prefs.widgetGridUnfolded).map { it.id }.distinct()
-            .filter { manager.getAppWidgetInfo(it) == null }
+            .filter { !BuiltInWidget.isBuiltIn(it) && manager.getAppWidgetInfo(it) == null }
         if (gone.isNotEmpty()) {
             gone.forEach { id ->
                 host.deleteAppWidgetId(id)
@@ -162,12 +240,13 @@ class WidgetController(
         val fit = WidgetGrid.fitToGrid(current, grid.cols, grid.rows)
         // Tell new widgets their size before their first layout, so they inflate the right
         // layout for it from the start (layout then reports the exact size).
-        for (spec in fit.shown) if (spec.id !in reportedSizes) reportCells(spec)
+        for (spec in fit.shown) if (spec.id !in reportedSizes && !BuiltInWidget.isBuiltIn(spec.id)) reportCells(spec)
         grid.setWidgets(fit.shown.mapNotNull { spec -> viewFor(spec.id)?.let { it to spec } })
     }
 
-    private fun viewFor(id: Int): AppWidgetHostView? {
+    private fun viewFor(id: Int): View? {
         views[id]?.let { return it }
+        if (BuiltInWidget.isBuiltIn(id)) return builtInView(id).also { views[id] = it }
         val info = manager.getAppWidgetInfo(id) ?: return null
         return host.createView(activity, id, info).also { v ->
             (v as? LongPressWidgetHostView)?.onLongPress = { grid.enterEditModeFromLongPress() }
@@ -234,7 +313,7 @@ class WidgetController(
     override fun onRemove(id: Int) {
         prefs.widgetGrid = WidgetGrid.remove(prefs.widgetGrid, id)
         prefs.widgetGridUnfolded = WidgetGrid.remove(prefs.widgetGridUnfolded, id)
-        host.deleteAppWidgetId(id)
+        if (!BuiltInWidget.isBuiltIn(id)) host.deleteAppWidgetId(id)
         views.remove(id)
         reportedSizes.remove(id)
         render()
@@ -242,11 +321,16 @@ class WidgetController(
     }
 
     override fun resizable(id: Int): Pair<Boolean, Boolean> {
+        if (BuiltInWidget.isBuiltIn(id)) return true to true
         val mode = manager.getAppWidgetInfo(id)?.resizeMode ?: return false to false
         return (mode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0) to (mode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0)
     }
 
     override fun minSpan(id: Int): Pair<Int, Int> {
+        if (BuiltInWidget.isBuiltIn(id)) {
+            return WidgetGrid.spanFor(activity.resources.getDimension(R.dimen.size_cal_min_width) / density, grid.cellWidthDp, grid.cols) to
+                WidgetGrid.spanFor(activity.resources.getDimension(R.dimen.size_cal_min_height) / density, grid.cellHeightDp, grid.rows)
+        }
         val info = manager.getAppWidgetInfo(id) ?: return 1 to 1
         val (canH, canV) = resizable(id)
         val wPx = if (canH && info.minResizeWidth > 0) info.minResizeWidth else info.minWidth
@@ -275,6 +359,10 @@ class WidgetController(
         when (requestCode) {
             REQUEST_PICK -> {
                 if (resultCode != Activity.RESULT_OK || data == null) return true
+                BuiltInWidget.fromKey(data.getStringExtra(WidgetPickerActivity.EXTRA_BUILTIN))?.let {
+                    placeBuiltIn(it)
+                    return true
+                }
                 val provider = data.getParcelableExtraCompat<ComponentName>(WidgetPickerActivity.EXTRA_PROVIDER) ?: return true
                 val profile = data.getParcelableExtraCompat<UserHandle>(WidgetPickerActivity.EXTRA_PROFILE)
                 bind(provider, profile)
@@ -362,5 +450,7 @@ class WidgetController(
         const val REQUEST_PICK = 101
         const val REQUEST_BIND = 102
         const val REQUEST_CONFIGURE = 103
+        const val REQUEST_CALENDAR_PERMISSION = 104
+        private const val CALENDAR_SETTLE_MS = 400L
     }
 }

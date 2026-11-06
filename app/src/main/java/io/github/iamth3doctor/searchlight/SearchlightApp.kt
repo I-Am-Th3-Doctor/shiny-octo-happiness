@@ -48,6 +48,9 @@ class SearchlightApp : Application() {
         private set
     lateinit var calendar: CalendarSearch
         private set
+    /** The Calendar widget's events (the home grid's built-in widget). */
+    lateinit var calendarEvents: io.github.iamth3doctor.searchlight.calendar.CalendarEvents
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -61,6 +64,7 @@ class SearchlightApp : Application() {
         media = MediaRepository(this)
         thumbnails = Thumbnails(this)
         calendar = CalendarSearch(this)
+        calendarEvents = io.github.iamth3doctor.searchlight.calendar.CalendarEvents(this)
         currency = CurrencyRates(this)
         background = BackgroundSearch(files, media, messages, calendar)
         weather = WeatherRepository(this, prefs)

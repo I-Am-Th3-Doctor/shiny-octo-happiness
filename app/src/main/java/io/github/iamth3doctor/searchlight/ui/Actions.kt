@@ -120,15 +120,31 @@ object Actions {
         }
     }
 
+    /** The last calendar intent's data (tests: which event or day was opened). */
+    @Volatile var lastCalendarUri: Uri? = null
+
     /** The calendar app on this event, at this occurrence. */
     fun openEvent(context: Context, e: io.github.iamth3doctor.searchlight.calendar.EventEntry) =
-        start(
+        openEvent(context, e.eventId, e.begin, e.end)
+
+    fun openEvent(context: Context, eventId: Long, begin: Long, end: Long): Boolean {
+        val uri = android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, eventId)
+        lastCalendarUri = uri
+        return start(
             context,
-            Intent(Intent.ACTION_VIEW, android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, e.eventId))
-                .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, e.begin)
-                .putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, e.end)
+            Intent(Intent.ACTION_VIEW, uri)
+                .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin)
+                .putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, end)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
+    }
+
+    /** The calendar app on the day holding [timeMs]. */
+    fun openCalendarAt(context: Context, timeMs: Long): Boolean {
+        val uri = android.provider.CalendarContract.CONTENT_URI.buildUpon().appendPath("time").appendPath(timeMs.toString()).build()
+        lastCalendarUri = uri
+        return start(context, Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     fun copy(context: Context, text: String) {
         val cm = context.getSystemService(ClipboardManager::class.java)

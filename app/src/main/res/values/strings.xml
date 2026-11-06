@@ -158,6 +158,24 @@
     <string name="widget_picker_none">No apps on this phone provide widgets.</string>
     <string name="widget_picker_no_match">No widgets match.</string>
     <string name="widget_picker_row">%1$s · %2$s</string>
+    <string name="widget_builtin_app">Searchlight</string>
+    <string name="widget_calendar">Calendar</string>
+    <!-- Calendar widget -->
+    <string name="cal_prev_week">Previous week</string>
+    <string name="cal_next_week">Next week</string>
+    <string name="cal_header_desc">%1$s. Double-tap for this week</string>
+    <string name="cal_no_events">No events</string>
+    <string name="cal_no_events_desc">No events. Double-tap to open the calendar on this day</string>
+    <string name="cal_permission">Allow calendar access to see events</string>
+    <string name="cal_permission_allow">Allow</string>
+    <string name="cal_all_day">All day</string>
+    <string name="cal_until">Until %1$s</string>
+    <string name="cal_no_title">(No title)</string>
+    <string name="cal_today">Today, %1$s</string>
+    <plurals name="cal_day_events">
+        <item quantity="one">%1$s, 1 event</item>
+        <item quantity="other">%1$s, %2$d events</item>
+    </plurals>
 
     <!-- Widget Center -->
     <string name="widget_center">Widget Center</string>

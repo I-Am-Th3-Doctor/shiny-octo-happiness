@@ -38,10 +38,20 @@ import kotlin.math.roundToInt
  */
 class WidgetPickerActivity : Activity() {
 
-    private class Row(val info: AppWidgetProviderInfo, val appLabel: String, val label: String, val size: String) {
-        val key = "${info.provider.flattenToString()}#${info.profile.hashCode()}"
+    /** An app's widget ([info]), or one of Searchlight's own ([builtIn]). */
+    private class Row(
+        val info: AppWidgetProviderInfo?, val appLabel: String, val label: String, val size: String,
+        val builtIn: BuiltInWidget? = null,
+    ) {
+        val key = if (builtIn != null) "builtin:${builtIn.key}" else "${info!!.provider.flattenToString()}#${info.profile.hashCode()}"
         val haystack = "$appLabel $label".lowercase()
     }
+
+    /** Searchlight's own widgets, first: only in the full picker (not one app's widgets). */
+    private fun builtInRows(): List<Row> = listOf(
+        Row(null, getString(R.string.widget_builtin_app), getString(R.string.widget_calendar),
+            "${BuiltInWidget.CALENDAR.defaultCols} × ${BuiltInWidget.CALENDAR.defaultRows}", BuiltInWidget.CALENDAR),
+    )
 
     private val main = Handler(Looper.getMainLooper())
     private val loader = Executors.newFixedThreadPool(2)
@@ -111,6 +121,7 @@ class WidgetPickerActivity : Activity() {
                 }
                 Row(info, appLabel, info.loadLabel(pm) ?: appLabel, sizeLabel(info, density))
             }.sortedWith(compareBy<Row, String>(String.CASE_INSENSITIVE_ORDER) { it.appLabel }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.label })
+                .let { if (onlyPackage == null) builtInRows() + it else it }
             main.post {
                 if (isFinishing) return@post
                 all = rows
@@ -141,9 +152,15 @@ class WidgetPickerActivity : Activity() {
         else @Suppress("DEPRECATION") getParcelableExtra(key)
 
     private fun choose(row: Row) {
+        if (row.builtIn != null) {
+            setResult(RESULT_OK, Intent().putExtra(EXTRA_BUILTIN, row.builtIn.key))
+            finish()
+            return
+        }
+        val info = row.info ?: return
         setResult(RESULT_OK, Intent()
-            .putExtra(EXTRA_PROVIDER, row.info.provider)
-            .putExtra(EXTRA_PROFILE, row.info.profile))
+            .putExtra(EXTRA_PROVIDER, info.provider)
+            .putExtra(EXTRA_PROFILE, info.profile))
         finish()
     }
 
@@ -178,10 +195,15 @@ class WidgetPickerActivity : Activity() {
                 return
             }
             h.b.preview.setImageDrawable(null)
+            if (row.builtIn != null) {
+                h.b.preview.setImageResource(R.drawable.preview_calendar_widget)
+                return
+            }
+            val info = row.info ?: return
             val dpi = resources.displayMetrics.densityDpi
             loader.execute {
                 val d = try {
-                    row.info.loadPreviewImage(this@WidgetPickerActivity, dpi) ?: row.info.loadIcon(this@WidgetPickerActivity, dpi)
+                    info.loadPreviewImage(this@WidgetPickerActivity, dpi) ?: info.loadIcon(this@WidgetPickerActivity, dpi)
                 } catch (e: Exception) {
                     null
                 }
@@ -196,6 +218,8 @@ class WidgetPickerActivity : Activity() {
     companion object {
         const val EXTRA_PROVIDER = "provider"
         const val EXTRA_PROFILE = "profile"
+        /** Chosen instead of a provider: one of Searchlight's own widgets (BuiltInWidget.key). */
+        const val EXTRA_BUILTIN = "builtin"
         const val EXTRA_FILTER_PACKAGE = "filter_package"
         const val EXTRA_FILTER_USER = "filter_user"
     }

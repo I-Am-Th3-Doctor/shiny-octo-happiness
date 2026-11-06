@@ -90,6 +90,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private lateinit var adapter: ResultsAdapter
     internal lateinit var favoritesPopup: FavoritesPopup // internal: the device tests long-press its cells
     private lateinit var widgets: WidgetController
+    /** Tests: the home grid's widgets. */
+    internal val widgetController: WidgetController get() = widgets
     private lateinit var appTable: AppTableAdapter
 
     private val app get() = searchlight
@@ -137,7 +139,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.currency.onUpdated = { if (query().isNotBlank()) refreshResults() } // fresh rates: re-answer
         adapter = ResultsAdapter(app.apps, app.contacts, app.thumbnails, this)
         favoritesPopup = FavoritesPopup(this, app.apps, prefs, ::launchApp, ::showAppMenu)
-        widgets = WidgetController(this, binding.widgetGrid, prefs) { editing -> binding.editBar.isVisible = editing }
+        widgets = WidgetController(
+            this, binding.widgetGrid, prefs, { editing -> binding.editBar.isVisible = editing }, app.calendarEvents,
+            decorate = { shadeTexts(it, GlassTint.textShadow(FrostedDrawable.glassLevel)) },
+        )
         savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
         widgets.cleanUpOrphans()
 
@@ -203,6 +208,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         if (!widgets.onActivityResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
     }
 
+    /** The Calendar widget's "Allow": granted or not, every Calendar widget shows the new state. */
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == WidgetController.REQUEST_CALENDAR_PERMISSION) widgets.refreshCalendars()
+    }
+
     override fun onResume() {
         super.onResume()
         FrostedDrawable.setGlassLevel(prefs.glassLevel) // the glass setting, as saved: redraws every surface
@@ -218,6 +229,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         app.shortcuts.refreshIfAccessChanged() // e.g. just made the default home: shortcuts become readable
         app.autoFavorites.refreshIfStale() // daily, and picks up usage access granted (or revoked) in Settings
         app.autoFavorites.refreshPrediction() // the predicted 6th favorite follows the time of day
+        widgets.refreshCalendars() // events (and calendar access) may have changed while away
         cards.forEach { it.render() } // e.g. °F/°C changed in the Widget Center
         WallpaperBlur.retryIfUnavailable() // photo access may have been granted in Settings
         binding.searchInput.hint = greeting()
@@ -1059,7 +1071,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     /** The surfaces with glass behind their text. */
     private fun glassSurfaces(): List<View> =
-        listOf(binding.homeCard, binding.resultsPanel, binding.webPill, binding.rail, binding.allApps)
+        listOf(binding.homeCard, binding.resultsPanel, binding.webPill, binding.rail, binding.allApps) + widgets.calendarViews()
 
     /**
      * Toward Clear the glass stops darkening the wallpaper under it, so white text on it gets a

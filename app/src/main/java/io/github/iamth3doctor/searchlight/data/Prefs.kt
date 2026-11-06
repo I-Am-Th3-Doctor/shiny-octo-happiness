@@ -219,6 +219,11 @@ class Prefs(context: Context) {
         get() = WidgetGrid.parse(sp.getString(KEY_WIDGET_GRID_UNFOLDED, null))
         set(value) = sp.edit().putString(KEY_WIDGET_GRID_UNFOLDED, WidgetGrid.serialize(value)).apply()
 
+    /** The Calendar widget has asked Android for calendar access at least once. */
+    var calendarPermissionAsked: Boolean
+        get() = sp.getBoolean(KEY_CALENDAR_PERMISSION_ASKED, false)
+        set(value) = sp.edit().putBoolean(KEY_CALENDAR_PERMISSION_ASKED, value).apply()
+
     /**
      * The pre-grid single-column layout ("id:heightDp,…"), returned once and then deleted.
      * Only used to carry existing widgets over to the grid.
@@ -493,6 +498,7 @@ class Prefs(context: Context) {
         private const val KEY_LEGACY_WIDGETS = "widgets"
         private const val KEY_WIDGET_GRID = "widget_grid"
         private const val KEY_WIDGET_GRID_UNFOLDED = "widget_grid_unfolded"
+        private const val KEY_CALENDAR_PERMISSION_ASKED = "calendar_permission_asked"
         private const val KEY_TEMP_UNIT = "temp_unit"
         private const val KEY_PLACE_NAME = "place_name"
         private const val KEY_PLACE_ADMIN = "place_admin"

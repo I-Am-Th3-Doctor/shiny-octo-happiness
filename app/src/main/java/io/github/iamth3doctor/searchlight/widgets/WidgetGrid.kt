@@ -22,6 +22,7 @@ object WidgetGrid {
     data class Fit(val shown: List<GridSpec>, val hidden: List<Int>)
 
     // ------------------------------------------------------------------ storage: "id:col:row:w:h;…"
+    // (negative ids are Searchlight's own widgets: see BuiltInWidget)
 
     fun parse(raw: String?): List<GridSpec> {
         if (raw.isNullOrBlank()) return emptyList()
@@ -30,7 +31,7 @@ object WidgetGrid {
             val n = part.trim().split(':').map { it.toIntOrNull() ?: return@mapNotNull null }
             if (n.size != 5) return@mapNotNull null
             val s = GridSpec(n[0], n[1], n[2], n[3], n[4])
-            if (s.id < 0 || s.col < 0 || s.row < 0 || s.colSpan < 1 || s.rowSpan < 1 || !seen.add(s.id)) null else s
+            if (s.col < 0 || s.row < 0 || s.colSpan < 1 || s.rowSpan < 1 || !seen.add(s.id)) null else s
         }
     }
 

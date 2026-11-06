@@ -13,7 +13,9 @@ class WidgetGridTest {
     @Test fun storageRoundTripAndJunk() {
         val list = listOf(g(1, 0, 0, 4, 2), g(2, 1, 3, 2, 2))
         assertEquals(list, WidgetGrid.parse(WidgetGrid.serialize(list)))
-        assertEquals(listOf(g(1, 0, 0, 4, 2)), WidgetGrid.parse("1:0:0:4:2;junk;2:1:1;3:0:0:0:1;1:2:2:1:1;-4:0:0:1:1"))
+        assertEquals(listOf(g(1, 0, 0, 4, 2)), WidgetGrid.parse("1:0:0:4:2;junk;2:1:1;3:0:0:0:1;1:2:2:1:1;4:-1:0:1:1"))
+        // Negative ids are Searchlight's own widgets (BuiltInWidget), stored like any other.
+        assertEquals(listOf(g(-4, 0, 0, 1, 1)), WidgetGrid.parse("-4:0:0:1:1"))
         assertTrue(WidgetGrid.parse(null).isEmpty())
     }
 
