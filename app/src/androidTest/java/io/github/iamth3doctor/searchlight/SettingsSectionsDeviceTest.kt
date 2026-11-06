@@ -83,7 +83,7 @@ class SettingsSectionsDeviceTest {
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             Thread.sleep(1000)
             // Every section has a header; first open, the rest closed.
-            assertEquals(listOf(true, false, false, false, false, false), open(s))
+            assertEquals(listOf(true, false, false, false, false, false, false, false), open(s))
             // Each section in its own frosted card, 28dp corners, its title over its subtitle.
             s.onActivity { a ->
                 val r = a.resources.getDimension(R.dimen.radius_card)
@@ -98,22 +98,22 @@ class SettingsSectionsDeviceTest {
 
             // A header toggles its own section only.
             tap(s, "gestures")
-            assertEquals(listOf(true, false, true, false, false, false), open(s))
+            assertEquals(listOf(true, false, true, false, false, false, false, false), open(s))
             tap(s, "home")
-            assertEquals(listOf(false, false, true, false, false, false), open(s))
+            assertEquals(listOf(false, false, true, false, false, false, false, false), open(s))
             tap(s, "gestures")
             tap(s, "favorites")
-            assertEquals(listOf(false, false, false, false, true, false), open(s))
+            assertEquals(listOf(false, false, false, false, true, false, false, false), open(s))
 
             // Leaving and coming back (the screen rebuilt): the same.
             s.recreate()
             Thread.sleep(800)
-            assertEquals(listOf(false, false, false, false, true, false), open(s))
+            assertEquals(listOf(false, false, false, false, true, false, false, false), open(s))
         }
         // A new launch reads it back from storage (what a restart does).
         ActivityScenario.launch(SettingsActivity::class.java).use { s ->
             Thread.sleep(800)
-            assertEquals(listOf(false, false, false, false, true, false), open(s))
+            assertEquals(listOf(false, false, false, false, true, false, false, false), open(s))
         }
     }
 
