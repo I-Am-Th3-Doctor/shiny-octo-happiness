@@ -376,17 +376,19 @@ class CalendarEventEditingDeviceTest {
         assertEquals(listOf(app.getString(R.string.cal_delete_this), app.getString(R.string.cal_delete_all)), items)
         shot("85-calendar-delete-repeating")
         CalendarEventActions.lastDialog = null
+        val next = today.plusWeeks(1)
+        assertTrue("next week's there before: ${providerDay(next)}", "Standup#$series" in providerDay(next))
         h.onActivity { ask.listView.performItemClick(null, 0, 0) } // this event only
-        // Today's occurrence is cancelled (an exception Google syncs); the series stays.
+        // Today's occurrence is excluded from the series (EXDATE, synced like any edit); the rest stay.
         waitFor("today's gone") { on(h) { v.byDay[today].orEmpty().none { it.title == "Standup" } } }
-        val exception = app.contentResolver.query(Events.CONTENT_URI, arrayOf(Events._ID), "${Events.ORIGINAL_ID} = ?", arrayOf(series.toString()), null)
-            ?.use { c -> if (c.moveToFirst()) c.getLong(0) else null }
-        assertNotNull("a cancelled exception", exception)
-        assertEquals(Events.STATUS_CANCELED, row(exception!!)!!.status)
+        val exdate = app.contentResolver.query(ContentUris.withAppendedId(Events.CONTENT_URI, series), arrayOf(Events.EXDATE), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        assertEquals(CalendarWriter.exdateWith(null, at(today, 9), false), exdate)
         assertFalse("the series stays", row(series)!!.deleted)
+        assertTrue(row(series)!!.dirty)
+        assertTrue("next week's still there: ${providerDay(next)}", "Standup#$series" in providerDay(next))
 
         // Next week's occurrence: the whole series this time.
-        val next = today.plusWeeks(1)
         if (YearMonth.from(next) != YearMonth.from(today)) h.onActivity { v.shiftMonth(1) }
         select(h, v, next)
         rowView(h, v, "Standup").let { rv -> h.onActivity { rv.performClick() } }

@@ -208,17 +208,18 @@ class CalendarWriter(private val context: Context) {
     }
 
     /**
-     * Deletes one occurrence of a repeating event (the one starting at [instanceBegin]): a
-     * cancelled exception to the series, which Google Calendar shows the same way.
+     * Deletes one occurrence of a repeating event (the one starting at [instanceBegin]) by adding
+     * it to the series' excluded dates (EXDATE): a change to the series' own row, which Google
+     * syncs like any edit, and which leaves every other occurrence as it was.
      */
     fun deleteOccurrence(eventId: Long, instanceBegin: Long): Boolean {
-        val uri = ContentUris.withAppendedId(Events.CONTENT_EXCEPTION_URI, eventId)
-        val ok = context.contentResolver.insert(uri, ContentValues().apply {
-            put(Events.ORIGINAL_INSTANCE_TIME, instanceBegin)
-            put(Events.STATUS, Events.STATUS_CANCELED)
-        }) != null
+        val cr = context.contentResolver
+        val uri = ContentUris.withAppendedId(Events.CONTENT_URI, eventId)
+        val (existing, allDay) = cr.query(uri, arrayOf(Events.EXDATE, Events.ALL_DAY), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) to (c.getInt(1) == 1) else null } ?: return false
+        val n = cr.update(uri, ContentValues().apply { put(Events.EXDATE, exdateWith(existing, instanceBegin, allDay)) }, null, null)
         calendarOf(eventId)?.takeIf { !it.localOnly }?.let(::requestSync)
-        return ok
+        return n > 0
     }
 
     /** One occurrence that was already changed on its own (an exception row): cancel just it. */
@@ -355,6 +356,17 @@ class CalendarWriter(private val context: Context) {
                     else -> n * 1000L
                 }
             }.takeIf { it > 0 } ?: fallback
+        }
+
+        /**
+         * [existing] EXDATE plus the occurrence at [instanceBegin], in the provider's format: UTC
+         * date-times ("20261106T140000Z"), comma-separated; all-day ones are UTC midnights.
+         */
+        fun exdateWith(existing: String?, instanceBegin: Long, allDay: Boolean): String {
+            val t = Instant.ofEpochMilli(instanceBegin).atZone(ZoneOffset.UTC)
+            val stamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").format(if (allDay) t.toLocalDate().atStartOfDay(ZoneOffset.UTC) else t)
+            val parts = existing.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            return (if (stamp in parts) parts else parts + stamp).joinToString(",")
         }
 
         /** "FREQ=WEEKLY;BYDAY=MO,TH" back to a [Recurrence]; null for rules the sheet can't show. */
