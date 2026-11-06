@@ -51,6 +51,9 @@ import io.github.iamth3doctor.searchlight.ui.Permissions
 import io.github.iamth3doctor.searchlight.focus.FocusRules
 import java.text.NumberFormat
 
+/** Tags each empty favorite slot row in Settings (tests). */
+internal const val FAVORITE_EMPTY_SLOT_TAG = "favorite_empty_slot"
+
 /** Settings + the permissions hub. Phase 4 adds looks and gestures. */
 class SettingsActivity : Activity() {
 
@@ -648,7 +651,7 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = px(R.dimen.size_row)
-            tag = EMPTY_SLOT_TAG
+            tag = FAVORITE_EMPTY_SLOT_TAG
         }
         val dim = secondaryText()
         row.addView(View(this).apply {
@@ -824,7 +827,5 @@ class SettingsActivity : Activity() {
         )
         const val REQUEST_HOME_ROLE = 1
         const val REQUEST_RUNTIME = 2
-        /** Tags each empty favorite slot row (tests). */
-        const val EMPTY_SLOT_TAG = "favorite_empty_slot"
     }
 }

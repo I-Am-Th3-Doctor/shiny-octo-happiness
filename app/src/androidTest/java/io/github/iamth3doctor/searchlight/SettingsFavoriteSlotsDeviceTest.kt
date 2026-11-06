@@ -91,7 +91,7 @@ class SettingsFavoriteSlotsDeviceTest {
         s.onActivity { a ->
             val list = a.findViewById<ViewGroup>(R.id.favoritesList)
             val all = (0 until list.childCount).map(list::getChildAt).filterIsInstance<LinearLayout>()
-            r = Rows(all.filter { it.tag != SettingsActivity.EMPTY_SLOT_TAG }, all.filter { it.tag == SettingsActivity.EMPTY_SLOT_TAG })
+            r = Rows(all.filter { it.tag != FAVORITE_EMPTY_SLOT_TAG }, all.filter { it.tag == FAVORITE_EMPTY_SLOT_TAG })
         }
         return r
     }
