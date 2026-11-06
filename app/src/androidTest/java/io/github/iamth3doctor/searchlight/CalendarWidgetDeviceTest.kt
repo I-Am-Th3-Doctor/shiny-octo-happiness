@@ -516,8 +516,8 @@ class CalendarWidgetDeviceTest {
             val asked = app.calendarEvents.permissionRequests
             tap(v.allowButton)
             waitFor("permission requested") { app.calendarEvents.permissionRequests == asked + 1 }
-            // Granted underneath, so Android answers without a dialog (no Back press: a lingering
-            // record of its permission screen once made one close home instead).
+            Thread.sleep(1500) // the request's result comes back (granted underneath, so no dialog)
+            if ("GrantPermissions" in shell("dumpsys activity activities")) shell("input keyevent KEYCODE_BACK")
             waitFor("home again") { on(h) { it.hasWindowFocus() } }
             assertTrue(on(h) { v.permissionRow.isShown })
             val id = layout(h).single().id

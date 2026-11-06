@@ -49,15 +49,6 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-    packaging {
-        resources {
-            // Duplicate metadata from the Anthropic SDK's dependencies (Jackson, OkHttp, Kotlin).
-            excludes += setOf(
-                "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/INDEX.LIST",
-                "META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/versions/9/module-info.class",
-            )
-        }
-    }
     buildFeatures {
         viewBinding = true
         buildConfig = true
@@ -68,9 +59,6 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.viewpager2)
-    // The Calendar widget's AI scheduling: Claude via the official Anthropic SDK (only used
-    // with an API key set in Settings > AI).
-    implementation(libs.anthropic.java)
     testImplementation(libs.junit)
     // Android's org.json is a stub in local unit tests; use the real one for the weather parser tests.
     testImplementation(libs.org.json)

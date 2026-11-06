@@ -3,7 +3,6 @@ package io.github.iamth3doctor.searchlight
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
-import android.widget.Toast
 import android.app.role.RoleManager
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
@@ -98,8 +97,6 @@ class SettingsActivity : Activity() {
         binding.widgetCenterRow.setOnClickListener { startActivity(Intent(this, WidgetCenterActivity::class.java)) }
         binding.reindex.setOnClickListener { app.files.rescan() }
         binding.about.text = getString(R.string.settings_about, BuildConfig.VERSION_NAME)
-        setupCalendarWidget()
-        setupAi()
 
         prefs.addFavoritesListener(favoritesChanged)
         app.apps.addListener(favoritesChanged)
@@ -118,84 +115,6 @@ class SettingsActivity : Activity() {
         app.startSources()
         app.autoFavorites.refreshIfStale() // usage access may have just been granted
         render()
-        renderCalendarWidget()
-    }
-
-    // ------------------------------------------------------------------ Calendar widget
-
-    private val calendarWriter by lazy { io.github.iamth3doctor.searchlight.calendar.CalendarWriter(this) }
-
-    private fun setupCalendarWidget() {
-        binding.calendarConfirmSwitch.isChecked = prefs.calendarConfirm
-        binding.calendarConfirmSwitch.setOnCheckedChangeListener { _, on -> prefs.calendarConfirm = on }
-        binding.calendarTargetRow.setOnClickListener { pickCalendarTarget() }
-        renderCalendarWidget()
-    }
-
-    private fun renderCalendarWidget() {
-        val chosen = calendarWriter.calendars().firstOrNull { it.id == prefs.calendarTarget }
-        binding.calendarTargetValue.text = chosen?.name ?: getString(
-            if (app.calendar.hasPermission()) R.string.settings_calendar_target_default else R.string.settings_calendar_needs_access,
-        )
-    }
-
-    /** Where the Calendar widget's new events go: any calendar that takes new events. */
-    private fun pickCalendarTarget() {
-        val cals = calendarWriter.calendars()
-        if (cals.isEmpty()) {
-            Toast.makeText(this, R.string.settings_calendar_needs_access, Toast.LENGTH_LONG).show()
-            return
-        }
-        val labels = listOf(getString(R.string.settings_calendar_target_default)) +
-            cals.map { if (it.account.isNotEmpty() && it.account != it.name) "${it.name} · ${it.account}" else it.name }
-        val checked = cals.indexOfFirst { it.id == prefs.calendarTarget }.let { if (it < 0) 0 else it + 1 }
-        AlertDialog.Builder(this).setTitle(R.string.settings_calendar_target)
-            .wrappingSingleChoice(labels, checked) { d, which ->
-                d.dismiss()
-                prefs.calendarTarget = if (which == 0) -1L else cals[which - 1].id
-                renderCalendarWidget()
-            }.show()
-    }
-
-    // ------------------------------------------------------------------ AI
-
-    /** The key is never shown back: the field is for typing a new one; the status says whether one is saved. */
-    private fun setupAi() {
-        val parser = app.eventParser
-        fun status() = binding.aiKeyStatus.setText(if (parser.hasKey) R.string.settings_ai_saved else R.string.settings_ai_none)
-        status()
-        binding.aiKeySave.setOnClickListener {
-            val key = binding.aiKeyField.text?.toString()?.trim().orEmpty()
-            if (key.isEmpty()) {
-                binding.aiKeyStatus.setText(R.string.settings_ai_enter)
-                return@setOnClickListener
-            }
-            parser.apiKey = key
-            binding.aiKeyField.text = null
-            status()
-        }
-        binding.aiKeyRemove.setOnClickListener {
-            parser.apiKey = null
-            binding.aiKeyField.text = null
-            status()
-        }
-        binding.aiKeyTest.setOnClickListener {
-            val key = binding.aiKeyField.text?.toString()?.trim().orEmpty().ifEmpty { parser.apiKey.orEmpty() }
-            if (key.isEmpty()) {
-                binding.aiKeyStatus.setText(R.string.settings_ai_enter)
-                return@setOnClickListener
-            }
-            binding.aiKeyStatus.setText(R.string.settings_ai_testing)
-            parser.test(key) { error ->
-                if (isFinishing) return@test
-                binding.aiKeyStatus.setText(when (error) {
-                    null -> R.string.settings_ai_ok
-                    "unauthorized" -> R.string.settings_ai_bad
-                    "service" -> R.string.settings_ai_service
-                    else -> R.string.settings_ai_offline
-                })
-            }
-        }
     }
 
     private fun render() {
@@ -760,8 +679,6 @@ class SettingsActivity : Activity() {
             "gestures" to CollapsibleSections.Menu(R.drawable.ic_gesture_hand, R.string.settings_sub_gestures),
             "permissions" to CollapsibleSections.Menu(R.drawable.ic_shield, R.string.settings_sub_permissions),
             "favorites" to CollapsibleSections.Menu(R.drawable.ic_star, R.string.settings_sub_favorites),
-            "calendar" to CollapsibleSections.Menu(R.drawable.ic_calendar, R.string.settings_sub_calendar),
-            "ai" to CollapsibleSections.Menu(R.drawable.ic_sparkle, R.string.settings_sub_ai),
             "about" to CollapsibleSections.Menu(R.drawable.ic_info, R.string.settings_sub_about),
         )
         const val REQUEST_HOME_ROLE = 1

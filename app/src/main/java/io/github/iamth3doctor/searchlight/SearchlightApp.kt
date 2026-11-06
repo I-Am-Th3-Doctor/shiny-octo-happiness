@@ -48,10 +48,6 @@ class SearchlightApp : Application() {
         private set
     lateinit var calendar: CalendarSearch
         private set
-    /** Encrypted on-device secrets (the AI provider's key). */
-    val secrets by lazy { io.github.iamth3doctor.searchlight.data.SecretStore(this) }
-    /** Typed text to calendar events: Claude with a key set in Settings > AI, else on-device rules. */
-    val eventParser by lazy { io.github.iamth3doctor.searchlight.calendar.EventParser(secrets) }
     /** The Calendar widget's events (the home grid's built-in widget). */
     lateinit var calendarEvents: io.github.iamth3doctor.searchlight.calendar.CalendarEvents
         private set

@@ -159,13 +159,6 @@ class WidgetController(
 
     private val refreshCalendarsNow = Runnable { refreshCalendars() }
 
-    /** "Add event" in Calendar widgets (set by the home screen). */
-    var addHost: CalendarWidgetView.AddEventHost? = null
-        set(value) {
-            field = value
-            calendarViews().forEach { it.addHost = value }
-        }
-
     /** This home screen's own watch on calendar data (see CalendarEvents.watch). */
     private var calendarWatch: Any? = null
 
@@ -219,7 +212,6 @@ class WidgetController(
         v.onLongPress = { grid.enterEditModeFromLongPress() }
         v.onRequestPermission = ::requestCalendarPermission
         v.onContentChanged = decorate
-        v.addHost = addHost
         v.refresh()
     }
 
