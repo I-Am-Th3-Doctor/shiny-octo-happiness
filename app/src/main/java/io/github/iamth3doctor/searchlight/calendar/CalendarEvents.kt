@@ -66,6 +66,7 @@ class CalendarEvents(private val context: Context) {
                 CalendarContract.Instances.EVENT_ID, CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN,
                 CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY,
                 CalendarContract.Instances.CALENDAR_DISPLAY_NAME, CalendarContract.Instances.DISPLAY_COLOR,
+                CalendarContract.Instances.EVENT_LOCATION, CalendarContract.Instances.DESCRIPTION,
             ),
             "${CalendarContract.Instances.VISIBLE} = 1",
             null,
@@ -80,6 +81,7 @@ class CalendarEvents(private val context: Context) {
                     allDay = c.getInt(4) == 1,
                     calendarName = c.getString(5).orEmpty(),
                     color = if (c.isNull(6)) 0 else c.getInt(6),
+                    detail = CalendarModel.detail(c.getString(7), c.getString(8)),
                 )
             }
         }

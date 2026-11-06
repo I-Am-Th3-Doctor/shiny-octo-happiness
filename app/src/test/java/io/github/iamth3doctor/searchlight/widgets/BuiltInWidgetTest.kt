@@ -17,11 +17,11 @@ class BuiltInWidgetTest {
         assertFalse(BuiltInWidget.isBuiltIn(12))
     }
 
-    @Test fun calendarIsFourByTwo() {
+    @Test fun calendarIsFourByThree() {
         assertEquals(BuiltInWidget.CALENDAR, BuiltInWidget.fromKey("calendar"))
         assertNull(BuiltInWidget.fromKey(null))
         assertNull(BuiltInWidget.fromKey("clock"))
-        assertEquals(4 to 2, BuiltInWidget.CALENDAR.defaultCols to BuiltInWidget.CALENDAR.defaultRows)
+        assertEquals(4 to 3, BuiltInWidget.CALENDAR.defaultCols to BuiltInWidget.CALENDAR.defaultRows)
     }
 
     @Test fun builtInsSurviveStorageAndRefitting() {

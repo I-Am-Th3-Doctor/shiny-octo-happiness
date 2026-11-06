@@ -161,17 +161,31 @@
     <string name="widget_builtin_app">Searchlight</string>
     <string name="widget_calendar">Calendar</string>
     <!-- Calendar widget -->
-    <string name="cal_prev_week">Previous week</string>
-    <string name="cal_next_week">Next week</string>
-    <string name="cal_header_desc">%1$s. Double-tap for this week</string>
+    <string name="cal_prev_month">Previous month</string>
+    <string name="cal_next_month">Next month</string>
+    <string name="cal_month_desc">%1$s. Double-tap for this month</string>
+    <string name="cal_refresh">Refresh events</string>
+    <string name="cal_open_app">Open calendar</string>
     <string name="cal_no_events">No events</string>
     <string name="cal_no_events_desc">No events. Double-tap to open the calendar on this day</string>
     <string name="cal_permission">Allow calendar access to see events</string>
     <string name="cal_permission_allow">Allow</string>
     <string name="cal_all_day">All day</string>
-    <string name="cal_until">Until %1$s</string>
     <string name="cal_no_title">(No title)</string>
     <string name="cal_today">Today, %1$s</string>
+    <string name="cal_rel_now">now</string>
+    <string name="cal_rel_min_left">%1$d min left</string>
+    <string name="cal_rel_hr_left">%1$d hr left</string>
+    <string name="cal_rel_hr_min_left">%1$d hr %2$d min left</string>
+    <string name="cal_rel_in_min">In %1$d min.</string>
+    <string name="cal_rel_in_hr">In %1$d hr.</string>
+    <string name="cal_rel_today">Today</string>
+    <string name="cal_rel_tomorrow">Tomorrow</string>
+    <string name="cal_rel_ended">Ended</string>
+    <plurals name="cal_rel_in_days">
+        <item quantity="one">In %1$d day</item>
+        <item quantity="other">In %1$d days</item>
+    </plurals>
     <plurals name="cal_day_events">
         <item quantity="one">%1$s, 1 event</item>
         <item quantity="other">%1$s, %2$d events</item>

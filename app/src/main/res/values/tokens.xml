@@ -66,17 +66,15 @@
     <dimen name="size_gesture">56dp</dimen>            <!-- home gestures (down/left/right) on empty space -->
     <dimen name="size_preview_width">120dp</dimen>    <!-- widget picker preview -->
     <dimen name="size_preview_height">88dp</dimen>
-    <!-- Calendar widget (home grid). -->
-    <dimen name="size_cal_header">32dp</dimen>        <!-- week range + chevrons -->
-    <dimen name="size_cal_chevron">40dp</dimen>       <!-- prev / next touch width -->
-    <dimen name="size_cal_day">30dp</dimen>           <!-- day number circle -->
+    <!-- Calendar widget (home grid): month grid + day agenda. -->
+    <dimen name="size_cal_header">32dp</dimen>        <!-- month / day header row -->
+    <dimen name="size_cal_chevron">36dp</dimen>       <!-- prev / next, refresh, gear: touch width -->
+    <dimen name="size_cal_icon">20dp</dimen>          <!-- refresh / gear glyph -->
+    <dimen name="size_cal_day">28dp</dimen>           <!-- day number circle, at most -->
     <dimen name="size_cal_dot">4dp</dimen>            <!-- event dot under a day -->
-    <dimen name="size_cal_event_row">30dp</dimen>     <!-- agenda row -->
     <dimen name="size_cal_color">8dp</dimen>          <!-- calendar color dot in a row -->
-    <dimen name="size_cal_name_max">96dp</dimen>      <!-- calendar name in a row, at most -->
-    <dimen name="size_cal_min_width">220dp</dimen>    <!-- smallest the widget resizes to -->
-    <dimen name="size_cal_min_height">136dp</dimen>
-    <dimen name="size_cal_compact">124dp</dimen>      <!-- shorter than this: no weekday row -->
+    <dimen name="size_cal_min_width">180dp</dimen>    <!-- smallest the widget resizes to -->
+    <dimen name="size_cal_min_height">200dp</dimen>
     <dimen name="stroke_hairline">1.5dp</dimen>
     <dimen name="stroke_glass">1dp</dimen>
     <dimen name="glass_text_shadow">4dp</dimen>

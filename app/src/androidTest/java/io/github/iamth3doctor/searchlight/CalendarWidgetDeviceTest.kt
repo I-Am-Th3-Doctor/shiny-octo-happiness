@@ -8,13 +8,14 @@ import android.content.Intent
 import android.provider.CalendarContract
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.github.iamth3doctor.searchlight.calendar.CalendarModel
 import io.github.iamth3doctor.searchlight.calendar.DayEvent
-import io.github.iamth3doctor.searchlight.calendar.WeekModel
 import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.Posture
 import io.github.iamth3doctor.searchlight.widgets.BuiltInWidget
@@ -33,13 +34,15 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 
 /**
- * The built-in Calendar widget, as the person uses it: picked from the widget picker, placed at
- * 4 × 2, resized; the week moved with chevrons, a swipe and the header; today and event dots;
- * the agenda for a tapped day, opening an event or the day; no calendar access; fold/unfold; and
- * Focus. Runs folded and unfolded (the workflow runs the suite in both).
+ * The built-in Calendar widget (month grid | day agenda), as the person uses it: picked from the
+ * widget picker, placed at 4 × 3, resized (stacked below three cells wide); months moved with
+ * the chevrons and the month name; a tapped day's agenda with live labels; opening an event or
+ * the day; the refresh icon; no calendar access; fold/unfold; and Focus. Runs folded and
+ * unfolded (the workflow runs the suite in both).
  */
 @RunWith(AndroidJUnit4::class)
 class CalendarWidgetDeviceTest {
@@ -110,17 +113,39 @@ class CalendarWidgetDeviceTest {
     private val today get() = LocalDate.now(zone)
     private fun at(day: LocalDate, h: Int, m: Int = 0) = day.atTime(h, m).atZone(zone).toInstant().toEpochMilli()
 
-    /** This week's days: today, a busy day (five events: three dots), and a day with none. */
-    private class Week(val today: LocalDate, val busy: LocalDate, val empty: LocalDate, val events: List<DayEvent>)
+    /** Today at 2:05 PM: a fixed "now" for the live labels. */
+    private val now get() = at(today, 14, 5)
 
-    private fun fakeWeek(): Week {
-        val days = WeekModel.days(WeekModel.weekStart(today, WeekModel.dayOfWeek(android.icu.util.Calendar.getInstance().firstDayOfWeek)))
-        val others = days.filter { it != today }
-        val busy = others[0]
-        val empty = others[1]
-        val events = listOf(DayEvent(101, "Design review", at(today, 10), at(today, 11), false, "Work", 0xFF4285F4.toInt())) +
-            (0 until 5).map { i -> DayEvent(200L + i, "Busy $i", at(busy, 9 + i), at(busy, 9 + i, 30), false, "Home", 0xFF33B679.toInt()) }
-        return Week(today, busy, empty, events)
+    /**
+     * Today: a meeting running now, two later (in 35 min, in 2 hr), one this morning (ended), an
+     * all-day one; tomorrow one; in four days one; and one other day with five (three dots).
+     */
+    private fun fakeEvents(): List<DayEvent> {
+        val t = today
+        return listOf(
+            DayEvent(101, "Standup", at(t, 14, 0), at(t, 14, 30), false, "Work", 0xFF4285F4.toInt(), "Room 4"),
+            DayEvent(102, "Design review", at(t, 14, 40), at(t, 15, 10), false, "Work", 0xFF4285F4.toInt()),
+            DayEvent(103, "Dinner", at(t, 16, 50), at(t, 18, 0), false, "Home", 0xFF33B679.toInt(), "Luigi's"),
+            DayEvent(104, "Gym", at(t, 7, 0), at(t, 8, 0), false, "Home", 0xFF33B679.toInt()),
+            DayEvent(105, "Holiday", utc(t), utc(t.plusDays(1)), true, "Holidays", 0xFFE67C73.toInt()),
+            DayEvent(201, "Flight", at(t.plusDays(1), 9, 0), at(t.plusDays(1), 11, 0), false, "Travel", 0xFFF6BF26.toInt(), "UA 123"),
+            DayEvent(301, "Dentist", at(t.plusDays(4), 10, 0), at(t.plusDays(4), 11, 0), false, "Home", 0xFF33B679.toInt()),
+        ) + (0 until 5).map { i -> DayEvent(400L + i, "Busy $i", at(busyDay(), 9 + i), at(busyDay(), 9 + i, 30), false, "Home", 0xFF33B679.toInt()) }
+    }
+
+    private fun utc(d: LocalDate) = d.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+
+    /** A day this month (not today, tomorrow or four days on) for the five-event day. */
+    private fun busyDay(): LocalDate {
+        val m = YearMonth.from(today)
+        return (1..m.lengthOfMonth()).map(m::atDay).first { it != today && it != today.plusDays(1) && it != today.plusDays(4) }
+    }
+
+    /** A day this month with no events. */
+    private fun emptyDay(): LocalDate {
+        val m = YearMonth.from(today)
+        val taken = setOf(today, today.plusDays(1), today.plusDays(4), busyDay())
+        return (1..m.lengthOfMonth()).map(m::atDay).first { it !in taken }
     }
 
     private fun home(block: (ActivityScenario<MainActivity>) -> Unit) {
@@ -134,13 +159,15 @@ class CalendarWidgetDeviceTest {
     }
 
     /** What the picker hands back for "Calendar", delivered the way the picker delivers it. */
-    private fun addCalendar(h: ActivityScenario<MainActivity>): CalendarWidgetView {
+    private fun addCalendar(h: ActivityScenario<MainActivity>, fixedNow: Boolean = true): CalendarWidgetView {
         h.onActivity {
             it.widgetController.onActivityResult(WidgetController.REQUEST_PICK, Activity.RESULT_OK,
                 Intent().putExtra(WidgetPickerActivity.EXTRA_BUILTIN, BuiltInWidget.CALENDAR.key))
         }
         waitFor("calendar widget on the grid") { on(h) { it.widgetController.calendarViews().any { v -> v.isAttachedToWindow && v.width > 0 } } }
-        return on(h) { it.widgetController.calendarViews().single() }
+        val v = on(h) { it.widgetController.calendarViews().single() }
+        if (fixedNow) h.onActivity { v.clock = { now }; v.goToToday() }
+        return v
     }
 
     private fun layout(h: ActivityScenario<MainActivity>): List<GridSpec> = on(h) {
@@ -148,9 +175,9 @@ class CalendarWidgetDeviceTest {
     }
 
     private fun loaded(h: ActivityScenario<MainActivity>, v: CalendarWidgetView) =
-        waitFor("events loaded") { on(h) { v.loadedWeek == v.weekStart } }
+        waitFor("events loaded") { on(h) { v.loadedMonth == v.month } }
 
-    /** The middle of [v] as drawn (getLocationOnScreen of a rotated view is its rotated corner). */
+    /** The middle of [v] as drawn (getLocationOnScreen of a flipped view is its flipped corner). */
     private fun center(v: View): Pair<Int, Int> {
         val r = android.graphics.Rect()
         var out = 0 to 0
@@ -165,7 +192,15 @@ class CalendarWidgetDeviceTest {
         instrumentation.waitForIdleSync()
     }
 
-    private fun cell(v: CalendarWidgetView, day: LocalDate) = v.dayCells.first { it.day == day }
+    private fun dayView(h: ActivityScenario<MainActivity>, v: CalendarWidgetView, d: LocalDate) =
+        on(h) { v.dayViews.first { it.day == d } }
+
+    /** Taps [d] in the grid, moving on a month first if this one doesn't show it. */
+    private fun select(h: ActivityScenario<MainActivity>, v: CalendarWidgetView, d: LocalDate) {
+        if (on(h) { v.dayViews.none { it.day == d } }) tap(v.nextButton)
+        tap(dayView(h, v, d))
+        assertEquals(d, on(h) { v.selected })
+    }
 
     /** The shown texts under [root] (call on the main thread). */
     private fun collectTexts(root: View): List<TextView> {
@@ -186,18 +221,25 @@ class CalendarWidgetDeviceTest {
 
     private fun strings(root: View) = texts(root).map { it.text.toString() }
 
-    // ---- 1. Picker, size, resize ----
+    /** The agenda's rows: each row's texts, in order. */
+    private fun rows(h: ActivityScenario<MainActivity>, v: CalendarWidgetView): List<List<String>> = on(h) {
+        (0 until v.eventList.childCount).map { i -> collectTexts(v.eventList.getChildAt(i)).map { t -> t.text.toString() } }
+    }
 
-    @Test fun pickerOffersCalendarWhichAddsAtFourByTwoAndResizes() {
-        // The picker lists Searchlight's Calendar among the apps' widgets; choosing it returns it.
+    private fun row(h: ActivityScenario<MainActivity>, v: CalendarWidgetView, title: String): List<String> =
+        rows(h, v).firstOrNull { it.firstOrNull() == title } ?: throw AssertionError("no row $title in ${rows(h, v)}")
+
+    private fun time(h: ActivityScenario<MainActivity>, ms: Long): String = on(h) { android.text.format.DateFormat.getTimeFormat(it).format(ms) }
+
+    // ---- 1. Picker, size, resize, split / stacked ----
+
+    @Test fun pickerOffersCalendarWhichAddsAtFourByThreeAndStacksWhenNarrow() {
         val picker = ActivityScenario.launchActivityForResult(WidgetPickerActivity::class.java)
         var row: View? = null
         waitFor("Calendar in the picker") {
             picker.onActivity { a ->
-                val list = (a.window.decorView as ViewGroup).let { root ->
-                    fun find(x: View): RecyclerView? = x as? RecyclerView ?: (x as? ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { find(g.getChildAt(it)) } }
-                    find(root)
-                }
+                fun find(x: View): RecyclerView? = x as? RecyclerView ?: (x as? ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { find(g.getChildAt(it)) } }
+                val list = find(a.window.decorView)
                 row = list?.let { l -> (0 until l.childCount).map(l::getChildAt).firstOrNull { r -> collectTexts(r).any { it.text.toString() == a.getString(R.string.widget_calendar) } } }
             }
             row != null
@@ -209,26 +251,25 @@ class CalendarWidgetDeviceTest {
         assertEquals(BuiltInWidget.CALENDAR.key, result.resultData.getStringExtra(WidgetPickerActivity.EXTRA_BUILTIN))
 
         app.calendarEvents.permissionOverride = true
-        val week = fakeWeek()
-        app.calendarEvents.eventsOverride = { _, _ -> week.events }
+        app.calendarEvents.eventsOverride = { _, _ -> fakeEvents() }
         home { h ->
             val v = addCalendar(h)
             val spec = layout(h).single()
             assertTrue("built-in id: $spec", BuiltInWidget.isBuiltIn(spec.id))
-            assertEquals("4 × 2", 4 to 2, spec.colSpan to spec.rowSpan)
+            assertEquals("4 × 3", 4 to 3, spec.colSpan to spec.rowSpan)
             loaded(h, v)
+            assertFalse("split at 4 wide", on(h) { v.stacked })
+            assertEquals(LinearLayout.HORIZONTAL, on(h) { v.orientation })
             shot("61-calendar-widget")
 
-            // Resizable both ways, down to its minimum, which still shows the week and agenda.
             val grid = on(h) { it.findViewById<WidgetGridView>(R.id.widgetGrid) }
             assertEquals(true to true, on(h) { it.widgetController.resizable(spec.id) })
             val (minW, minH) = on(h) { it.widgetController.minSpan(spec.id) }
-            assertTrue("min span $minW × $minH", minW in 1..4 && minH in 1..2)
-            for (size in listOf(minW to minH, 4 to 3, 4 to 2)) {
+            assertTrue("min span $minW × $minH", minW in 1..2 && minH in 1..3)
+            val gap = 2 * app.resources.getDimension(R.dimen.space_s)
+            val density = app.resources.displayMetrics.density
+            for (size in listOf(3 to 3, 2 to 3, minW to minH, 4 to 4, 4 to 3)) {
                 h.onActivity { it.widgetController.onCommit(spec.copy(colSpan = size.first, rowSpan = size.second)); it.widgetController.render() }
-                // Its cells, less the grid's gap on each side.
-                val gap = 2 * app.resources.getDimension(R.dimen.space_s)
-                val density = app.resources.displayMetrics.density
                 waitFor("resized to $size") {
                     on(h) {
                         val wantW = grid.cellWidthDp * density * size.first - gap
@@ -239,117 +280,161 @@ class CalendarWidgetDeviceTest {
                 Thread.sleep(400)
                 assertEquals(size, layout(h).single().let { it.colSpan to it.rowSpan })
                 assertSame("same widget, not a new one", v, on(h) { it.widgetController.calendarViews().single() })
-                // Every text legible: nothing below the caption size.
+                // Below three cells wide it stacks (month over agenda); from three it splits.
+                val narrow = size.first < 3
+                assertEquals("$size stacked", narrow, on(h) { v.stacked })
+                assertEquals(if (narrow) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL, on(h) { v.orientation })
+                // Every day still shown and every text legible: nothing below the caption size.
+                assertTrue("month grid shown at $size", on(h) { v.dayViews.filter { it.day != null }.all { d -> d.width > 0 && d.height > 0 } })
+                assertTrue("agenda shown at $size", on(h) { v.dayTitle.isShown && v.dayTitle.width > 0 })
                 val minPx = app.resources.getDimension(R.dimen.text_caption) - 0.5f
                 for (t in texts(v)) assertTrue("${t.text} at ${t.textSize}px", t.textSize >= minPx)
-                assertTrue("week row shown", on(h) { v.weekRow.isShown && v.weekRow.height > 0 })
-                if (size == minW to minH) shot("62-calendar-min-size")
+                if (size == 2 to 3) shot("62-calendar-stacked")
             }
         }
     }
 
-    // ---- 2. Week navigation ----
+    // ---- 2. Month navigation and days ----
 
-    @Test fun chevronsSwipeAndHeaderMoveTheWeek() {
+    @Test fun monthChevronsTheMonthNameAndTappingADay() {
         app.calendarEvents.permissionOverride = true
-        app.calendarEvents.eventsOverride = { _, _ -> emptyList() }
-        home { h ->
-            val v = addCalendar(h)
-            val thisWeek = on(h) { v.weekStart }
-            assertTrue(today in WeekModel.days(thisWeek))
-            assertEquals(WeekModel.rangeLabel(thisWeek, app.resources.configuration.locales[0]), on(h) { v.title.text.toString() })
-
-            tap(v.nextButton)
-            assertEquals(thisWeek.plusWeeks(1), on(h) { v.weekStart })
-            assertEquals(WeekModel.rangeLabel(thisWeek.plusWeeks(1), app.resources.configuration.locales[0]), on(h) { v.title.text.toString() })
-            tap(v.prevButton)
-            tap(v.prevButton)
-            assertEquals(thisWeek.minusWeeks(1), on(h) { v.weekStart })
-
-            // A swipe left across the days: one week on; right: one back.
-            fun swipe(leftward: Boolean) {
-                val loc = IntArray(2)
-                var w = 0
-                var y = 0
-                main { v.weekRow.getLocationOnScreen(loc); w = v.weekRow.width; y = loc[1] + v.weekRow.height / 2 }
-                val (a, b) = (loc[0] + w * 8 / 10) to (loc[0] + w * 2 / 10)
-                if (leftward) shell("input swipe $a $y $b $y 200") else shell("input swipe $b $y $a $y 200")
-                Thread.sleep(600)
-            }
-            swipe(leftward = true)
-            assertEquals(thisWeek, on(h) { v.weekStart })
-            swipe(leftward = true)
-            assertEquals(thisWeek.plusWeeks(1), on(h) { v.weekStart })
-            swipe(leftward = false)
-            swipe(leftward = false)
-            assertEquals(thisWeek.minusWeeks(1), on(h) { v.weekStart })
-            // A swipe on the widget is the widget's: no home gesture, no edit mode.
-            assertFalse(on(h) { it.findViewById<WidgetGridView>(R.id.widgetGrid).editMode })
-
-            // Days outside the week's starting month are dimmed (if this week crosses one).
-            val dims = on(h) { v.dayCells.map { c -> WeekModel.dimmed(c.day!!, v.weekStart) to c.dimmed } }
-            for ((want, got) in dims) assertEquals(want, got)
-
-            // The header: straight back to this week, today selected.
-            tap(v.nextButton)
-            tap(v.nextButton)
-            tap(v.title)
-            assertEquals(thisWeek, on(h) { v.weekStart })
-            assertEquals(today, on(h) { v.selected })
-        }
-    }
-
-    // ---- 3. Today, dots, agenda ----
-
-    @Test fun todayDotsAndTheAgendaFollowTheTappedDay() {
-        app.calendarEvents.permissionOverride = true
-        val week = fakeWeek()
-        app.calendarEvents.eventsOverride = { _, _ -> week.events }
+        app.calendarEvents.eventsOverride = { _, _ -> fakeEvents() }
         home { h ->
             val v = addCalendar(h)
             loaded(h, v)
-            assertTrue("today highlighted", on(h) { cell(v, today).isToday })
-            assertEquals(1, on(h) { v.dayCells.count { c -> c.isToday } })
-            // Dots only where there are events: one today, three (the cap) for five.
-            val dots = on(h) { v.dayCells.associate { c -> c.day!! to c.dots } }
-            assertEquals(1, dots[today])
-            assertEquals(3, dots[week.busy])
-            for ((d, n) in dots) if (d != today && d != week.busy) assertEquals("$d", 0, n)
-            // Today is selected at first: its event in the agenda.
-            assertEquals(today, on(h) { v.selected })
-            assertEquals(1, on(h) { v.eventList.childCount })
-            assertTrue(strings(v.eventList).toString(), "Design review" in strings(v.eventList))
-            assertTrue("Work" in strings(v.eventList))
+            val thisMonth = YearMonth.from(today)
+            val locale = app.resources.configuration.locales[0]
+            assertEquals(CalendarModel.monthLabel(thisMonth, locale), on(h) { v.monthTitle.text.toString() })
+            assertEquals(CalendarModel.dayLabel(today, locale), on(h) { v.dayTitle.text.toString() })
 
-            tap(cell(v, week.busy))
-            assertEquals(week.busy, on(h) { v.selected })
-            assertEquals(5, on(h) { v.eventList.childCount })
-            assertEquals(listOf("Busy 0", "Busy 1", "Busy 2", "Busy 3", "Busy 4"),
-                strings(v.eventList).filter { it.startsWith("Busy") })
-            shot("63-calendar-busy-day")
+            // Today: gold disc; selected (today, at first): the ring; dots where there are events.
+            assertTrue(dayView(h, v, today).isToday)
+            assertEquals(1, on(h) { v.dayViews.count { it.isToday } })
+            assertTrue(dayView(h, v, today).isSelectedDay)
+            assertEquals(3, dayView(h, v, today).dots) // five events today: capped at three
+            assertEquals(3, dayView(h, v, busyDay()).dots)
+            assertEquals(0, dayView(h, v, emptyDay()).dots)
+            // Leading / trailing days of other months are dimmed, this month's aren't.
+            val dims = on(h) { v.dayViews.filter { it.day != null }.map { d -> CalendarModel.dimmed(d.day!!, thisMonth) to d.dimmed } }
+            for ((want, got) in dims) assertEquals(want, got)
+
+            // A tapped day: selected (ring moves), the agenda shows it.
+            tap(dayView(h, v, busyDay()))
+            assertEquals(busyDay(), on(h) { v.selected })
+            assertTrue(dayView(h, v, busyDay()).isSelectedDay)
+            assertFalse(dayView(h, v, today).isSelectedDay)
+            assertEquals(CalendarModel.dayLabel(busyDay(), locale), on(h) { v.dayTitle.text.toString() })
+            assertEquals((0 until 5).map { "Busy $it" }, rows(h, v).map { it.first() })
+
+            // Chevrons: on a month, back two; the title follows.
+            tap(v.nextButton)
+            assertEquals(thisMonth.plusMonths(1), on(h) { v.month })
+            assertEquals(CalendarModel.monthLabel(thisMonth.plusMonths(1), locale), on(h) { v.monthTitle.text.toString() })
+            tap(v.prevButton)
+            tap(v.prevButton)
+            assertEquals(thisMonth.minusMonths(1), on(h) { v.month })
+            assertEquals(thisMonth.minusMonths(1).atDay(1), on(h) { v.selected })
+            assertFalse(on(h) { it.findViewById<WidgetGridView>(R.id.widgetGrid).editMode })
+
+            // The month name: straight back to this month, today selected.
+            tap(v.monthTitle)
+            assertEquals(thisMonth, on(h) { v.month })
+            assertEquals(today, on(h) { v.selected })
+            assertTrue(dayView(h, v, today).isSelectedDay)
+        }
+    }
+
+    // ---- 3. Live labels ----
+
+    @Test fun liveLabelsCountDownAndEndedEventsDim() {
+        app.calendarEvents.permissionOverride = true
+        app.calendarEvents.eventsOverride = { _, _ -> fakeEvents() }
+        home { h ->
+            val v = addCalendar(h)
+            loaded(h, v)
+            // All-day first, then by start: Holiday, Gym, Standup, Design review, Dinner.
+            assertEquals(listOf("Holiday", "Gym", "Standup", "Design review", "Dinner"), rows(h, v).map { it.first() })
+            shot("63-calendar-labels")
+
+            val standup = row(h, v, "Standup")
+            assertTrue("time range: $standup", "${time(h, at(today, 14, 0))} – ${time(h, at(today, 14, 30))}" in standup)
+            assertTrue("detail line: $standup", "Room 4" in standup)
+            assertTrue("now: $standup", "now" in standup && "25 min left" in standup)
+            assertTrue("In 35 min.: ${row(h, v, "Design review")}", "In 35 min." in row(h, v, "Design review"))
+            assertTrue("In 2 hr.: ${row(h, v, "Dinner")}", "In 2 hr." in row(h, v, "Dinner") && "Luigi's" in row(h, v, "Dinner"))
+            assertTrue("All day: ${row(h, v, "Holiday")}", "All day" in row(h, v, "Holiday") && "Today" in row(h, v, "Holiday"))
+            assertTrue("Ended: ${row(h, v, "Gym")}", "Ended" in row(h, v, "Gym"))
+            // Ended is dimmed; the rest aren't.
+            val alphas = on(h) { (0 until v.eventList.childCount).map { i -> v.eventList.getChildAt(i).let { r -> collectTexts(r).first().text.toString() to r.alpha } } }.toMap()
+            assertTrue("Gym dimmed: $alphas", alphas.getValue("Gym") < 1f)
+            assertEquals(1f, alphas.getValue("Standup"))
+
+            // A minute ticks by (here: ten): the labels move on without a reload.
+            h.onActivity { v.clock = { now + 10 * 60_000L }; it.widgetController.tickCalendars() }
+            assertTrue("15 min left: ${row(h, v, "Standup")}", "15 min left" in row(h, v, "Standup"))
+            assertTrue("In 25 min.: ${row(h, v, "Design review")}", "In 25 min." in row(h, v, "Design review"))
+            h.onActivity { v.clock = { at(today, 14, 31) }; it.widgetController.tickCalendars() }
+            assertTrue("Standup ended: ${row(h, v, "Standup")}", "Ended" in row(h, v, "Standup"))
+            h.onActivity { v.clock = { now } ; v.renderAgenda() }
+
+            // Tomorrow, and four days on.
+            select(h, v, today.plusDays(1))
+            assertTrue("Tomorrow: ${row(h, v, "Flight")}", "Tomorrow" in row(h, v, "Flight") && "UA 123" in row(h, v, "Flight"))
+            shot("64-calendar-tomorrow")
+            tap(v.monthTitle)
+            select(h, v, today.plusDays(4))
+            assertTrue("In 4 days: ${row(h, v, "Dentist")}", "In 4 days" in row(h, v, "Dentist"))
+        }
+    }
+
+    // ---- 4. Opening, empty day, refresh ----
+
+    @Test fun openingEventsEmptyDaysAndTheRefreshIcon() {
+        app.calendarEvents.permissionOverride = true
+        val extra = ArrayList<DayEvent>()
+        app.calendarEvents.eventsOverride = { _, _ -> fakeEvents() + extra }
+        home { h ->
+            val v = addCalendar(h)
+            loaded(h, v)
 
             // An event opens in the calendar app.
             Actions.lastCalendarUri = null
-            on(h) { v.eventList.getChildAt(0).performClick() }
-            assertEquals(
-                android.content.ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, 200L),
-                Actions.lastCalendarUri,
-            )
+            on(h) { (0 until v.eventList.childCount).map(v.eventList::getChildAt).first { r -> collectTexts(r).first().text == "Standup" }.performClick() }
+            assertEquals(android.content.ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, 101L), Actions.lastCalendarUri)
             shell("input keyevent KEYCODE_HOME")
             Thread.sleep(1500)
 
-            // A day with nothing: "No events"; tapping it (again) opens the calendar on that day.
-            tap(cell(v, week.empty))
-            assertEquals(week.empty, on(h) { v.selected })
+            // Empty agenda space (below the rows) opens the calendar on the day.
+            Actions.lastCalendarUri = null
+            on(h) { v.eventList.performClick() }
+            assertEquals(today, Actions.lastCalendarUri?.lastPathSegment?.toLong()?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() })
+            shell("input keyevent KEYCODE_HOME")
+            Thread.sleep(1500)
+
+            // A day with nothing: "No events"; tapping it opens the calendar there.
+            tap(dayView(h, v, emptyDay()))
+            assertEquals(emptyDay(), on(h) { v.selected })
             assertTrue(on(h) { v.emptyView.isShown && v.eventList.childCount == 0 })
             assertEquals(app.getString(R.string.cal_no_events), on(h) { v.emptyView.text.toString() })
-            shot("64-calendar-empty-day")
+            shot("65-calendar-empty-day")
             Actions.lastCalendarUri = null
-            tap(cell(v, week.empty))
-            val uri = Actions.lastCalendarUri
-            assertNotNull("calendar opened on the day", uri)
-            val ms = uri!!.lastPathSegment!!.toLong()
-            assertEquals(week.empty, java.time.Instant.ofEpochMilli(ms).atZone(zone).toLocalDate())
+            tap(v.emptyView)
+            assertEquals(emptyDay(), Actions.lastCalendarUri?.lastPathSegment?.toLong()?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDate() })
+            shell("input keyevent KEYCODE_HOME")
+            Thread.sleep(1500)
+
+            // The refresh icon re-reads: an event added since shows up.
+            extra += DayEvent(900, "Added later", at(emptyDay(), 12), at(emptyDay(), 13), false, "Work", 0xFF4285F4.toInt())
+            assertEquals(0, on(h) { v.eventList.childCount })
+            tap(v.refreshButton)
+            waitFor("refreshed") { on(h) { v.eventList.childCount == 1 } }
+            assertEquals("Added later", rows(h, v).single().first())
+            assertEquals(1, dayView(h, v, emptyDay()).dots)
+
+            // The gear opens the calendar app (on the selected day).
+            Actions.lastCalendarUri = null
+            tap(v.gearButton)
+            assertNotNull(Actions.lastCalendarUri)
             shell("input keyevent KEYCODE_HOME")
         }
     }
@@ -364,8 +449,7 @@ class CalendarWidgetDeviceTest {
         var calId = -1L
         automation.adoptShellPermissionIdentity(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
         try {
-            val cr = app.contentResolver
-            calId = cr.insert(calUri, ContentValues().apply {
+            calId = app.contentResolver.insert(calUri, ContentValues().apply {
                 put(CalendarContract.Calendars.ACCOUNT_NAME, "searchlight-widget-test")
                 put(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
                 put(CalendarContract.Calendars.NAME, "Widget test")
@@ -381,7 +465,7 @@ class CalendarWidgetDeviceTest {
         }
         try {
             home { h ->
-                val v = addCalendar(h)
+                val v = addCalendar(h, fixedNow = false)
                 loaded(h, v)
                 val before = on(h) { v.byDay[today].orEmpty().size }
                 // Added while the widget is showing: calendar data changed, the widget follows.
@@ -390,6 +474,7 @@ class CalendarWidgetDeviceTest {
                     app.contentResolver.insert(CalendarContract.Events.CONTENT_URI, ContentValues().apply {
                         put(CalendarContract.Events.CALENDAR_ID, calId)
                         put(CalendarContract.Events.TITLE, title)
+                        put(CalendarContract.Events.EVENT_LOCATION, "Gate B12")
                         put(CalendarContract.Events.DTSTART, at(today, 23, 0))
                         put(CalendarContract.Events.DTEND, at(today, 23, 30))
                         put(CalendarContract.Events.EVENT_TIMEZONE, zone.id)
@@ -397,22 +482,14 @@ class CalendarWidgetDeviceTest {
                 } finally {
                     automation.dropShellPermissionIdentity()
                 }
-                val seen = app.calendarEvents.changesSeen
-                try {
-                    waitFor("new event on today", 15_000) { on(h) { v.byDay[today].orEmpty().any { it.title == title } } }
-                } catch (e: AssertionError) {
-                    val (from, to) = WeekModel.queryRange(on(h) { v.weekStart }, zone)
-                    val direct = runCatching { app.calendarEvents.queryNow(from, to).map { it.title } }
-                    throw AssertionError("not shown: watching=${app.calendarEvents.watching} " +
-                        "changes ${seen}->${app.calendarEvents.changesSeen}, widget today=${on(h) { v.byDay[today].orEmpty().map { it.title } }}, " +
-                        "direct query=$direct, loaded=${on(h) { v.loadedWeek }} week=${on(h) { v.weekStart }}")
-                }
+                waitFor("new event on today", 15_000) { on(h) { v.byDay[today].orEmpty().any { it.title == title } } }
                 assertEquals(before + 1, on(h) { v.byDay[today].orEmpty().size })
-                if (on(h) { v.selected } != today) tap(v.title)
-                val row = on(h) { (0 until v.eventList.childCount).map(v.eventList::getChildAt).first { r -> r.contentDescription?.contains(title) == true } }
-                assertTrue(strings(row).toString(), "Widget test" in strings(row))
-                shot("65-calendar-real-event")
-                tap(row)
+                if (on(h) { v.selected } != today) tap(v.monthTitle)
+                val r = row(h, v, title)
+                assertTrue("detail from the location: $r", "Gate B12" in r)
+                shot("66-calendar-real-event")
+                val rowView = on(h) { (0 until v.eventList.childCount).map(v.eventList::getChildAt).first { x -> collectTexts(x).first().text == title } }
+                tap(rowView)
                 waitFor("calendar app opened", 20_000) { "calendar" in shell("dumpsys activity activities").lineSequence().firstOrNull { "ResumedActivity" in it }.orEmpty().lowercase() }
             }
         } finally {
@@ -422,25 +499,23 @@ class CalendarWidgetDeviceTest {
         }
     }
 
-    // ---- 4. Calendar access ----
+    // ---- 5. Calendar access ----
 
     @Test fun withoutAccessTheGrantRowShowsAndGrantingLoadsEvents() {
         // Revoking for real would kill the app (and this test with it): stand in for "denied".
         app.calendarEvents.permissionOverride = false
-        val week = fakeWeek()
-        app.calendarEvents.eventsOverride = { _, _ -> week.events }
+        app.calendarEvents.eventsOverride = { _, _ -> fakeEvents() }
         main { app.prefs.calendarPermissionAsked = false }
         home { h ->
             val v = addCalendar(h)
             assertTrue("grant row", on(h) { v.permissionRow.isShown && v.allowButton.isShown })
             assertFalse(on(h) { v.emptyView.isShown })
             assertEquals(0, on(h) { v.eventList.childCount })
-            assertTrue("no dots without access", on(h) { v.dayCells.all { c -> c.dots == 0 } })
-            assertTrue("the week still works", on(h) { v.weekRow.isShown })
+            assertTrue("no dots without access", on(h) { v.dayViews.all { d -> d.dots == 0 } })
+            assertTrue("the month still works", on(h) { v.dayViews.any { it.isToday } })
             assertTrue(app.getString(R.string.cal_permission) in strings(v.permissionRow))
-            shot("66-calendar-permission")
+            shot("67-calendar-permission")
 
-            // "Allow" asks Android; still not granted (here: the stand-in), the row stays and nothing breaks.
             val asked = app.calendarEvents.permissionRequests
             tap(v.allowButton)
             waitFor("permission requested") { app.calendarEvents.permissionRequests == asked + 1 }
@@ -456,19 +531,18 @@ class CalendarWidgetDeviceTest {
                 arrayOf(Manifest.permission.READ_CALENDAR), intArrayOf(android.content.pm.PackageManager.PERMISSION_GRANTED)) }
             loaded(h, v)
             assertFalse(on(h) { v.permissionRow.isShown })
-            assertEquals(1, on(h) { cell(v, today).dots })
-            assertEquals(1, on(h) { v.eventList.childCount })
+            assertEquals(3, dayView(h, v, today).dots)
+            assertEquals(5, on(h) { v.eventList.childCount })
             assertSame(v, on(h) { it.widgetController.calendarViews().single() })
             assertEquals(id, layout(h).single().id)
         }
     }
 
-    // ---- 5. Fold / unfold, Focus ----
+    // ---- 6. Fold / unfold, Focus ----
 
     @Test fun foldingKeepsItPlacedAndFocusHidesIt() {
         app.calendarEvents.permissionOverride = true
-        val week = fakeWeek()
-        app.calendarEvents.eventsOverride = { _, _ -> week.events }
+        app.calendarEvents.eventsOverride = { _, _ -> fakeEvents() }
         home { h ->
             val v = addCalendar(h)
             val grid = on(h) { it.findViewById<WidgetGridView>(R.id.widgetGrid) }
@@ -484,14 +558,15 @@ class CalendarWidgetDeviceTest {
             assertEquals(here.id, there.id)
             assertTrue("fits the grid: $there", on(h) { there.inBounds(grid.cols, grid.rows) })
             assertSame(v, on(h) { it.widgetController.calendarViews().single() })
-            assertTrue("still shows its week", on(h) { v.weekRow.height > 0 && v.dayCells.all { c -> c.day != null } })
+            assertEquals("split or stacked by its width there", there.colSpan < 3, on(h) { v.stacked })
+            assertTrue("still shows its month", on(h) { v.dayViews.count { it.day != null } >= 28 })
 
             h.onActivity { it.widgetController.posture = back }
             waitFor("back") { on(h) { grid.measuredUnfolded == startedUnfolded && v.isAttachedToWindow } }
             Thread.sleep(500)
             assertEquals("its place here untouched", here, layout(h).single())
+            assertFalse(on(h) { v.stacked })
 
-            // Focus hides it like every widget; off, it's back.
             main { app.prefs.focusMode = true }
             waitFor("hidden in Focus") { on(h) { v.visibility != View.VISIBLE } }
             main { app.prefs.focusMode = false }

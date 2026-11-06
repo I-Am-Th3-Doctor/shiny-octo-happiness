@@ -116,6 +116,7 @@ class WidgetController(
         calendarEvents.stopWatching(calendarWatch)
         calendarWatch = calendarEvents.watch(::calendarDataChanged)
         val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_TICK) // the Calendar widget's live labels, once a minute
             addAction(Intent.ACTION_DATE_CHANGED)
             addAction(Intent.ACTION_TIME_CHANGED)
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
@@ -153,6 +154,9 @@ class WidgetController(
     /** Returning home, calendar access granted, or the date changed: every Calendar widget reloads. */
     fun refreshCalendars() = calendarViews().forEach { it.refresh() }
 
+    /** A minute went by (while home is showing): live labels move on. */
+    fun tickCalendars() = calendarViews().forEach { it.tick() }
+
     private val refreshCalendarsNow = Runnable { refreshCalendars() }
 
     /** This home screen's own watch on calendar data (see CalendarEvents.watch). */
@@ -165,7 +169,9 @@ class WidgetController(
     }
 
     private val dateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(c: Context, intent: Intent) = refreshCalendars()
+        override fun onReceive(c: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_TIME_TICK) tickCalendars() else refreshCalendars()
+        }
     }
 
     /**
@@ -195,6 +201,11 @@ class WidgetController(
         }
         layout = WidgetGrid.upsert(layout, spot)
         render()
+    }
+
+    /** The Calendar widget splits month | agenda from three cells wide; narrower, it stacks them. */
+    private fun arrange(v: View, spec: GridSpec) {
+        if (v is CalendarWidgetView) v.stacked = spec.colSpan < SPLIT_MIN_COLS
     }
 
     private fun builtInView(id: Int): View = CalendarWidgetView(activity, calendarEvents).also { v ->
@@ -246,7 +257,7 @@ class WidgetController(
         // Tell new widgets their size before their first layout, so they inflate the right
         // layout for it from the start (layout then reports the exact size).
         for (spec in fit.shown) if (spec.id !in reportedSizes && !BuiltInWidget.isBuiltIn(spec.id)) reportCells(spec)
-        grid.setWidgets(fit.shown.mapNotNull { spec -> viewFor(spec.id)?.let { it to spec } })
+        grid.setWidgets(fit.shown.mapNotNull { spec -> viewFor(spec.id)?.let { arrange(it, spec); it to spec } })
     }
 
     private fun viewFor(id: Int): View? {
@@ -313,6 +324,7 @@ class WidgetController(
     /** A move or resize was dropped on free cells: that's now the stored position. */
     override fun onCommit(spec: GridSpec) {
         layout = WidgetGrid.upsert(layout, spec)
+        views[spec.id]?.let { arrange(it, spec) }
     }
 
     override fun onRemove(id: Int) {
@@ -457,5 +469,6 @@ class WidgetController(
         const val REQUEST_CONFIGURE = 103
         const val REQUEST_CALENDAR_PERMISSION = 104
         private const val CALENDAR_SETTLE_MS = 400L
+        const val SPLIT_MIN_COLS = 3
     }
 }

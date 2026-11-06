@@ -19,10 +19,12 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.content.res.ResourcesCompat
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.calendar.CalendarEvents
+import io.github.iamth3doctor.searchlight.calendar.CalendarModel
+import io.github.iamth3doctor.searchlight.calendar.CalendarModel.Rel
 import io.github.iamth3doctor.searchlight.calendar.DayEvent
-import io.github.iamth3doctor.searchlight.calendar.WeekModel
 import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
 import io.github.iamth3doctor.searchlight.ui.GlassTint
@@ -32,20 +34,24 @@ import io.github.iamth3doctor.searchlight.ui.px
 import io.github.iamth3doctor.searchlight.ui.pxF
 import io.github.iamth3doctor.searchlight.ui.type
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.min
 
 /**
  * Searchlight's own Calendar widget for the home grid (not an app widget: it's drawn here, so it
- * can be frosted glass like the home card and take swipes). A week row with prev/next chevrons
- * (a horizontal swipe on the row also moves a week; tapping the range goes back to this week),
- * and under it the selected day's agenda. Events come from [events]; without calendar access
- * the agenda is a single "Allow" row instead.
+ * can be frosted glass like the home card). Split in two on one glass surface: the month grid
+ * on the left, the selected day's agenda on the right, each event with a live label ("now ·
+ * 25 min left", "In 35 min.", "Tomorrow", "Ended"). Narrower than three cells ([stacked]), the
+ * month sits above the agenda instead. Events come from [events]; without calendar access the
+ * agenda is a single "Allow" row.
  */
 @SuppressLint("ViewConstructor")
 class CalendarWidgetView(context: Context, private val events: CalendarEvents) : LinearLayout(context) {
@@ -57,6 +63,9 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
     /** Content was rebuilt (new texts to shade on clear glass). */
     var onContentChanged: ((View) -> Unit)? = null
 
+    /** Now, in ms (tests set a fixed one). */
+    var clock: () -> Long = System::currentTimeMillis
+
     // Design tokens (this is a View, not a Context).
     private fun px(token: Int) = context.px(token)
     private fun pxF(token: Int) = context.pxF(token)
@@ -64,31 +73,54 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
 
     private val zone: ZoneId get() = ZoneId.systemDefault()
     private val locale: Locale get() = resources.configuration.locales[0]
+    private fun todayNow(): LocalDate = Instant.ofEpochMilli(clock()).atZone(zone).toLocalDate()
 
-    var today: LocalDate = LocalDate.now()
+    var today: LocalDate = todayNow()
         private set
-    var weekStart: LocalDate = WeekModel.weekStart(today, firstDayOfWeek())
+    var month: YearMonth = YearMonth.from(today)
         private set
     var selected: LocalDate = today
         private set
-    /** The week the shown events were loaded for (null: none yet). */
-    var loadedWeek: LocalDate? = null
+    /** The month the shown events were loaded for (null: none yet). */
+    var loadedMonth: YearMonth? = null
         private set
-    /** Events by day for [loadedWeek]. */
+    /** Events by day for the grid of [loadedMonth]. */
     var byDay: Map<LocalDate, List<DayEvent>> = emptyMap()
         private set
-    /** Still on "this week, today" (not navigated away): follows the date past midnight. */
+    /** Still on "this month, today" (not navigated away): follows the date past midnight. */
     private var followingToday = true
     private var generation = 0
+    private var firstDay: DayOfWeek = firstDayOfWeek()
 
-    private val header = LinearLayout(context)
-    val prevButton = chevron(R.string.cal_prev_week, flip = true) { shiftWeek(-1) }
-    val nextButton = chevron(R.string.cal_next_week, flip = false) { shiftWeek(+1) }
-    val title = TextView(context)
+    /** Month above agenda (narrower than three cells) instead of side by side. */
+    var stacked = false
+        set(value) {
+            if (field == value) return
+            field = value
+            applyArrangement()
+        }
+
+    private val lexend: Typeface = ResourcesCompat.getFont(context, R.font.lexend) ?: Typeface.DEFAULT
+
+    // ---- month side
+    private val monthPane = LinearLayout(context)
+    val prevButton = iconButton(R.drawable.ic_chevron_slim, R.string.cal_prev_month, flip = true) { shiftMonth(-1) }
+    val nextButton = iconButton(R.drawable.ic_chevron_slim, R.string.cal_next_month, flip = false) { shiftMonth(+1) }
+    val monthTitle = TextView(context)
     private val weekdays = LinearLayout(context)
-    val weekRow = WeekRow(context)
-    val dayCells: List<DayCell> = List(7) { DayCell(context) }
-    private val agenda = FrameLayout(context)
+    private val weeks = LinearLayout(context)
+    /** Six rows of seven; rows a month doesn't need are hidden. */
+    val dayViews: List<DayView> = List(42) { DayView(context) }
+
+    // ---- divider
+    private val divider = View(context)
+
+    // ---- agenda side
+    private val agendaPane = LinearLayout(context)
+    val dayTitle = TextView(context)
+    val refreshButton = iconButton(R.drawable.ic_refresh, R.string.cal_refresh, flip = false) { userRefresh() }
+    val gearButton = iconButton(R.drawable.ic_settings, R.string.cal_open_app, flip = false) { openDay(selected) }
+    private val agendaBody = FrameLayout(context)
     private val scroll = ScrollView(context)
     val eventList = LinearLayout(context)
     val emptyView = TextView(context)
@@ -96,7 +128,6 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
     val allowButton = TextView(context)
 
     init {
-        orientation = VERTICAL
         isClickable = true // a press on the widget is never a press on empty space
         val s = px(R.dimen.space_s)
         val xs = px(R.dimen.space_xs)
@@ -107,10 +138,10 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
         )
         clipToOutline = true
 
-        // Header: ‹  Nov 2 – 8, 2026  ›
-        header.orientation = HORIZONTAL
-        header.gravity = Gravity.CENTER_VERTICAL
-        title.apply {
+        // ---- month: ‹ June 2026 ›, weekdays, the grid
+        monthPane.orientation = VERTICAL
+        val monthHeader = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        monthTitle.apply {
             type(Type.BODY)
             typeface = Typeface.create(typeface, Typeface.BOLD)
             setTextColor(color(R.color.on_surface))
@@ -120,10 +151,10 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
             background = ripple(borderless = false)
             setOnClickListener { goToToday() }
         }
-        header.addView(prevButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
-        header.addView(title, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
-        header.addView(nextButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
-        addView(header, LayoutParams(LayoutParams.MATCH_PARENT, px(R.dimen.size_cal_header)))
+        monthHeader.addView(prevButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
+        monthHeader.addView(monthTitle, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        monthHeader.addView(nextButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
+        monthPane.addView(monthHeader, LayoutParams(LayoutParams.MATCH_PARENT, px(R.dimen.size_cal_header)))
 
         weekdays.orientation = HORIZONTAL
         repeat(7) {
@@ -135,21 +166,47 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
                 importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         }
-        addView(weekdays, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        monthPane.addView(weekdays, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
-        weekRow.orientation = HORIZONTAL
-        dayCells.forEach { cell ->
-            cell.setOnClickListener { cell.day?.let(::tapDay) }
-            weekRow.addView(cell, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        weeks.orientation = VERTICAL
+        for (r in 0 until 6) {
+            val row = LinearLayout(context).apply { orientation = HORIZONTAL }
+            for (c in 0 until 7) {
+                val v = dayViews[r * 7 + c]
+                v.setOnClickListener { v.day?.let(::tapDay) }
+                row.addView(v, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+            }
+            weeks.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
         }
-        addView(weekRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = xs })
+        monthPane.addView(weeks, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // Agenda: the selected day's events, "No events", or the permission row.
+        divider.setBackgroundColor(color(R.color.glass_border))
+
+        // ---- agenda: Fri, Jun 5  ⟳ ⚙, then the events
+        agendaPane.orientation = VERTICAL
+        val dayHeader = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        dayTitle.apply {
+            type(Type.BODY)
+            typeface = Typeface.create(typeface, Typeface.BOLD)
+            setTextColor(color(R.color.on_surface))
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
+            setPadding(xs, 0, 0, 0)
+        }
+        dayHeader.addView(dayTitle, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        dayHeader.addView(refreshButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
+        dayHeader.addView(gearButton, LayoutParams(px(R.dimen.size_cal_chevron), LayoutParams.MATCH_PARENT))
+        agendaPane.addView(dayHeader, LayoutParams(LayoutParams.MATCH_PARENT, px(R.dimen.size_cal_header)))
+
         eventList.orientation = VERTICAL
+        // Empty agenda space (below the events) opens the calendar on the day.
+        eventList.isClickable = true
+        eventList.setOnClickListener { openDay(selected) }
         scroll.isVerticalScrollBarEnabled = false
         scroll.overScrollMode = OVER_SCROLL_NEVER
-        scroll.addView(eventList, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        agenda.addView(scroll, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        scroll.isFillViewport = true
+        scroll.addView(eventList, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        agendaBody.addView(scroll, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         emptyView.apply {
             type(Type.BODY)
             setTextColor(color(R.color.on_surface_dim))
@@ -159,18 +216,19 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
             background = ripple(borderless = false)
             setOnClickListener { openDay(selected) }
         }
-        agenda.addView(emptyView, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        agendaBody.addView(emptyView, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         permissionRow.apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(xs, 0, 0, 0)
+            orientation = VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(xs, 0, xs, 0)
             addView(TextView(context).apply {
                 type(Type.BODY)
                 setTextColor(color(R.color.on_surface))
                 setText(R.string.cal_permission)
-                maxLines = 2
+                gravity = Gravity.CENTER
+                maxLines = 3
                 ellipsize = TextUtils.TruncateAt.END
-            }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
             allowButton.apply {
                 type(Type.BODY)
                 typeface = Typeface.create(typeface, Typeface.BOLD)
@@ -186,73 +244,107 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
                 foreground = ripple(borderless = false)
                 setOnClickListener { onRequestPermission?.invoke() }
             }
-            addView(allowButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = px(R.dimen.space_s) })
+            addView(allowButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = s })
         }
-        agenda.addView(permissionRow, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        addView(agenda, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = xs })
+        agendaBody.addView(permissionRow, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        agendaPane.addView(agendaBody, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
+        addView(monthPane)
+        addView(divider)
+        addView(agendaPane)
+        applyArrangement()
         render()
+    }
+
+    /** Side by side (month | agenda), or month over agenda. */
+    private fun applyArrangement() {
+        val line = px(R.dimen.stroke_glass)
+        val s = px(R.dimen.space_s)
+        if (stacked) {
+            orientation = VERTICAL
+            monthPane.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 3f)
+            divider.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, line).apply { topMargin = s; bottomMargin = s / 2 }
+            agendaPane.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 2f)
+        } else {
+            orientation = HORIZONTAL
+            monthPane.layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f)
+            divider.layoutParams = LayoutParams(line, LayoutParams.MATCH_PARENT).apply { marginStart = s; marginEnd = s; topMargin = s; bottomMargin = s }
+            agendaPane.layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f)
+        }
+        requestLayout()
     }
 
     // ------------------------------------------------------------------ state
 
     /** The week the system calendar starts on (the locale's, or the user's own choice on Android 14+). */
     private fun firstDayOfWeek(): DayOfWeek =
-        WeekModel.dayOfWeek(android.icu.util.Calendar.getInstance(android.icu.util.ULocale.getDefault()).firstDayOfWeek)
+        CalendarModel.dayOfWeek(android.icu.util.Calendar.getInstance(android.icu.util.ULocale.getDefault()).firstDayOfWeek)
 
-    /** Returning home, a new week, or changed calendar data: reload this week's events. */
+    /** Returning home, another day or month, the refresh icon, or changed calendar data: reload. */
     fun refresh() {
-        val now = LocalDate.now(zone)
-        val first = firstDayOfWeek()
-        if (now != today || WeekModel.weekStart(weekStart, first) != weekStart) {
-            today = now
-            if (followingToday) selected = now
-            weekStart = WeekModel.weekStart(selected, first)
-        }
+        catchUpWithToday()
+        firstDay = firstDayOfWeek()
         if (!events.hasPermission()) {
             generation++
             byDay = emptyMap()
-            loadedWeek = null
+            loadedMonth = null
             render()
             return
         }
-        val week = weekStart
+        val m = month
+        val grid = CalendarModel.monthGrid(m, firstDay)
         val gen = ++generation
-        val (from, to) = WeekModel.queryRange(week, zone)
+        val (from, to) = CalendarModel.queryRange(grid.first(), grid.last(), zone)
         events.load(from, to) { list ->
-            if (gen != generation) return@load // a newer week or refresh is on its way
-            byDay = WeekModel.byDay(list, WeekModel.days(week), zone)
-            loadedWeek = week
+            if (gen != generation) return@load // a newer month or refresh is on its way
+            byDay = CalendarModel.byDay(list, grid, zone)
+            loadedMonth = m
             render()
         }
         render()
     }
 
-    /** One week back (-1) or on (+1): today, if that week holds it, else its first day, is selected. */
-    fun shiftWeek(by: Int) {
-        weekStart = weekStart.plusWeeks(by.toLong())
-        val days = WeekModel.days(weekStart)
-        selected = if (today in days) today else weekStart
+    /** The minute changed: the live labels move on (and past midnight, the day does too). */
+    fun tick() {
+        if (todayNow() != today) refresh() else renderAgenda()
+    }
+
+    private fun catchUpWithToday() {
+        val now = todayNow()
+        if (now == today) return
+        today = now
+        if (followingToday) {
+            selected = now
+            month = YearMonth.from(now)
+        }
+    }
+
+    private fun userRefresh() {
+        refreshButton.animate().rotationBy(360f).setDuration(400).start()
+        refresh()
+    }
+
+    /** One month back (-1) or on (+1): today, if that month holds it, else its 1st, is selected. */
+    fun shiftMonth(by: Int) {
+        month = month.plusMonths(by.toLong())
+        selected = if (YearMonth.from(today) == month) today else month.atDay(1)
         followingToday = selected == today
         refresh()
     }
 
     fun goToToday() {
+        catchUpWithToday()
         followingToday = true
         selected = today
-        weekStart = WeekModel.weekStart(today, firstDayOfWeek())
+        month = YearMonth.from(today)
         refresh()
     }
 
-    /** Selects [day]; tapping the already-selected day with no events opens the calendar there. */
+    /** Selects [day] (a dimmed one from a neighbouring month too): the agenda shows it. */
     fun tapDay(day: LocalDate) {
-        if (day == selected && loadedWeek == weekStart && events.hasPermission() && byDay[day].isNullOrEmpty()) {
-            openDay(day)
-            return
-        }
         selected = day
         followingToday = day == today
-        render()
+        refresh()
     }
 
     private fun openDay(day: LocalDate) {
@@ -266,41 +358,84 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
     // ------------------------------------------------------------------ drawing
 
     private fun render() {
-        val days = WeekModel.days(weekStart)
-        val allowed = events.hasPermission()
-        val loaded = loadedWeek == weekStart
-        title.text = WeekModel.rangeLabel(weekStart, locale)
-        title.contentDescription = context.getString(R.string.cal_header_desc, title.text)
-        for ((i, d) in days.withIndex()) {
-            (weekdays.getChildAt(i) as TextView).text = d.dayOfWeek.getDisplayName(TextStyle.SHORT_STANDALONE, locale)
-            val count = if (allowed && loaded) byDay[d]?.size ?: 0 else 0
-            dayCells[i].bind(d, today = d == today, selected = d == selected, dimmed = WeekModel.dimmed(d, weekStart), dots = WeekModel.dots(count), events = count)
-        }
+        renderMonth()
+        renderAgenda()
+    }
 
+    private fun renderMonth() {
+        val grid = CalendarModel.monthGrid(month, firstDay)
+        val allowed = events.hasPermission()
+        val loaded = loadedMonth == month
+        monthTitle.text = CalendarModel.monthLabel(month, locale)
+        monthTitle.contentDescription = context.getString(R.string.cal_month_desc, monthTitle.text)
+        for ((i, d) in CalendarModel.weekdays(firstDay).withIndex()) {
+            (weekdays.getChildAt(i) as TextView).text = d.getDisplayName(TextStyle.NARROW_STANDALONE, locale)
+        }
+        for (r in 0 until 6) weeks.getChildAt(r).visibility = if (r * 7 < grid.size) VISIBLE else GONE
+        for ((i, v) in dayViews.withIndex()) {
+            val d = grid.getOrNull(i)
+            if (d == null) {
+                v.clear()
+                continue
+            }
+            val count = if (allowed && loaded) byDay[d]?.size ?: 0 else 0
+            v.bind(d, today = d == today, selected = d == selected, dimmed = CalendarModel.dimmed(d, month), events = count)
+        }
+    }
+
+    /** The selected day's events, their live labels worked out now. */
+    fun renderAgenda() {
+        val allowed = events.hasPermission()
+        val loaded = loadedMonth == month
+        dayTitle.text = CalendarModel.dayLabel(selected, locale)
         permissionRow.visibility = if (allowed) GONE else VISIBLE
+        refreshButton.visibility = if (allowed) VISIBLE else INVISIBLE
         val list = if (allowed && loaded) byDay[selected].orEmpty() else emptyList()
         emptyView.visibility = if (allowed && loaded && list.isEmpty()) VISIBLE else GONE
         scroll.visibility = if (list.isEmpty()) GONE else VISIBLE
+        val now = clock()
         eventList.removeAllViews()
-        for (e in list) eventList.addView(eventRow(e, selected))
-        scroll.scrollTo(0, 0)
+        for (e in list) eventList.addView(eventRow(e, now))
         onContentChanged?.invoke(this)
     }
 
-    private fun eventRow(e: DayEvent, day: LocalDate): View {
-        val time = when (val w = WeekModel.whenOn(e, day, zone)) {
-            WeekModel.When.AllDay -> context.getString(R.string.cal_all_day)
-            is WeekModel.When.At -> DateFormat.getTimeFormat(context).format(w.ms)
-            is WeekModel.When.Until -> context.getString(R.string.cal_until, DateFormat.getTimeFormat(context).format(w.ms))
+    /** What an event's right-hand label says: one or two lines. */
+    fun labelLines(e: DayEvent, nowMs: Long): Pair<String, String?> {
+        fun day(r: Rel): String = when (r) {
+            Rel.Today -> context.getString(R.string.cal_rel_today)
+            Rel.Tomorrow -> context.getString(R.string.cal_rel_tomorrow)
+            is Rel.InDays -> resources.getQuantityString(R.plurals.cal_rel_in_days, r.days.toInt(), r.days.toInt())
+            else -> ""
         }
+        return when (val r = CalendarModel.relative(e, nowMs, zone)) {
+            is Rel.Now -> context.getString(R.string.cal_rel_now) to when {
+                r.minutesLeft < 60 -> context.getString(R.string.cal_rel_min_left, r.minutesLeft.toInt())
+                r.minutesLeft % 60 == 0L -> context.getString(R.string.cal_rel_hr_left, (r.minutesLeft / 60).toInt())
+                else -> context.getString(R.string.cal_rel_hr_min_left, (r.minutesLeft / 60).toInt(), (r.minutesLeft % 60).toInt())
+            }
+            is Rel.InMinutes -> context.getString(R.string.cal_rel_in_min, r.minutes.toInt()) to null
+            is Rel.InHours -> context.getString(R.string.cal_rel_in_hr, r.hours.toInt()) to null
+            Rel.Ended -> context.getString(R.string.cal_rel_ended) to null
+            is Rel.AllDay -> context.getString(R.string.cal_all_day) to day(r.day)
+            else -> day(r) to null
+        }
+    }
+
+    private fun eventRow(e: DayEvent, now: Long): View {
+        val rel = CalendarModel.relative(e, now, zone)
+        val ended = rel == Rel.Ended
+        val (label, sub) = labelLines(e, now)
         val name = e.title.ifBlank { context.getString(R.string.cal_no_title) }
+        val range = CalendarModel.timeRange(e) { DateFormat.getTimeFormat(context).format(it) }
+        val xs = px(R.dimen.space_xs)
         return LinearLayout(context).apply {
             orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = px(R.dimen.size_cal_event_row)
-            setPadding(px(R.dimen.space_xs), 0, px(R.dimen.space_xs), 0)
+            gravity = Gravity.TOP
+            setPadding(xs, xs, xs, xs)
             background = ripple(borderless = false)
-            contentDescription = listOf(time, name, e.calendarName).filter { it.isNotBlank() }.joinToString(", ")
+            alpha = if (ended) ENDED_ALPHA else 1f
+            tag = rel
+            contentDescription = listOfNotNull(name, range, e.detail.ifBlank { null }, label, sub).joinToString(", ")
             setOnClickListener { open(e) }
             val dot = px(R.dimen.size_cal_color)
             addView(View(context).apply {
@@ -308,44 +443,55 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
                     shape = GradientDrawable.OVAL
                     setColor(if (e.color != 0) (e.color or 0xFF000000.toInt()) else color(R.color.gold))
                 }
-            }, LayoutParams(dot, dot))
-            addView(TextView(context).apply {
-                type(Type.CAPTION)
-                setTextColor(color(R.color.on_surface_dim))
-                text = time
-                isSingleLine = true
-            }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = px(R.dimen.space_s) })
-            addView(TextView(context).apply {
-                type(Type.BODY)
-                setTextColor(color(R.color.on_surface))
-                text = name
-                isSingleLine = true
-                ellipsize = TextUtils.TruncateAt.END
+            }, LayoutParams(dot, dot).apply { topMargin = px(R.dimen.space_s) - dot / 4 })
+            addView(LinearLayout(context).apply {
+                orientation = VERTICAL
+                addView(TextView(context).apply {
+                    type(Type.BODY)
+                    setTextColor(color(R.color.on_surface))
+                    text = name
+                    isSingleLine = true
+                    ellipsize = TextUtils.TruncateAt.END
+                })
+                if (range != null) addView(caption(range, R.color.on_surface_dim))
+                if (e.detail.isNotBlank()) addView(caption(e.detail, R.color.on_surface_dim))
             }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(R.dimen.space_s) })
-            if (e.calendarName.isNotBlank()) addView(TextView(context).apply {
-                type(Type.CAPTION)
-                setTextColor(color(R.color.on_surface_dim))
-                text = e.calendarName
-                maxWidth = px(R.dimen.size_cal_name_max)
-                isSingleLine = true
-                ellipsize = TextUtils.TruncateAt.END
+            addView(LinearLayout(context).apply {
+                orientation = VERTICAL
+                gravity = Gravity.END
+                addView(TextView(context).apply {
+                    if (rel is Rel.Now) {
+                        type(Type.BODY)
+                        typeface = Typeface.create(typeface, Typeface.BOLD)
+                        setTextColor(color(R.color.gold))
+                    } else {
+                        type(Type.CAPTION)
+                        setTextColor(color(if (ended) R.color.on_surface_faint else R.color.on_surface))
+                    }
+                    text = label
+                    isSingleLine = true
+                    gravity = Gravity.END
+                })
+                if (sub != null) addView(caption(sub, R.color.on_surface_dim).apply { gravity = Gravity.END })
             }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = px(R.dimen.space_s) })
         }
     }
 
-    /** Short widgets drop the weekday labels first, so the days and agenda keep legible text. */
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        val compact = h < px(R.dimen.size_cal_compact)
-        val v = if (compact) GONE else VISIBLE
-        if (weekdays.visibility != v) post { weekdays.visibility = v }
+    private fun caption(text: String, colorToken: Int) = TextView(context).apply {
+        type(Type.CAPTION)
+        setTextColor(color(colorToken))
+        this.text = text
+        isSingleLine = true
+        ellipsize = TextUtils.TruncateAt.END
     }
 
-    private fun chevron(desc: Int, flip: Boolean, click: () -> Unit) = ImageView(context).apply {
-        setImageResource(R.drawable.ic_chevron_slim)
-        if (flip) rotation = 180f
+    private fun iconButton(icon: Int, desc: Int, flip: Boolean, click: () -> Unit) = ImageView(context).apply {
+        setImageResource(icon)
+        if (flip) scaleX = -1f
         imageTintList = android.content.res.ColorStateList.valueOf(color(R.color.on_surface))
-        scaleType = ImageView.ScaleType.CENTER
+        scaleType = ImageView.ScaleType.CENTER_INSIDE
+        val pad = (px(R.dimen.size_cal_chevron) - px(R.dimen.size_cal_icon)) / 2
+        setPadding(pad, pad, pad, pad)
         contentDescription = context.getString(desc)
         background = ripple(borderless = true)
         isClickable = true
@@ -391,119 +537,91 @@ class CalendarWidgetView(context: Context, private val events: CalendarEvents) :
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean = longPressed || super.onTouchEvent(event)
 
-    // ------------------------------------------------------------------ the week row
+    // ------------------------------------------------------------------ a day in the grid
 
-    /** The seven days: a horizontal swipe across them moves one week (left: on, right: back). */
-    inner class WeekRow(context: Context) : LinearLayout(context) {
-        private val swipeDistance = context.pxF(R.dimen.size_swipe) / 2
-        private var x0 = 0f
-        private var y0 = 0f
-        private var swiping = false
-
-        override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-            when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { x0 = ev.x; y0 = ev.y; swiping = false }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = ev.x - x0
-                    if (!swiping && abs(dx) > slop && abs(dx) > abs(ev.y - y0)) {
-                        swiping = true
-                        parent?.requestDisallowInterceptTouchEvent(true)
-                    }
-                }
-            }
-            return swiping
-        }
-
-        @SuppressLint("ClickableViewAccessibility")
-        override fun onTouchEvent(ev: MotionEvent): Boolean {
-            when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { x0 = ev.x; y0 = ev.y; swiping = false }
-                MotionEvent.ACTION_MOVE -> if (!swiping && abs(ev.x - x0) > slop && abs(ev.x - x0) > abs(ev.y - y0)) swiping = true
-                MotionEvent.ACTION_UP -> {
-                    val dx = ev.x - x0
-                    if (swiping && abs(dx) >= swipeDistance) shiftWeek(if (dx < 0) +1 else -1)
-                    swiping = false
-                }
-                MotionEvent.ACTION_CANCEL -> swiping = false
-            }
-            return true
-        }
-    }
-
-    /** One day: its number (gold disc when it's today, a ring when selected) and up to three dots. */
-    inner class DayCell(context: Context) : LinearLayout(context) {
+    /**
+     * One day: its number in a circle that fits the cell (gold disc for today, gold ring when
+     * selected), dimmed outside the month, and up to three gold dots for its events.
+     */
+    inner class DayView(context: Context) : View(context) {
         var day: LocalDate? = null
             private set
         var isToday = false
             private set
-        var dots = 0
+        var isSelectedDay = false
             private set
         var dimmed = false
             private set
-        val number = TextView(context)
-        private val dotRow = Dots(context)
+        var dots = 0
+            private set
 
-        init {
-            orientation = VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            isClickable = true
-            background = ripple(borderless = true)
-            number.apply {
-                type(Type.BODY)
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-            }
-            val d = px(R.dimen.size_cal_day)
-            addView(number, LayoutParams(d, d))
-            addView(dotRow, LayoutParams(LayoutParams.MATCH_PARENT, px(R.dimen.size_cal_dot) * 2))
+        private val maxCircle = pxF(R.dimen.size_cal_day)
+        private val dotR = pxF(R.dimen.size_cal_dot) / 2
+        private val ring = pxF(R.dimen.stroke_hairline)
+        private val bodySize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 13f, resources.displayMetrics)
+        private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = lexend }
+        private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = context.color(R.color.gold) }
+        private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = ring; color = context.color(R.color.gold)
         }
 
-        fun bind(d: LocalDate, today: Boolean, selected: Boolean, dimmed: Boolean, dots: Int, events: Int) {
+        init {
+            isClickable = true
+            isFocusable = true
+            background = ripple(borderless = true)
+        }
+
+        fun bind(d: LocalDate, today: Boolean, selected: Boolean, dimmed: Boolean, events: Int) {
             day = d
             isToday = today
-            this.dots = dots
+            isSelectedDay = selected
             this.dimmed = dimmed
+            dots = CalendarModel.dots(events)
             isSelected = selected
-            number.text = d.dayOfMonth.toString()
-            number.typeface = Typeface.create(number.typeface, if (today || selected) Typeface.BOLD else Typeface.NORMAL)
-            number.setTextColor(color(when {
-                today -> R.color.on_gold
-                dimmed -> R.color.on_surface_faint
-                else -> R.color.on_surface
-            }))
-            number.background = when {
-                today || selected -> GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(if (today) color(R.color.gold) else color(R.color.surface_inset))
-                    if (selected) setStroke(px(R.dimen.stroke_glass) * 2, color(if (today) R.color.on_surface else R.color.gold))
-                }
-                else -> null
-            }
-            dotRow.count = dots
+            visibility = VISIBLE
             val date = d.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(locale))
             val label = if (today) context.getString(R.string.cal_today, date) else date
             contentDescription = if (events > 0) resources.getQuantityString(R.plurals.cal_day_events, events, label, events) else label
+            invalidate()
+        }
+
+        fun clear() {
+            day = null
+            visibility = INVISIBLE
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            val d = day ?: return
+            val dotsH = dotR * 2 + dotR * 1.5f
+            val circle = min(maxCircle, min(width.toFloat(), height - dotsH) - ring * 2).coerceAtLeast(0f)
+            val cx = width / 2f
+            val cy = (height - dotsH) / 2f
+            val r = circle / 2
+            if (isToday) canvas.drawCircle(cx, cy, r, fill)
+            if (isSelectedDay) canvas.drawCircle(cx, cy, if (isToday) r + ring * 1.5f else r - ring / 2, outline)
+            textPaint.textSize = min(bodySize, circle * 0.5f)
+            textPaint.typeface = if (isToday || isSelectedDay) Typeface.create(lexend, Typeface.BOLD) else lexend
+            textPaint.color = context.color(when {
+                isToday -> R.color.on_gold
+                dimmed -> R.color.on_surface_faint
+                else -> R.color.on_surface
+            })
+            val baseline = cy - (textPaint.descent() + textPaint.ascent()) / 2
+            canvas.drawText(d.dayOfMonth.toString(), cx, baseline, textPaint)
+            if (dots > 0) {
+                val gap = dotR * 1.5f
+                val total = dots * 2 * dotR + (dots - 1) * gap
+                var x = cx - total / 2 + dotR
+                val y = cy + r + dotR + dotR * 1.5f
+                repeat(dots) {
+                    canvas.drawCircle(x, y.coerceAtMost(height - dotR), dotR, fill)
+                    x += 2 * dotR + gap
+                }
+            }
         }
     }
 
-    private inner class Dots(context: Context) : View(context) {
-        var count = 0
-            set(value) {
-                if (field != value) { field = value; invalidate() }
-            }
-        private val r = context.pxF(R.dimen.size_cal_dot) / 2
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = context.color(R.color.gold) }
-
-        override fun onDraw(canvas: Canvas) {
-            if (count <= 0) return
-            val gap = r * 1.5f
-            val total = count * 2 * r + (count - 1) * gap
-            var x = (width - total) / 2 + r
-            val y = height / 2f
-            repeat(count) {
-                canvas.drawCircle(x, y, r, paint)
-                x += 2 * r + gap
-            }
-        }
+    private companion object {
+        const val ENDED_ALPHA = 0.45f
     }
 }
