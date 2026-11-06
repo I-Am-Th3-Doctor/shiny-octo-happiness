@@ -212,7 +212,25 @@ class CalendarEventEditingDeviceTest {
         waitFor("day loaded") { on(h) { v.selected == d && v.loadedMonth == v.month } }
     }
 
+    /** What the provider itself has on [d] (title, event, status, original), for failure messages. */
+    private fun providerDay(d: LocalDate): String {
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+            ContentUris.appendId(it, at(d, 0)); ContentUris.appendId(it, at(d.plusDays(1), 0))
+        }.build()
+        return app.contentResolver.query(uri, arrayOf(CalendarContract.Instances.TITLE, CalendarContract.Instances.EVENT_ID,
+            CalendarContract.Instances.STATUS, CalendarContract.Instances.ORIGINAL_ID, CalendarContract.Instances.CALENDAR_ID), null, null, null)
+            ?.use { c -> generateSequence { if (c.moveToNext()) "${c.getString(0)}#${c.getLong(1)} st=${if (c.isNull(2)) "-" else c.getInt(2)} orig=${if (c.isNull(3)) "-" else c.getLong(3)} cal=${c.getLong(4)}" else null }.toList() }
+            .toString()
+    }
+
     private fun rowView(h: ActivityScenario<MainActivity>, v: CalendarWidgetView, title: String): View {
+        try {
+            waitFor("$title in the agenda") { on(h) { (0 until v.eventList.childCount).any { i -> (v.eventList.getChildAt(i).getTag(R.id.calendar_event) as? io.github.iamth3doctor.searchlight.calendar.DayEvent)?.title == title } } }
+        } catch (e: AssertionError) {
+            val day = on(h) { v.selected }
+            throw AssertionError("$title not in the agenda for $day (month ${on(h) { v.month }}, loaded ${on(h) { v.loadedMonth }}). " +
+                "widget: ${on(h) { v.byDay[day].orEmpty().map { "${it.title}#${it.eventId}" } }}; provider: ${providerDay(day)}", e)
+        }
         waitFor("$title in the agenda") { on(h) { (0 until v.eventList.childCount).any { i -> (v.eventList.getChildAt(i).getTag(R.id.calendar_event) as? io.github.iamth3doctor.searchlight.calendar.DayEvent)?.title == title } } }
         return on(h) { (0 until v.eventList.childCount).map(v.eventList::getChildAt).first { (it.getTag(R.id.calendar_event) as? io.github.iamth3doctor.searchlight.calendar.DayEvent)?.title == title } }
     }
