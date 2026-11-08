@@ -432,7 +432,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         stopCards()
         cards = types.map { type ->
             when (type) {
-                CardType.WEATHER -> WeatherCard(this)
+                CardType.WEATHER -> WeatherCard(this).also {
+                    it.onShowingEventChanged = { updateDots(binding.cards.currentItem) }
+                    it.onShowAgenda = ::showAgenda
+                }
                 CardType.CALENDAR -> CalendarCard(this)
                 CardType.BATTERY -> BatteryCard(this)
                 CardType.MUSIC -> MusicCard(this).also { it.onStartedPlaying = ::onMusicStarted }
@@ -466,9 +469,43 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         cards.forEach { it.onStop() }
     }
 
+    /**
+     * The page dots: the current tile's bright. A tile showing a calendar event instead of its
+     * own content (the Weather tile's "Next up") has a gold dot, always bright: the only signal
+     * when you're on another tile (the strip never switches tiles by itself).
+     */
     private fun updateDots(position: Int) {
-        for (i in 0 until binding.dots.childCount) binding.dots.getChildAt(i).alpha = if (i == position) 1f else 0.35f
+        val gold = android.content.res.ColorStateList.valueOf(getColor(R.color.gold))
+        for (i in 0 until binding.dots.childCount) {
+            val dot = binding.dots.getChildAt(i)
+            val event = (cards.getOrNull(i) as? WeatherCard)?.nextUp != null
+            dot.backgroundTintList = if (event) gold else null
+            dot.alpha = if (i == position || event) 1f else 0.35f
+            dot.tag = if (event) DOT_EVENT else null
+        }
     }
+
+    /** What the last "Next up" tap without a video link showed (tests): the Calendar widget or the calendar app. */
+    internal var lastAgenda: String? = null
+
+    /**
+     * "Next up" without a video link: the agenda. The Calendar widget on the home screen goes to
+     * today (and leaves widget editing); with none placed, the calendar app opens on today.
+     */
+    private fun showAgenda() {
+        val calendars = widgets.calendarViews()
+        if (calendars.isEmpty()) {
+            lastAgenda = "app"
+            Actions.openCalendarAt(this, System.currentTimeMillis())
+            return
+        }
+        lastAgenda = "widget"
+        widgets.exitEditMode()
+        calendars.forEach { it.goToToday() }
+    }
+
+    /** Tests: the tiles. */
+    internal val homeCards: List<HomeCard> get() = cards
 
     /** Idle card from the Widget Center, unless music is playing and should be in front. */
     private fun goToIdleCard() {
@@ -1400,6 +1437,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     }
 
     companion object {
+        /** Tags a page dot that's gold: its tile is showing a calendar event (tests). */
+        const val DOT_EVENT = "dot_event"
+
         /** A widget id (already bound, e.g. from a pin request) to place on the home grid. */
         const val EXTRA_PLACE_WIDGET = "place_widget"
 

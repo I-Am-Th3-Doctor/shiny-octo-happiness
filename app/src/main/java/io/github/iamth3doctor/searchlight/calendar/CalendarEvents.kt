@@ -92,6 +92,7 @@ class CalendarEvents(private val context: Context) {
                     recurring = !c.isNull(11) || !c.isNull(12) || !c.isNull(13),
                     location = c.getString(7).orEmpty(),
                     originalId = if (c.isNull(13)) -1 else c.getLong(13),
+                    description = c.getString(8).orEmpty(),
                 )
             }
         }

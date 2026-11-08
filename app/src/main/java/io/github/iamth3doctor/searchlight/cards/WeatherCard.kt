@@ -26,6 +26,13 @@ import java.util.Date
  * doesn't fit). Tap: open your weather app (chosen on first tap), or set a location / retry
  * when there's no weather to show.
  * Long-press: switch °F/°C, refresh, weather settings.
+ *
+ * "Next up": while a calendar event is in progress, or one starts within the hour, the tile
+ * shows it instead ("• Team Sync starts in 14 min (Zoom)", "• In progress: Design Review (Ends
+ * in 22 min)"), from the same Calendar Provider events as the Calendar widget, and goes back to
+ * weather by itself once that's past. Tapping it then joins the video call, if the event has a
+ * link, or else shows the agenda ([onShowAgenda]). [onShowingEventChanged] lets the home screen
+ * mark the tile's page dot.
  */
 class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
 
@@ -35,6 +42,52 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
     private lateinit var line: TextView
 
     private val listener: () -> Unit = { render() }
+
+    // ---- Next up
+    private val events = activity.searchlight.calendarEvents
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var calendarWatch: Any? = null
+    private var generation = 0
+
+    /** Now, in ms (tests set a fixed one). */
+    var clock: () -> Long = System::currentTimeMillis
+
+    /** The event the tile shows instead of weather, or null (weather). */
+    var nextUp: io.github.iamth3doctor.searchlight.calendar.NextUp.Status? = null
+        private set
+
+    /** The tile started or stopped showing an event (the home screen's gold page dot). */
+    var onShowingEventChanged: ((Boolean) -> Unit)? = null
+
+    /** A tapped event without a video link: the agenda. */
+    var onShowAgenda: (() -> Unit)? = null
+
+    /** Once a minute, on the minute, while home is showing: the countdown moves, the window slides. */
+    private val tick = object : Runnable {
+        override fun run() {
+            reloadNextUp()
+            val now = System.currentTimeMillis()
+            main.postDelayed(this, 60_000L - now % 60_000L + 50L)
+        }
+    }
+
+    /** Re-reads the hour ahead (and what's in progress) and redraws. */
+    fun reloadNextUp() {
+        if (!started) return
+        val now = clock()
+        val gen = ++generation
+        events.load(now, now + io.github.iamth3doctor.searchlight.calendar.NextUp.WINDOW_MS + 60_000L) { list ->
+            if (gen != generation || !started) return@load
+            setNextUp(io.github.iamth3doctor.searchlight.calendar.NextUp.pick(list, clock()))
+        }
+    }
+
+    private fun setNextUp(s: io.github.iamth3doctor.searchlight.calendar.NextUp.Status?) {
+        val was = nextUp != null
+        nextUp = s
+        render()
+        if (was != (s != null)) onShowingEventChanged?.invoke(s != null)
+    }
 
     /** Unfolded, side by side: just the temperature, at a glance (the full line folded). */
     private var glance = false
@@ -51,7 +104,10 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
         line = root.findViewById(R.id.weatherLine)
         val card = root.findViewById<View>(R.id.card)
         card.setOnClickListener { v ->
+            val up = nextUp
             when {
+                up != null && up.call != null -> io.github.iamth3doctor.searchlight.ui.Actions.openCallLink(activity, up.call.url)
+                up != null -> onShowAgenda?.invoke()
                 repo.state.problem == WeatherRepository.Problem.NEEDS_LOCATION -> openSettings()
                 repo.state.data == null -> repo.refresh() // the tile says "tap to retry"
                 else -> weatherApp()?.let { activity.searchlight.apps.launch(it, v, activity) }
@@ -64,14 +120,28 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
     override fun onStart() {
         repo.addListener(listener)
         super.onStart()
+        calendarWatch = events.watch { reloadNextUp() }
+        main.removeCallbacks(tick)
+        tick.run()
     }
 
     override fun onStop() {
         repo.removeListener(listener)
+        main.removeCallbacks(tick)
+        events.stopWatching(calendarWatch)
+        calendarWatch = null
+        generation++
         super.onStop()
     }
 
     override fun draw() {
+        val up = nextUp
+        if (up != null) {
+            drawNextUp(up)
+            return
+        }
+        emoji.visibility = View.VISIBLE
+        line.contentDescription = null
         val state = repo.state
         val data = state.data
         val unit = prefs.tempUnit
@@ -114,6 +184,25 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
                 time,
             ),
         )
+    }
+
+    /** What the tile's line says, and whether its weather icon shows (tests). */
+    internal val lineText: CharSequence? get() = if (::line.isInitialized) line.text else null
+    internal val iconShown: Boolean get() = ::emoji.isInitialized && emoji.visibility == View.VISIBLE
+
+    /** "• Team Sync starts in 14 min (Zoom)": a gold bullet, the event in bold, the time after. */
+    private fun drawNextUp(up: io.github.iamth3doctor.searchlight.calendar.NextUp.Status) {
+        emoji.visibility = View.GONE
+        val untitled = activity.getString(R.string.cal_no_title)
+        val text = io.github.iamth3doctor.searchlight.calendar.NextUp.text(up, untitled)
+        val s = SpannableString("• $text")
+        s.setSpan(android.text.style.ForegroundColorSpan(activity.getColor(R.color.gold)), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        s.setSpan(StyleSpan(Typeface.BOLD), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val title = up.event.title.ifBlank { untitled }
+        val at = s.indexOf(title)
+        if (at >= 0) s.setSpan(StyleSpan(Typeface.BOLD), at, at + title.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        line.text = s
+        line.contentDescription = text + if (up.call != null) ". " + activity.getString(R.string.next_up_join) else ""
     }
 
     /**

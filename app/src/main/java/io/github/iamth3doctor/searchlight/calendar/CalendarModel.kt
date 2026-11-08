@@ -34,6 +34,8 @@ class DayEvent(
     val location: String = "",
     /** For an occurrence changed on its own (an exception row): its series' event id, else -1. */
     val originalId: Long = -1,
+    /** The full description (the Weather tile's "Next up" looks for a video-call link in it). */
+    val description: String = "",
 )
 
 /**

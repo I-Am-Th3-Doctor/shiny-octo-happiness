@@ -126,6 +126,17 @@ object Actions {
     /** Tests: false records [lastCalendarUri] without starting the calendar app. */
     @Volatile var startCalendar = true
 
+    /** The last video-call link opened, and (tests) whether to really open it. */
+    @Volatile var lastCallLink: String? = null
+    @Volatile var startCallLinks = true
+
+    /** A meeting's video-call link: the Zoom / Meet / Teams app if installed (it claims the link), else the browser. */
+    fun openCallLink(context: Context, url: String): Boolean {
+        lastCallLink = url
+        if (!startCallLinks) return true
+        return start(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     /** The calendar app on this event, at this occurrence. */
     fun openEvent(context: Context, e: io.github.iamth3doctor.searchlight.calendar.EventEntry) =
         openEvent(context, e.eventId, e.begin, e.end)
