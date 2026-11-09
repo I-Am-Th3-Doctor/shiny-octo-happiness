@@ -45,6 +45,7 @@ import io.github.iamth3doctor.searchlight.cards.CardType
 import io.github.iamth3doctor.searchlight.cards.CardsAdapter
 import io.github.iamth3doctor.searchlight.cards.HomeCard
 import io.github.iamth3doctor.searchlight.cards.MusicCard
+import io.github.iamth3doctor.searchlight.cards.NextUpCard
 import io.github.iamth3doctor.searchlight.cards.QuickActionsCard
 import io.github.iamth3doctor.searchlight.cards.WeatherCard
 import io.github.iamth3doctor.searchlight.databinding.ActivityMainBinding
@@ -149,7 +150,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
         calendarActions = io.github.iamth3doctor.searchlight.widgets.CalendarEventActions(
             this, prefs, io.github.iamth3doctor.searchlight.calendar.CalendarWriter(this),
-            refresh = { widgets.refreshCalendars() },
+            refresh = { widgets.refreshCalendars(); agendaView?.refresh() },
             arrangeWidgets = { binding.widgetGrid.setEditMode(true) },
         )
         widgets.eventActions = calendarActions
@@ -367,9 +368,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         val focusTile = cards.firstOrNull { it is QuickActionsCard } as QuickActionsCard?
         val focusOnly = prefs.focusMode && focusTile != null
         focusTile?.setFocusOnly(focusOnly)
+        val tiles = tiles()
         if (posture == Posture.UNFOLDED || focusOnly) {
             binding.cards.adapter = null // releases the tile views to the row
-            for (card in if (focusOnly) listOfNotNull(focusTile) else cards) {
+            for (card in if (focusOnly) listOfNotNull(focusTile) else tiles) {
                 row.addView(card.viewFor(row).apply {
                     minimumWidth = if (card.minRowWidth != 0 && !focusOnly) px(card.minRowWidth) else 0
                     setTag(R.id.tile_flexible, card.rowFlexible)
@@ -381,11 +383,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             row.isVisible = true
         } else {
             row.isVisible = false
-            cards.forEach { it.setInRow(false) }
+            tiles.forEach { it.setInRow(false) }
             binding.cards.isVisible = true
-            binding.cards.adapter = CardsAdapter(cards)
-            binding.dots.isVisible = cards.size > 1
-            if (restorePage in cards.indices) {
+            binding.cards.adapter = CardsAdapter(tiles)
+            buildDots(tiles.size)
+            binding.dots.isVisible = tiles.size > 1
+            if (restorePage in tiles.indices) {
                 binding.cards.setCurrentItem(restorePage, false)
                 updateDots(restorePage)
             } else {
@@ -432,24 +435,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         stopCards()
         cards = types.map { type ->
             when (type) {
-                CardType.WEATHER -> WeatherCard(this).also {
-                    it.onShowingEventChanged = { updateDots(binding.cards.currentItem) }
-                    it.onShowAgenda = ::showAgenda
-                }
+                CardType.WEATHER -> WeatherCard(this)
                 CardType.CALENDAR -> CalendarCard(this)
                 CardType.BATTERY -> BatteryCard(this)
                 CardType.MUSIC -> MusicCard(this).also { it.onStartedPlaying = ::onMusicStarted }
                 CardType.QUICK_ACTIONS -> QuickActionsCard(this)
             }
-        }
-        binding.dots.removeAllViews()
-        val dotSize = px(R.dimen.size_dot)
-        val dotGap = px(R.dimen.space_xs)
-        repeat(cards.size) {
-            binding.dots.addView(View(this).apply {
-                setBackgroundResource(R.drawable.bg_dot)
-                layoutParams = LinearLayout.LayoutParams(dotSize, dotSize).apply { marginStart = dotGap; marginEnd = dotGap }
-            })
         }
         applyTileMode()
         if (wasStarted) startCards()
@@ -461,64 +452,141 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         if (cardsStarted) return
         cardsStarted = true
         cards.forEach { it.onStart() }
+        nextUp.onStart() // watches the calendar whether or not it's in the strip
     }
 
     private fun stopCards() {
         if (!cardsStarted) return
         cardsStarted = false
         cards.forEach { it.onStop() }
+        nextUp.onStop()
+    }
+
+    // ------------------------------------------------------------------ "Next up"
+
+    /** The event tile: first in the strip while an event is in progress or starts within the hour. */
+    private val nextUp: NextUpCard by lazy {
+        NextUpCard(this).also {
+            it.onActiveChanged = ::onNextUpChanged
+            it.onOpenAgenda = ::openAgenda
+        }
     }
 
     /**
-     * The page dots: the current tile's bright. A tile showing a calendar event instead of its
-     * own content (the Weather tile's "Next up") has a gold dot, always bright: the only signal
-     * when you're on another tile (the strip never switches tiles by itself).
+     * The strip as it shows now: the Widget Center's tiles, in order; while "Next up" is active,
+     * the event tile first, the Weather tile in Calendar & Date's place, and Calendar & Date out
+     * (the event tile stands for it). Without a Calendar & Date tile, Weather stays where it is.
+     */
+    private fun tiles(): List<HomeCard> {
+        if (!nextUp.active) return cards
+        val weather = cards.firstOrNull { it is WeatherCard }
+        val calendar = cards.firstOrNull { it is CalendarCard }
+        val rest = cards.mapNotNull {
+            when {
+                it === calendar -> weather
+                it === weather && calendar != null -> null
+                else -> it
+            }
+        }
+        return listOf(nextUp) + rest
+    }
+
+    /** An event came into the window: it's the front tile. It left: the usual order, the idle tile. */
+    private fun onNextUpChanged(active: Boolean) {
+        applyTileMode(restorePage = if (active) 0 else -1)
+        applyGlassShadows()
+    }
+
+    /** The Month + Day calendar opened from "Next up" (tests). */
+    internal var agendaDialog: android.app.Dialog? = null
+    internal var agendaView: io.github.iamth3doctor.searchlight.widgets.CalendarWidgetView? = null
+
+    /**
+     * "Next up" without a call link: the split Month + Day calendar, on the event's day, over the
+     * home screen (events open, edit and delete there as in the Calendar widget). Back or a tap
+     * outside closes it.
+     */
+    private fun openAgenda(event: io.github.iamth3doctor.searchlight.calendar.DayEvent) {
+        agendaDialog?.dismiss()
+        val view = io.github.iamth3doctor.searchlight.widgets.CalendarWidgetView(this, app.calendarEvents)
+        view.actions = calendarActions
+        view.onRequestPermission = { requestPermissions(arrayOf(android.Manifest.permission.READ_CALENDAR), WidgetController.REQUEST_CALENDAR_PERMISSION) }
+        val metrics = resources.displayMetrics
+        val widthDp = metrics.widthPixels / metrics.density
+        view.stacked = widthDp < AGENDA_SPLIT_MIN_DP
+        val day = java.time.Instant.ofEpochMilli(event.begin)
+            .atZone(if (event.allDay) java.time.ZoneOffset.UTC else java.time.ZoneId.systemDefault()).toLocalDate()
+        view.tapDay(day)
+        val margin = px(R.dimen.space_m)
+        val frame = FrameLayout(this).apply {
+            setPadding(margin, margin, margin, margin)
+            addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
+        val dialog = android.app.Dialog(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar).apply {
+            setContentView(frame)
+            setCanceledOnTouchOutside(true)
+            window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            window?.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, (metrics.heightPixels * AGENDA_HEIGHT).toInt())
+            setOnDismissListener { if (agendaDialog === this) { agendaDialog = null; agendaView = null } }
+        }
+        agendaDialog = dialog
+        agendaView = view
+        dialog.show()
+    }
+
+    /** One page dot per tile in the strip. */
+    private fun buildDots(n: Int) {
+        if (binding.dots.childCount == n) return
+        binding.dots.removeAllViews()
+        val dotSize = px(R.dimen.size_dot)
+        val dotGap = px(R.dimen.space_xs)
+        repeat(n) {
+            binding.dots.addView(View(this).apply {
+                setBackgroundResource(R.drawable.bg_dot)
+                layoutParams = LinearLayout.LayoutParams(dotSize, dotSize).apply { marginStart = dotGap; marginEnd = dotGap }
+            })
+        }
+    }
+
+    /**
+     * The page dots: the current tile's bright. The "Next up" tile's dot is gold and always
+     * bright: an event is coming up even when you've swiped to another tile.
      */
     private fun updateDots(position: Int) {
         val gold = android.content.res.ColorStateList.valueOf(getColor(R.color.gold))
+        val tiles = tiles()
         for (i in 0 until binding.dots.childCount) {
             val dot = binding.dots.getChildAt(i)
-            val event = (cards.getOrNull(i) as? WeatherCard)?.nextUp != null
+            val event = tiles.getOrNull(i) is NextUpCard
             dot.backgroundTintList = if (event) gold else null
             dot.alpha = if (i == position || event) 1f else 0.35f
             dot.tag = if (event) DOT_EVENT else null
         }
     }
 
-    /** What the last "Next up" tap without a video link showed (tests): the Calendar widget or the calendar app. */
-    internal var lastAgenda: String? = null
+    /** Tests: the "Next up" tile (in the strip or not). */
+    internal val nextUpTile: NextUpCard get() = nextUp
 
-    /**
-     * "Next up" without a video link: the agenda. The Calendar widget on the home screen goes to
-     * today (and leaves widget editing); with none placed, the calendar app opens on today.
-     */
-    private fun showAgenda() {
-        val calendars = widgets.calendarViews()
-        if (calendars.isEmpty()) {
-            lastAgenda = "app"
-            Actions.openCalendarAt(this, System.currentTimeMillis())
-            return
-        }
-        lastAgenda = "widget"
-        widgets.exitEditMode()
-        calendars.forEach { it.goToToday() }
-    }
-
-    /** Tests: the tiles. */
-    internal val homeCards: List<HomeCard> get() = cards
+    /** Tests: the tiles as the strip shows them now. */
+    internal val homeCards: List<HomeCard> get() = tiles()
 
     /** Idle card from the Widget Center, unless music is playing and should be in front. */
     private fun goToIdleCard() {
-        val music = cards.firstOrNull { it is MusicCard } as MusicCard?
+        val tiles = tiles()
+        val music = tiles.firstOrNull { it is MusicCard } as MusicCard?
         val target = if (prefs.musicAutoFront && music?.isPlaying == true) CardType.MUSIC else prefs.idleCard
-        val index = cards.indexOfFirst { it.type == target }.coerceAtLeast(0)
-        if (cards.isNotEmpty()) binding.cards.setCurrentItem(index, false)
+        // "Next up" is the front tile while it shows; otherwise the idle tile.
+        val index = when {
+            nextUp.active && target != CardType.MUSIC -> 0
+            else -> tiles.indexOfFirst { it.type == target && it !is NextUpCard }.coerceAtLeast(0)
+        }
+        if (tiles.isNotEmpty()) binding.cards.setCurrentItem(index, false)
         updateDots(index)
     }
 
     private fun onMusicStarted() {
         if (!prefs.musicAutoFront || query().isNotBlank()) return
-        val index = cards.indexOfFirst { it.type == CardType.MUSIC }
+        val index = tiles().indexOfFirst { it.type == CardType.MUSIC }
         if (index >= 0) binding.cards.setCurrentItem(index, true)
     }
 
@@ -1437,8 +1505,12 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     }
 
     companion object {
-        /** Tags a page dot that's gold: its tile is showing a calendar event (tests). */
+        /** Tags a page dot that's gold: the "Next up" tile's (tests). */
         const val DOT_EVENT = "dot_event"
+        /** The Month + Day calendar from "Next up": split side by side from this width, else month over day. */
+        private const val AGENDA_SPLIT_MIN_DP = 360f
+        /** ... and this much of the screen's height. */
+        private const val AGENDA_HEIGHT = 0.62f
 
         /** A widget id (already bound, e.g. from a pin request) to place on the home grid. */
         const val EXTRA_PLACE_WIDGET = "place_widget"

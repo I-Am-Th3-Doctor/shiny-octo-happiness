@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The "Next up" tile: one line (a gold bullet, the event, when) that scrolls when it doesn't fit. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:id="@+id/card"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:foreground="?android:attr/selectableItemBackground"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/space_m">
+
+        <io.github.iamth3doctor.searchlight.ui.MarqueeTextView
+            android:id="@+id/nextUpLine"
+            style="@style/StripText"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
+    </LinearLayout>
+</FrameLayout>

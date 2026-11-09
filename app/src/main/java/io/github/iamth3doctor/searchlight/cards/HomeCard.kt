@@ -30,6 +30,9 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
     protected var started = false
         private set
 
+    /** This tile's own pager view type: tiles can be re-arranged without a page getting another tile's view. */
+    val viewTypeId: Int = nextViewType++
+
     @get:LayoutRes protected abstract val layout: Int
 
     /** Narrowest this tile can be when tiles sit side by side (unfolded): room for its buttons. */
@@ -92,6 +95,8 @@ abstract class HomeCard(val type: CardType, protected val activity: Activity) {
     }
 }
 
+private var nextViewType = 0
+
 /** Non-blank [parts] joined with " · ", keeping their spans: one line of tile text. */
 fun joinedLine(vararg parts: CharSequence): CharSequence = SpannableStringBuilder().apply {
     parts.filter { it.isNotBlank() }.forEachIndexed { i, part ->
@@ -102,9 +107,10 @@ fun joinedLine(vararg parts: CharSequence): CharSequence = SpannableStringBuilde
 
 class CardsAdapter(private val cards: List<HomeCard>) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     override fun getItemCount() = cards.size
-    // One view type per card: each page keeps its own long-lived view.
-    override fun getItemViewType(position: Int) = position
+    // One view type per card (not per position): each page keeps its own long-lived view, even
+    // when the strip is re-arranged ("Next up" in front).
+    override fun getItemViewType(position: Int) = cards[position].viewTypeId
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
-        object : RecyclerView.ViewHolder(cards[viewType].viewFor(parent)) {}
+        object : RecyclerView.ViewHolder(cards.first { it.viewTypeId == viewType }.viewFor(parent)) {}
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) = Unit
 }

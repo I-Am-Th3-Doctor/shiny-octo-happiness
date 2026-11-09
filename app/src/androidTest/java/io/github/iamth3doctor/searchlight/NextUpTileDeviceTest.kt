@@ -1,7 +1,5 @@
 package io.github.iamth3doctor.searchlight
 
-import android.app.Activity
-import android.content.Intent
 import android.view.View
 import android.view.ViewGroup
 import androidx.test.core.app.ActivityScenario
@@ -10,12 +8,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.calendar.DayEvent
 import io.github.iamth3doctor.searchlight.cards.CardType
+import io.github.iamth3doctor.searchlight.cards.HomeCard
+import io.github.iamth3doctor.searchlight.cards.NextUpCard
 import io.github.iamth3doctor.searchlight.cards.WeatherCard
 import io.github.iamth3doctor.searchlight.ui.Actions
-import io.github.iamth3doctor.searchlight.widgets.BuiltInWidget
-import io.github.iamth3doctor.searchlight.widgets.GridSpec
-import io.github.iamth3doctor.searchlight.widgets.WidgetController
-import io.github.iamth3doctor.searchlight.widgets.WidgetPickerActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,9 +22,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * "Next up" in the Weather tile: an event starting within the hour, or in progress, takes the
- * tile's line (with its call platform); tapping joins the call, or shows the agenda; the tile's
- * page dot turns gold without the strip moving; past the event it's weather again by itself.
+ * "Next up" as its own tile: while an event is in progress or starts within the hour, it's the
+ * first tile, Weather takes Calendar & Date's place (still all there), and Calendar & Date is out;
+ * its dot is gold; tapping joins the call or opens the Month + Day calendar on the event's day;
+ * past the event the strip is back in its usual order.
  */
 @RunWith(AndroidJUnit4::class)
 class NextUpTileDeviceTest {
@@ -40,9 +37,8 @@ class NextUpTileDeviceTest {
     private val dir = "/sdcard/Download/searchlight-shots"
 
     private val now = (System.currentTimeMillis() / 60_000L) * 60_000L + 5_000L
-    private var events = emptyList<DayEvent>()
-    private var savedFolded = emptyList<GridSpec>()
-    private var savedUnfolded = emptyList<GridSpec>()
+    @Volatile private var events = emptyList<DayEvent>()
+    private var savedOrder = emptyList<CardType>()
 
     private fun shell(cmd: String) = instrumentation.uiAutomation.executeShellCommand(cmd).use {
         java.io.FileInputStream(it.fileDescriptor).readBytes()
@@ -73,33 +69,22 @@ class NextUpTileDeviceTest {
         app.calendarEvents.permissionOverride = true
         app.calendarEvents.eventsOverride = { _, _ -> events }
         Actions.startCallLinks = false
-        Actions.startCalendar = false
-        main {
-            savedFolded = app.prefs.widgetGrid
-            savedUnfolded = app.prefs.widgetGridUnfolded
-            app.prefs.widgetGrid = emptyList()
-            app.prefs.widgetGridUnfolded = emptyList()
-            app.prefs.focusMode = false
-        }
-        assertTrue("the Weather tile is on", CardType.WEATHER in app.prefs.enabledCards)
+        main { app.prefs.focusMode = false }
+        savedOrder = app.prefs.enabledCards
+        assertTrue("Weather and Calendar & Date are on", CardType.WEATHER in savedOrder && CardType.CALENDAR in savedOrder)
     }
 
     @After fun restore() {
         app.calendarEvents.permissionOverride = null
         app.calendarEvents.eventsOverride = null
         Actions.startCallLinks = true
-        Actions.startCalendar = true
-        main {
-            app.prefs.widgetGrid = savedFolded
-            app.prefs.widgetGridUnfolded = savedUnfolded
-        }
     }
 
-    private fun home(block: (ActivityScenario<MainActivity>, WeatherCard) -> Unit) {
+    private fun home(block: (ActivityScenario<MainActivity>, NextUpCard) -> Unit) {
         val s = ActivityScenario.launch(MainActivity::class.java)
         try {
             Thread.sleep(1500)
-            val card = on(s) { it.homeCards.filterIsInstance<WeatherCard>().single() }
+            val card = on(s) { it.nextUpTile }
             s.onActivity { card.clock = { now } }
             block(s, card)
         } finally {
@@ -107,61 +92,78 @@ class NextUpTileDeviceTest {
         }
     }
 
-    private fun reload(h: ActivityScenario<MainActivity>, card: WeatherCard) = h.onActivity { card.reloadNextUp() }
+    private fun reload(h: ActivityScenario<MainActivity>, card: NextUpCard) = h.onActivity { card.reload() }
 
-    private fun line(h: ActivityScenario<MainActivity>, card: WeatherCard) = on(h) { card.lineText?.toString() }
+    private fun line(h: ActivityScenario<MainActivity>, card: NextUpCard) = on(h) { card.lineText?.toString() }
+
+    /** The strip's tiles as kinds: "next", or the tile's type. */
+    private fun strip(h: ActivityScenario<MainActivity>): List<String> =
+        on(h) { it.homeCards.map { c: HomeCard -> if (c is NextUpCard) "next" else c.type.name } }
+
+    private fun usual() = savedOrder.map { it.name }
 
     private fun pager(a: MainActivity): ViewPager2 = a.findViewById(R.id.cards)
-    private fun weatherIndex(a: MainActivity) = a.homeCards.indexOfFirst { c -> c is WeatherCard }
-    /** Folded: one tile at a time, with page dots (unfolded shows every tile side by side). */
     private fun folded(h: ActivityScenario<MainActivity>) = on(h) { pager(it).isShown }
-    private fun currentTile(h: ActivityScenario<MainActivity>) = on(h) { pager(it).currentItem }
-    private fun showWeatherTile(h: ActivityScenario<MainActivity>) = h.onActivity { pager(it).setCurrentItem(weatherIndex(it), false) }
 
-    private fun dotIsGold(h: ActivityScenario<MainActivity>): Boolean = on(h) {
-        val dots = it.findViewById<ViewGroup>(R.id.dots)
-        dots.getChildAt(it.homeCards.indexOfFirst { c -> c is WeatherCard })?.tag == MainActivity.DOT_EVENT
-    }
+    private fun dotGold(h: ActivityScenario<MainActivity>, index: Int): Boolean =
+        on(h) { it.findViewById<ViewGroup>(R.id.dots).getChildAt(index)?.tag == MainActivity.DOT_EVENT }
 
-    private fun tap(h: ActivityScenario<MainActivity>, card: WeatherCard) = h.onActivity {
-        val tiles = it.homeCards.indexOf(card)
-        // The tile's own clickable card view: found from its line.
+    /** The tile's own (clickable) card view, found through the strip. */
+    private fun tap(h: ActivityScenario<MainActivity>, card: NextUpCard) = h.onActivity {
         fun find(v: View): View? {
-            if (v.id == R.id.card && (v as? ViewGroup)?.findViewById<View>(R.id.weatherLine) != null) return v
+            if (v.id == R.id.card && (v as? ViewGroup)?.findViewById<View>(R.id.nextUpLine) != null) return v
             if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { r -> return r }
             return null
         }
-        check(tiles >= 0)
         find(it.window.decorView)!!.performClick()
     }
 
-    @Test fun anEventStartingWithinTheHourTakesTheTileAndJoinsTheCall() = home { h, card ->
-        // On another tile than Weather (folded): the strip must stay there.
-        val other = if (folded(h)) on(h) { (weatherIndex(it) + 1) % it.homeCards.size } else -1
-        if (other >= 0) h.onActivity { pager(it).setCurrentItem(other, false) }
+    /** What the Weather tile currently says (its line). */
+    private fun weatherLine(h: ActivityScenario<MainActivity>): String = on(h) {
+        val w = it.homeCards.first { c -> c is WeatherCard }
+        fun find(v: View): String? {
+            if (v.id == R.id.weatherLine) return (v as android.widget.TextView).text.toString()
+            if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { r -> return r }
+            return null
+        }
+        check(w is WeatherCard)
+        find(it.window.decorView).orEmpty()
+    }
 
+    @Test fun anEventIsTheFirstTileAndWeatherTakesTheCalendarSpot() = home { h, card ->
+        assertEquals("the usual order", usual(), strip(h))
         events = listOf(DayEvent(1, "Team Sync", now + min(14), now + min(44), false, "Work", 0,
             location = "https://us02web.zoom.us/j/8812345678?pwd=abc"))
         reload(h, card)
-        waitFor("next up shown") { on(h) { card.nextUp != null } }
+        waitFor("event tile in front") { strip(h).firstOrNull() == "next" }
+
+        // [next, Weather in Calendar's place, the rest]: Calendar & Date out, Weather moved, not gone.
+        val expected = listOf("next") + usual().mapNotNull {
+            when (it) { "CALENDAR" -> "WEATHER"; "WEATHER" -> null; else -> it }
+        }
+        assertEquals(expected, strip(h))
         assertEquals("• Team Sync starts in 14 min (Zoom)", line(h, card))
-        assertFalse("no weather icon while it shows an event", on(h) { card.iconShown })
-        if (other >= 0) {
-            assertEquals("the strip didn't move", other, currentTile(h))
-            assertTrue("gold dot on the Weather tile's page", dotIsGold(h))
+        assertFalse("weather still shows weather", weatherLine(h).startsWith("•"))
+        if (folded(h)) {
+            assertEquals("the event tile is shown first", 0, on(h) { pager(it).currentItem })
+            assertTrue("its dot is gold", dotGold(h, 0))
+            assertFalse(dotGold(h, 1))
+            shell("screencap -p $dir/${prefix}_font1.0_92-next-up-starting.png")
+            // Still swipeable: on to Weather, which works as ever.
+            h.onActivity { pager(it).setCurrentItem(1, false) }
+            assertEquals(1, on(h) { pager(it).currentItem })
+            assertTrue("gold dot while on another tile", dotGold(h, 0))
+            h.onActivity { pager(it).setCurrentItem(0, false) }
+        } else {
+            shell("screencap -p $dir/${prefix}_font1.0_92-next-up-starting.png")
         }
 
-        // Tap: the call link opens.
+        // Tap: the call link.
         Actions.lastCallLink = null
         tap(h, card)
         assertEquals("https://us02web.zoom.us/j/8812345678?pwd=abc", Actions.lastCallLink)
 
-        if (folded(h)) showWeatherTile(h)
-        instrumentation.waitForIdleSync()
-        Thread.sleep(800)
-        shell("screencap -p $dir/${prefix}_font1.0_92-next-up-starting.png")
-
-        // Other platforms, live: Meet, Teams, any other call link, and none.
+        // Other platforms, live.
         for ((loc, suffix) in listOf("https://meet.google.com/abc-defg-hij" to " (Meet)",
             "https://teams.microsoft.com/l/meetup-join/19%3a" to " (Teams)", "https://acme.webex.com/meet/jane" to " (video link)", "Room 4" to "")) {
             events = listOf(DayEvent(1, "Team Sync", now + min(14), now + min(44), false, "Work", 0, location = loc))
@@ -170,33 +172,23 @@ class NextUpTileDeviceTest {
         }
     }
 
-    @Test fun inProgressCountsDownAndTapShowsTheAgenda() = home { h, card ->
+    @Test fun inProgressTapOpensTheMonthAndDayCalendar() = home { h, card ->
         events = listOf(DayEvent(2, "Design Review", now - min(8), now + min(22), false, "Work", 0))
         reload(h, card)
         waitFor("in progress shown") { line(h, card) == "• In progress: Design Review (Ends in 22 min)" }
-        if (folded(h)) assertTrue(dotIsGold(h))
-        if (folded(h)) showWeatherTile(h)
-        instrumentation.waitForIdleSync()
-        Thread.sleep(800)
+        assertEquals("next", strip(h).first())
         shell("screencap -p $dir/${prefix}_font1.0_93-next-up-in-progress.png")
 
-        // No call link, no Calendar widget: the calendar app on today.
-        Actions.lastCalendarUri = null
+        // No call link: the split Month + Day calendar opens, on the event's day.
         tap(h, card)
-        assertEquals("app", on(h) { it.lastAgenda })
-        assertTrue(Actions.lastCalendarUri != null)
-
-        // With the Calendar widget on home: it goes to today instead.
-        h.onActivity {
-            it.widgetController.onActivityResult(WidgetController.REQUEST_PICK, Activity.RESULT_OK,
-                Intent().putExtra(WidgetPickerActivity.EXTRA_BUILTIN, BuiltInWidget.CALENDAR.key))
-        }
-        waitFor("calendar widget") { on(h) { it.widgetController.calendarViews().isNotEmpty() } }
-        val v = on(h) { it.widgetController.calendarViews().single() }
-        h.onActivity { v.shiftMonth(2) }
-        tap(h, card)
-        assertEquals("widget", on(h) { it.lastAgenda })
-        waitFor("widget back on today") { on(h) { v.selected == v.today && v.month == java.time.YearMonth.from(v.today) } }
+        waitFor("calendar open") { on(h) { it.agendaDialog?.isShowing == true } }
+        val v = on(h) { it.agendaView!! }
+        val day = java.time.Instant.ofEpochMilli(now - min(8)).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        waitFor("on the event's day") { on(h) { v.selected == day && v.loadedMonth == v.month } }
+        assertTrue("shows the event", on(h) { v.byDay[day].orEmpty().any { e -> e.title == "Design Review" } })
+        Thread.sleep(600)
+        shell("screencap -p $dir/${prefix}_font1.0_94-next-up-calendar.png")
+        h.onActivity { it.agendaDialog!!.dismiss() }
 
         // A minute later the countdown moves on.
         h.onActivity { card.clock = { now + min(1) } }
@@ -204,22 +196,20 @@ class NextUpTileDeviceTest {
         waitFor("21 min") { line(h, card) == "• In progress: Design Review (Ends in 21 min)" }
     }
 
-    @Test fun pastTheEventItsWeatherAgain() = home { h, card ->
+    @Test fun pastTheEventTheStripIsBackInItsUsualOrder() = home { h, card ->
         events = listOf(DayEvent(3, "Standup", now + min(5), now + min(20), false, "Work", 0))
         reload(h, card)
-        waitFor("shown") { on(h) { card.nextUp != null } }
-        // The event's over: back to weather by itself, the dot plain again.
+        waitFor("event tile in front") { strip(h).firstOrNull() == "next" }
         h.onActivity { card.clock = { now + min(21) } }
         reload(h, card)
-        waitFor("weather again") { on(h) { card.nextUp == null } }
-        assertTrue(on(h) { card.iconShown })
-        assertFalse(line(h, card).orEmpty().startsWith("•"))
-        if (folded(h)) assertFalse(dotIsGold(h))
-        // Nothing within the hour (61 min away), or all-day: weather.
+        waitFor("usual order again") { strip(h) == usual() }
+        if (folded(h)) assertFalse("no gold dot", (0 until usual().size).any { dotGold(h, it) })
+        // Nothing within the hour (61 min away), or all-day: no event tile.
         events = listOf(DayEvent(4, "Later", now + min(82), now + min(90), false, "Work", 0),
             DayEvent(5, "Holiday", now - min(600), now + min(800), true, "Holidays", 0))
         reload(h, card)
         Thread.sleep(800)
-        assertNull(on(h) { card.nextUp })
+        assertNull(on(h) { card.status })
+        assertEquals(usual(), strip(h))
     }
 }

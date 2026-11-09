@@ -173,6 +173,7 @@
     <string name="cal_all_day">All day</string>
     <string name="cal_no_title">(No title)</string>
     <string name="next_up_join">Double-tap to join the call</string>
+    <string name="next_up_open">Double-tap to open the calendar</string>
     <string name="cal_today">Today, %1$s</string>
     <string name="cal_add_event">Add event</string>
     <string name="cal_arrange_widgets">Arrange widgets</string>
