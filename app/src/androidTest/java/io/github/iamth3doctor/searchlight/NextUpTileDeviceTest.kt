@@ -24,7 +24,7 @@ import org.junit.runner.RunWith
 /**
  * "Next up" as its own tile: while an event is in progress or starts within the hour, it's the
  * first tile, Weather takes Calendar & Date's place (still all there), and Calendar & Date is out;
- * its dot is gold; tapping joins the call or opens the Month + Day calendar on the event's day;
+ * its dot is gold; tapping joins the call or goes straight to the event in the calendar app;
  * past the event the strip is back in its usual order.
  */
 @RunWith(AndroidJUnit4::class)
@@ -69,6 +69,7 @@ class NextUpTileDeviceTest {
         app.calendarEvents.permissionOverride = true
         app.calendarEvents.eventsOverride = { _, _ -> events }
         Actions.startCallLinks = false
+        Actions.startCalendar = false
         main { app.prefs.focusMode = false }
         savedOrder = app.prefs.enabledCards
         assertTrue("Weather and Calendar & Date are on", CardType.WEATHER in savedOrder && CardType.CALENDAR in savedOrder)
@@ -78,6 +79,7 @@ class NextUpTileDeviceTest {
         app.calendarEvents.permissionOverride = null
         app.calendarEvents.eventsOverride = null
         Actions.startCallLinks = true
+        Actions.startCalendar = true
     }
 
     private fun home(block: (ActivityScenario<MainActivity>, NextUpCard) -> Unit) {
@@ -172,23 +174,18 @@ class NextUpTileDeviceTest {
         }
     }
 
-    @Test fun inProgressTapOpensTheMonthAndDayCalendar() = home { h, card ->
+    @Test fun inProgressTapOpensTheEventInTheCalendarApp() = home { h, card ->
         events = listOf(DayEvent(2, "Design Review", now - min(8), now + min(22), false, "Work", 0))
         reload(h, card)
         waitFor("in progress shown") { line(h, card) == "• In progress: Design Review (Ends in 22 min)" }
         assertEquals("next", strip(h).first())
         shell("screencap -p $dir/${prefix}_font1.0_93-next-up-in-progress.png")
 
-        // No call link: the split Month + Day calendar opens, on the event's day.
+        // No call link: one tap, straight to the calendar app at the event (no overlay).
+        Actions.lastCalendarUri = null
         tap(h, card)
-        waitFor("calendar open") { on(h) { it.agendaDialog?.isShowing == true } }
-        val v = on(h) { it.agendaView!! }
-        val day = java.time.Instant.ofEpochMilli(now - min(8)).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
-        waitFor("on the event's day") { on(h) { v.selected == day && v.loadedMonth == v.month } }
-        assertTrue("shows the event", on(h) { v.byDay[day].orEmpty().any { e -> e.title == "Design Review" } })
-        Thread.sleep(600)
-        shell("screencap -p $dir/${prefix}_font1.0_94-next-up-calendar.png")
-        h.onActivity { it.agendaDialog!!.dismiss() }
+        assertEquals(android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, 2L), Actions.lastCalendarUri)
+        assertTrue("nothing of Searchlight's opened over home", on(h) { it.hasWindowFocus() })
 
         // A minute later the countdown moves on.
         h.onActivity { card.clock = { now + min(1) } }

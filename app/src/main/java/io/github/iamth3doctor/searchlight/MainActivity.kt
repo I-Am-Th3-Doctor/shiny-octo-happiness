@@ -150,7 +150,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         savedInstanceState?.getInt(KEY_PENDING_WIDGET)?.let { widgets.pendingId = it }
         calendarActions = io.github.iamth3doctor.searchlight.widgets.CalendarEventActions(
             this, prefs, io.github.iamth3doctor.searchlight.calendar.CalendarWriter(this),
-            refresh = { widgets.refreshCalendars(); agendaView?.refresh() },
+            refresh = { widgets.refreshCalendars() },
             arrangeWidgets = { binding.widgetGrid.setEditMode(true) },
         )
         widgets.eventActions = calendarActions
@@ -468,7 +468,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private val nextUp: NextUpCard by lazy {
         NextUpCard(this).also {
             it.onActiveChanged = ::onNextUpChanged
-            it.onOpenAgenda = ::openAgenda
         }
     }
 
@@ -495,43 +494,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun onNextUpChanged(active: Boolean) {
         applyTileMode(restorePage = if (active) 0 else -1)
         applyGlassShadows()
-    }
-
-    /** The Month + Day calendar opened from "Next up" (tests). */
-    internal var agendaDialog: android.app.Dialog? = null
-    internal var agendaView: io.github.iamth3doctor.searchlight.widgets.CalendarWidgetView? = null
-
-    /**
-     * "Next up" without a call link: the split Month + Day calendar, on the event's day, over the
-     * home screen (events open, edit and delete there as in the Calendar widget). Back or a tap
-     * outside closes it.
-     */
-    private fun openAgenda(event: io.github.iamth3doctor.searchlight.calendar.DayEvent) {
-        agendaDialog?.dismiss()
-        val view = io.github.iamth3doctor.searchlight.widgets.CalendarWidgetView(this, app.calendarEvents)
-        view.actions = calendarActions
-        view.onRequestPermission = { requestPermissions(arrayOf(android.Manifest.permission.READ_CALENDAR), WidgetController.REQUEST_CALENDAR_PERMISSION) }
-        val metrics = resources.displayMetrics
-        val widthDp = metrics.widthPixels / metrics.density
-        view.stacked = widthDp < AGENDA_SPLIT_MIN_DP
-        val day = java.time.Instant.ofEpochMilli(event.begin)
-            .atZone(if (event.allDay) java.time.ZoneOffset.UTC else java.time.ZoneId.systemDefault()).toLocalDate()
-        view.tapDay(day)
-        val margin = px(R.dimen.space_m)
-        val frame = FrameLayout(this).apply {
-            setPadding(margin, margin, margin, margin)
-            addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        }
-        val dialog = android.app.Dialog(this, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar).apply {
-            setContentView(frame)
-            setCanceledOnTouchOutside(true)
-            window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-            window?.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, (metrics.heightPixels * AGENDA_HEIGHT).toInt())
-            setOnDismissListener { if (agendaDialog === this) { agendaDialog = null; agendaView = null } }
-        }
-        agendaDialog = dialog
-        agendaView = view
-        dialog.show()
     }
 
     /** One page dot per tile in the strip. */
@@ -1507,10 +1469,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     companion object {
         /** Tags a page dot that's gold: the "Next up" tile's (tests). */
         const val DOT_EVENT = "dot_event"
-        /** The Month + Day calendar from "Next up": split side by side from this width, else month over day. */
-        private const val AGENDA_SPLIT_MIN_DP = 360f
-        /** ... and this much of the screen's height. */
-        private const val AGENDA_HEIGHT = 0.62f
 
         /** A widget id (already bound, e.g. from a pin request) to place on the home grid. */
         const val EXTRA_PLACE_WIDGET = "place_widget"

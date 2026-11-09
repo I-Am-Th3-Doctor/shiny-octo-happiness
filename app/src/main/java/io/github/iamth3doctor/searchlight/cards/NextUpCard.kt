@@ -11,7 +11,6 @@ import android.text.style.StyleSpan
 import android.view.View
 import android.widget.TextView
 import io.github.iamth3doctor.searchlight.R
-import io.github.iamth3doctor.searchlight.calendar.DayEvent
 import io.github.iamth3doctor.searchlight.calendar.NextUp
 import io.github.iamth3doctor.searchlight.searchlight
 import io.github.iamth3doctor.searchlight.ui.Actions
@@ -24,8 +23,8 @@ import io.github.iamth3doctor.searchlight.ui.Actions
  * strip by itself. Events come from the Calendar Provider, through the same CalendarEvents as the
  * Calendar widget.
  *
- * Tap: the event's video-call link if it has one; otherwise the Month + Day calendar on the
- * event's day ([onOpenAgenda]). Never a dead end.
+ * Tap: the event's video-call link if it has one; otherwise straight to the calendar app at the
+ * event (its detail; the day, where the app takes no event links). Never a dead end.
  */
 class NextUpCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
 
@@ -50,9 +49,6 @@ class NextUpCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
     /** An event came into the window, or the last one left it: the home screen re-arranges the strip. */
     var onActiveChanged: ((Boolean) -> Unit)? = null
 
-    /** A tapped event without a call link: the Month + Day calendar on its day. */
-    var onOpenAgenda: ((DayEvent) -> Unit)? = null
-
     /** Once a minute, on the minute, while home is showing: the countdown moves, the window slides. */
     private val tick = object : Runnable {
         override fun run() {
@@ -71,7 +67,8 @@ class NextUpCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
     fun tap() {
         val s = status ?: return
         val call = s.call
-        if (call != null) Actions.openCallLink(activity, call.url) else onOpenAgenda?.invoke(s.event)
+        if (call != null) Actions.openCallLink(activity, call.url)
+        else Actions.openEventOrDay(activity, s.event.eventId, s.event.begin, s.event.end)
     }
 
     override fun onStart() {

@@ -154,6 +154,25 @@ object Actions {
         )
     }
 
+    /**
+     * The calendar app straight at this event (its detail, where the app takes event links, as
+     * Google Calendar does); an app that doesn't: the calendar app on the event's day instead.
+     */
+    fun openEventOrDay(context: Context, eventId: Long, begin: Long, end: Long): Boolean {
+        val uri = android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, eventId)
+        lastCalendarUri = uri
+        if (!startCalendar) return true
+        val opened = start(
+            context,
+            Intent(Intent.ACTION_VIEW, uri)
+                .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin)
+                .putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, end)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            toastOnFail = false,
+        )
+        return opened || openCalendarAt(context, begin)
+    }
+
     /** The calendar app on the day holding [timeMs]. */
     fun openCalendarAt(context: Context, timeMs: Long): Boolean {
         val uri = android.provider.CalendarContract.CONTENT_URI.buildUpon().appendPath("time").appendPath(timeMs.toString()).build()
