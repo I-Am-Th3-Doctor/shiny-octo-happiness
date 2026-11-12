@@ -70,7 +70,8 @@
     <dimen name="size_cal_header">32dp</dimen>        <!-- month / day header row -->
     <dimen name="size_cal_chevron">36dp</dimen>       <!-- prev / next, refresh, gear: touch width -->
     <dimen name="size_cal_icon">20dp</dimen>          <!-- refresh / gear glyph -->
-    <dimen name="size_cal_title_min">72dp</dimen>     <!-- day title beside the icons, at least ("Fri, Jun 5") -->
+    <dimen name="size_cal_title_min">72dp</dimen>
+    <dimen name="size_next_up_dismiss">32dp</dimen>   <!-- the "Next up" tile's ×: its touch target (glyph 16dp) -->     <!-- day title beside the icons, at least ("Fri, Jun 5") -->
     <dimen name="size_cal_day">28dp</dimen>           <!-- day number circle, at most -->
     <dimen name="size_cal_dot">4dp</dimen>            <!-- event dot under a day -->
     <dimen name="size_cal_color">8dp</dimen>          <!-- calendar color dot in a row -->

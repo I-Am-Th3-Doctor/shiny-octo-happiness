@@ -70,7 +70,7 @@ class NextUpTileDeviceTest {
         app.calendarEvents.eventsOverride = { _, _ -> events }
         Actions.startCallLinks = false
         Actions.startCalendar = false
-        main { app.prefs.focusMode = false }
+        main { app.prefs.focusMode = false; app.prefs.nextUpDismissed = emptySet() }
         savedOrder = app.prefs.enabledCards
         assertTrue("Weather and Calendar & Date are on", CardType.WEATHER in savedOrder && CardType.CALENDAR in savedOrder)
     }
@@ -80,6 +80,7 @@ class NextUpTileDeviceTest {
         app.calendarEvents.eventsOverride = null
         Actions.startCallLinks = true
         Actions.startCalendar = true
+        main { app.prefs.nextUpDismissed = emptySet() }
     }
 
     private fun home(block: (ActivityScenario<MainActivity>, NextUpCard) -> Unit) {
@@ -208,5 +209,59 @@ class NextUpTileDeviceTest {
         Thread.sleep(800)
         assertNull(on(h) { card.status })
         assertEquals(usual(), strip(h))
+    }
+
+    /** The tile's ×, found through the strip. */
+    private fun dismissButton(a: MainActivity): View? {
+        fun find(v: View): View? {
+            if (v.id == R.id.nextUpDismiss) return v
+            if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { r -> return r }
+            return null
+        }
+        return find(a.window.decorView)
+    }
+
+    @Test fun theDismissButtonPutsTheUsualTilesBackForThatEventOnly() = home { h, card ->
+        val sync = DayEvent(7, "Team Sync", now - min(5), now + min(25), false, "Work", 0,
+            location = "https://us02web.zoom.us/j/8812345678")
+        events = listOf(sync)
+        reload(h, card)
+        waitFor("event tile in front") { strip(h).firstOrNull() == "next" }
+        assertTrue("× shows while it's up", on(h) { dismissButton(it)?.isShown == true })
+        shell("screencap -p $dir/${prefix}_font1.0_95-next-up-dismiss.png")
+
+        // ×: the usual tiles at once; nothing opened (the × is its own target, not a tap on the tile).
+        Actions.lastCalendarUri = null
+        Actions.lastCallLink = null
+        h.onActivity { dismissButton(it)!!.performClick() }
+        waitFor("usual order") { strip(h) == usual() }
+        assertNull(on(h) { card.status })
+        if (folded(h)) assertFalse("no gold dot", (0 until usual().size).any { dotGold(h, it) })
+        assertNull(Actions.lastCalendarUri)
+        assertNull(Actions.lastCallLink)
+        // The event itself is untouched: still in the calendar data.
+        var stillThere = false
+        app.calendarEvents.load(now, now + min(60)) { l -> stillThere = l.any { it.eventId == 7L } }
+        waitFor("event still there") { stillThere }
+
+        // Stays dismissed as the minutes go by.
+        h.onActivity { card.clock = { now + min(3) } }
+        reload(h, card)
+        Thread.sleep(800)
+        assertEquals(usual(), strip(h))
+
+        // Another event coming into its window still takes over.
+        events = listOf(sync, DayEvent(8, "Design Review", now + min(30), now + min(60), false, "Work", 0))
+        reload(h, card)
+        waitFor("next event takes over") { strip(h).firstOrNull() == "next" }
+        assertEquals("• Design Review starts in 27 min", line(h, card))
+        // Tapping the tile (not the ×) still opens the calendar at that event.
+        tap(h, card)
+        assertEquals(android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, 8L), Actions.lastCalendarUri)
+
+        // Once the dismissed occurrence has ended, its dismissal is forgotten.
+        h.onActivity { card.clock = { now + min(26) } }
+        reload(h, card)
+        waitFor("dismissal dropped") { app.prefs.nextUpDismissed.isEmpty() }
     }
 }

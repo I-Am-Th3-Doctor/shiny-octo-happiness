@@ -224,6 +224,11 @@ class Prefs(context: Context) {
         get() = sp.getLong(KEY_CALENDAR_TARGET, -1L)
         set(value) = sp.edit().putLong(KEY_CALENDAR_TARGET, value).apply()
 
+    /** Event occurrences whose "Next up" takeover was dismissed ("id:begin:end"; see NextUp.entry). */
+    var nextUpDismissed: Set<String>
+        get() = sp.getStringSet(KEY_NEXT_UP_DISMISSED, null)?.toSet().orEmpty()
+        set(value) = sp.edit().putStringSet(KEY_NEXT_UP_DISMISSED, HashSet(value)).apply()
+
     /** The Calendar widget has asked Android for calendar access at least once. */
     var calendarPermissionAsked: Boolean
         get() = sp.getBoolean(KEY_CALENDAR_PERMISSION_ASKED, false)
@@ -505,6 +510,7 @@ class Prefs(context: Context) {
         private const val KEY_WIDGET_GRID_UNFOLDED = "widget_grid_unfolded"
         private const val KEY_CALENDAR_PERMISSION_ASKED = "calendar_permission_asked"
         private const val KEY_CALENDAR_TARGET = "calendar_target"
+        private const val KEY_NEXT_UP_DISMISSED = "next_up_dismissed"
         private const val KEY_TEMP_UNIT = "temp_unit"
         private const val KEY_PLACE_NAME = "place_name"
         private const val KEY_PLACE_ADMIN = "place_admin"

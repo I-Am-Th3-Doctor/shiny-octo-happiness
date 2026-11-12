@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The "Next up" tile: one line (a gold bullet, the event, when) that scrolls when it doesn't fit. -->
+<!-- The "Next up" tile: one line (a gold bullet, the event, when) that scrolls when it doesn't fit,
+     and a small dismiss × in the top end corner (its own touch target, over the card). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -11,7 +12,8 @@
         android:foreground="?android:attr/selectableItemBackground"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="@dimen/space_m">
+        android:paddingStart="@dimen/space_m"
+        android:paddingEnd="@dimen/size_next_up_dismiss">
 
         <io.github.iamth3doctor.searchlight.ui.MarqueeTextView
             android:id="@+id/nextUpLine"
@@ -20,4 +22,16 @@
             android:layout_weight="1"
             android:textAppearance="@style/TextAppearance.Searchlight.Body" />
     </LinearLayout>
+
+    <ImageView
+        android:id="@+id/nextUpDismiss"
+        android:layout_width="@dimen/size_next_up_dismiss"
+        android:layout_height="@dimen/size_next_up_dismiss"
+        android:layout_gravity="top|end"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/next_up_dismiss"
+        android:padding="@dimen/space_s"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_close"
+        android:tint="@color/on_surface_dim" />
 </FrameLayout>

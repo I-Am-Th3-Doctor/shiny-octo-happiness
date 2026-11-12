@@ -61,4 +61,21 @@ class NextUpTest {
         assertEquals("https://meet.google.com/abc", NextUp.callOf(ev(2, "x", 1, location = "https://meet.google.com/abc", description = "https://zoom.us/j/1"))!!.url)
         assertNull(NextUp.callIn("Room 4, Building B"))
     }
+
+    @Test fun dismissingOneOccurrence() {
+        val sync = ev(1, "Team Sync", -5, 30)
+        val next = ev(2, "Design Review", 40)
+        val dismissed = NextUp.keys(setOf(NextUp.entry(sync)))
+        // Dismissed: the in-progress one is skipped; the next one in its window still takes over.
+        assertEquals("Design Review", NextUp.pick(listOf(sync, next), now, dismissed = dismissed)!!.event.title)
+        assertNull(NextUp.pick(listOf(sync), now, dismissed = dismissed))
+        // Another occurrence of the same event (same id, another start) isn't dismissed.
+        val nextWeek = DayEvent(1, "Team Sync", now + min(5), now + min(35), false, "Work", 0)
+        assertEquals(State.STARTING, NextUp.pick(listOf(nextWeek), now, dismissed = dismissed)!!.state)
+        // Once it's ended the stored dismissal goes; until then it stays.
+        val stored = setOf(NextUp.entry(sync))
+        assertEquals(stored, NextUp.live(stored, now))
+        assertEquals(emptySet<String>(), NextUp.live(stored, sync.end))
+        assertEquals(emptySet<String>(), NextUp.live(setOf("junk"), now))
+    }
 }

@@ -25,6 +25,11 @@ import io.github.iamth3doctor.searchlight.ui.Actions
  *
  * Tap: the event's video-call link if it has one; otherwise straight to the calendar app at the
  * event (its detail; the day, where the app takes no event links). Never a dead end.
+ *
+ * The × in the corner dismisses the takeover for that occurrence only: the strip goes back to its
+ * usual order at once, and stays so until the occurrence ends (then the stored dismissal is
+ * dropped); another event coming into its window takes over as usual. The event itself is left
+ * as it is.
  */
 class NextUpCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
 
@@ -32,6 +37,7 @@ class NextUpCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
     override val rowFlexible = true
 
     private val events = activity.searchlight.calendarEvents
+    private val prefs = activity.searchlight.prefs
     private val main = Handler(Looper.getMainLooper())
     private var calendarWatch: Any? = null
     private var generation = 0
@@ -61,6 +67,7 @@ class NextUpCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
     override fun bind(root: View) {
         line = root.findViewById(R.id.nextUpLine)
         root.findViewById<View>(R.id.card).setOnClickListener { tap() }
+        root.findViewById<View>(R.id.nextUpDismiss).setOnClickListener { dismiss() }
     }
 
     /** The link, or the calendar on the event's day. */
@@ -69,6 +76,15 @@ class NextUpCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
         val call = s.call
         if (call != null) Actions.openCallLink(activity, call.url)
         else Actions.openEventOrDay(activity, s.event.eventId, s.event.begin, s.event.end)
+    }
+
+    /** The ×: this occurrence no longer takes over the strip (until it ends; the event's untouched). */
+    fun dismiss() {
+        val s = status ?: return
+        prefs.nextUpDismissed = NextUp.live(prefs.nextUpDismissed, clock()) + NextUp.entry(s.event)
+        generation++ // a reload already on its way mustn't bring it back
+        set(null)
+        reload()
     }
 
     override fun onStart() {
@@ -93,7 +109,11 @@ class NextUpCard(activity: Activity) : HomeCard(CardType.CALENDAR, activity) {
         val gen = ++generation
         events.load(now, now + NextUp.WINDOW_MS + 60_000L) { list ->
             if (gen != generation || !started) return@load
-            set(NextUp.pick(list, clock()))
+            // Dismissed occurrences that have ended are forgotten; the rest are skipped.
+            val stored = prefs.nextUpDismissed
+            val live = NextUp.live(stored, clock())
+            if (live.size != stored.size) prefs.nextUpDismissed = live
+            set(NextUp.pick(list, clock(), dismissed = NextUp.keys(live)))
         }
     }
 

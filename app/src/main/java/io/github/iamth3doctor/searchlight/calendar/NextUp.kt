@@ -21,8 +21,8 @@ object NextUp {
      * What the tile shows at [nowMs]: an event in progress (the one ending first) wins over one
      * starting soon (the one starting first); null outside both, when the tile is weather.
      */
-    fun pick(events: List<DayEvent>, nowMs: Long, windowMs: Long = WINDOW_MS): Status? {
-        val timed = events.filter { !it.allDay && it.end > it.begin }
+    fun pick(events: List<DayEvent>, nowMs: Long, windowMs: Long = WINDOW_MS, dismissed: Set<String> = emptySet()): Status? {
+        val timed = events.filter { !it.allDay && it.end > it.begin && key(it) !in dismissed }
         timed.filter { it.begin <= nowMs && nowMs < it.end }
             .minWithOrNull(compareBy<DayEvent>({ it.end }, { it.begin }, { it.title }))
             ?.let { return Status(it, State.IN_PROGRESS, ceilMinutes(it.end - nowMs), callOf(it)) }
@@ -30,6 +30,21 @@ object NextUp {
             .minWithOrNull(compareBy<DayEvent>({ it.begin }, { it.title }))
             ?.let { Status(it, State.STARTING, ceilMinutes(it.begin - nowMs), callOf(it)) }
     }
+
+    // ------------------------------------------------------------------ dismissing
+
+    /** One occurrence of an event: dismissing it never touches the event's other occurrences. */
+    fun key(e: DayEvent) = "${e.eventId}:${e.begin}"
+
+    /** What's stored for a dismissed occurrence: its key and its end ("12:1800000000000:1800001800000"). */
+    fun entry(e: DayEvent) = "${key(e)}:${e.end}"
+
+    /** Stored entries of occurrences that haven't ended by [nowMs] (an ended one's dismissal has done its job). */
+    fun live(entries: Set<String>, nowMs: Long): Set<String> =
+        entries.filterTo(HashSet()) { it.substringAfterLast(':').toLongOrNull()?.let { end -> end > nowMs } == true }
+
+    /** The keys of [entries], for [pick]. */
+    fun keys(entries: Set<String>): Set<String> = entries.mapTo(HashSet()) { it.substringBeforeLast(':') }
 
     /** Rounded up: never "in 0 min". */
     fun ceilMinutes(ms: Long) = ((ms + 59_999L) / 60_000L).coerceAtLeast(1)
