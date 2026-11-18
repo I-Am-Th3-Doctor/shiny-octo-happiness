@@ -525,7 +525,8 @@ class WeatherSceneDeviceTest {
     @Test fun offlineKeepsTheLastSceneWithJustAGlyph() {
         main {
             app.prefs.manualPlace = GeoPlace("Tacoma", "Washington", "US", 47.25, -122.44)
-            repo.showForTest(reading(3, 96, 0.0), offline = false)
+            // The last good reading has rain coming and a thunderstorm warning in effect.
+            repo.showForTest(storm(reading(3, 96, 0.0)), offline = false)
         }
         home { h ->
             val v = addWeather(h)
@@ -545,6 +546,7 @@ class WeatherSceneDeviceTest {
             waitFor("offline glyph") { on(h) { v.offlineShown } }
             assertEquals("the last good data", listOf("52°F", "H 52° · L 39°"), texts(v).map { it.text.toString() })
             assertTrue("the last good scene, still moving", on(h) { v.scene.conditions!!.cloudCover > 0.9 && v.scene.animating })
+            assertTrue("the last known alert", on(h) { v.alertShown })
             val glyph = on(h) { v.offlineGlyph }
             assertTrue("small", on(h) { glyph.width <= (24 * app.resources.displayMetrics.density) })
             shot("89-widget-offline")
@@ -552,11 +554,21 @@ class WeatherSceneDeviceTest {
         screen { s ->
             assertTrue(on(s) { it.offlineGlyph.isShown })
             assertTrue("no warning text", texts(on(s) { it.window.decorView }).none { it.text.contains("offline", ignoreCase = true) })
+            // The last known alert: pill and storm scene, details still there.
+            assertTrue(on(s) { it.alertPill.isShown })
+            assertEquals(io.github.iamth3doctor.searchlight.weather.AlertKind.THUNDER, on(s) { it.scene.conditions!!.severe })
             assertTrue("the last scene", on(s) { it.scene.conditions!!.cloudCover > 0.9 })
             shot("90-scene-offline")
             s.onActivity { it.scene.performClick() }
             val now = texts(on(s) { it.panel.sections["now"]!! }).map { it.text.toString() }
             assertTrue(now.toString(), "52°F" in now && now.any { it.startsWith("Updated ") })
+            // The last good precip: this hour's rows and the rain coming.
+            val card = on(s) { it.panel.precip }
+            assertEquals("0.00 IN", on(s) { card.rateValue.text.toString() })
+            assertTrue(on(s) { card.expected.text.toString() }.startsWith("Rain expected around "))
+            s.onActivity { it.bar.scrubTo(h0 + 3 * hour + 30 * 60_000L) }
+            assertEquals("0.16 IN", on(s) { card.rateValue.text.toString() })
+            assertEquals("80%", on(s) { card.chanceValue.text.toString() })
         }
         shell("cmd connectivity airplane-mode disable")
     }
