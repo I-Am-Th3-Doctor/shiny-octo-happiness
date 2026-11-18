@@ -103,8 +103,15 @@ class WeatherSceneDeviceTest {
         throw AssertionError("timed out: $what")
     }
 
+    /** Waits (a few seconds at most) for the app's main thread to go idle: a living scene may never quite. */
+    private fun idle() {
+        val done = java.util.concurrent.CountDownLatch(1)
+        instrumentation.waitForIdle { done.countDown() }
+        done.await(4, java.util.concurrent.TimeUnit.SECONDS)
+    }
+
     private fun shot(name: String) {
-        instrumentation.waitForIdleSync()
+        idle()
         Thread.sleep(900)
         shell("screencap -p $dir/${prefix}_font1.0_$name.png")
     }
@@ -350,7 +357,7 @@ class WeatherSceneDeviceTest {
     /** Waits until no screen change is under way. */
     private fun settle(h: ActivityScenario<WeatherActivity>) {
         waitFor("screens settled") { on(h) { !it.screens.moving } }
-        instrumentation.waitForIdleSync()
+        idle()
     }
 
     private fun rect(v: View): android.graphics.Rect = onMain {
@@ -1083,6 +1090,15 @@ class Watchdog(private val seconds: Long) : org.junit.rules.TestRule {
                         dump = "main thread:\n" + mainThread.stackTrace.joinToString("\n") { "  at $it" } +
                             "\ntest thread:\n" + test.stackTrace.joinToString("\n") { "  at $it" }
                         android.util.Log.e("Watchdog", "${description.methodName} stuck\n$dump")
+                        runCatching {
+                            // Also to a file beside the screenshots, which the workflow prints.
+                            val reg = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+                            val prefix = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("shotPrefix") ?: "device"
+                            val fds = reg.uiAutomation.executeShellCommandRw(
+                                "sh -c 'cat > /sdcard/Download/searchlight-shots/watchdog-$prefix-${description.methodName}.txt'")
+                            android.os.ParcelFileDescriptor.AutoCloseOutputStream(fds[1]).use { it.write(dump!!.toByteArray()) }
+                            android.os.ParcelFileDescriptor.AutoCloseInputStream(fds[0]).use { it.readBytes() }
+                        }
                         test.interrupt()
                     } catch (_: InterruptedException) {
                     }

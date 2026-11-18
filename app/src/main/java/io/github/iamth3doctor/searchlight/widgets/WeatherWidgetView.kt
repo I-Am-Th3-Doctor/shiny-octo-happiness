@@ -154,7 +154,7 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
                 lp?.gravity = Gravity.CENTER_VERTICAL or Gravity.START
                 textBox.setPadding(pad, 0, pad, 0)
                 tempView.setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(R.dimen.text_weather_temp_compact))
-                textBox.addView(tempView)
+                textBox.addView(tempView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 textBox.addView(hiLoView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
             Size.STANDARD, Size.WIDE -> {
@@ -163,8 +163,9 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
                 lp?.gravity = Gravity.BOTTOM or Gravity.START
                 textBox.setPadding(pad, pad, pad, px(R.dimen.space_s) + px(R.dimen.space_xs) / 2)
                 tempView.setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(if (size == Size.WIDE) R.dimen.text_weather_temp_wide else R.dimen.text_weather_temp))
-                textBox.addView(tempView)
-                textBox.addView(hiLoView)
+                // Each as wide as its own text (a vertical LinearLayout would stretch them to the box, clipping the wider one).
+                textBox.addView(tempView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                textBox.addView(hiLoView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
         }
         textBox.layoutParams = lp ?: textBox.layoutParams

@@ -65,18 +65,21 @@ jobs:
             adb install -r testiconpack/build/outputs/apk/debug/testiconpack-debug.apk
             adb push testiconpack/build/outputs/apk/debug/testiconpack-debug.apk /data/local/tmp/testiconpack.apk
             if [ -f arcticons.apk ]; then adb install -r arcticons.apk || echo "Arcticons didn't install"; else echo "No Arcticons download"; fi
-            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=folded
+            rm -f /tmp/device-tests-failed
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=folded || touch /tmp/device-tests-failed
             adb shell wm size 1840x2208
             adb shell wm density 420
             sleep 5
             adb shell wm size
-            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded || touch /tmp/device-tests-failed
             adb shell wm size reset
             adb shell wm density reset
             mkdir -p shots
             for i in 1 2 3; do adb pull /sdcard/Download/searchlight-shots/. shots/ && break; echo "adb pull failed, retrying"; sleep 3; done
             ls shots
             cat shots/widgets-*.txt || true
+            cat shots/watchdog-*.txt || true
+            test ! -f /tmp/device-tests-failed
 
       - name: Upload screenshots artifact
         uses: actions/upload-artifact@v7
