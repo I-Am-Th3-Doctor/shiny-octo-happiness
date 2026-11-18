@@ -59,7 +59,8 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
             invalidate()
             // The next frame after a pause, not on every vsync: the thread idles in between.
             val spent = (System.nanoTime() - now) / 1_000_000
-            choreographer.postFrameCallbackDelayed(this, (frameMs - spent - 8).coerceAtLeast(1))
+            // Even when a frame runs long (a slow GPU), leave the thread a real gap to idle in.
+            choreographer.postFrameCallbackDelayed(this, (frameMs - spent - 8).coerceAtLeast(MIN_GAP_MS))
         }
     }
 
@@ -131,6 +132,8 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
     }
 
     companion object {
+        private const val MIN_GAP_MS = 12L
+
         /** Tests: stand in for battery saver (null: the real setting). */
         @Volatile var powerSaveOverride: Boolean? = null
     }

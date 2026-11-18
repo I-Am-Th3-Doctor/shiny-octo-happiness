@@ -57,7 +57,7 @@ import kotlin.math.abs
 class WeatherSceneDeviceTest {
 
     /** A stuck test fails on its own instead of holding up the whole run. */
-    @get:Rule val timeout: org.junit.rules.Timeout = org.junit.rules.Timeout.seconds(240)
+    @get:Rule val watchdog = Watchdog(240)
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val app = instrumentation.targetContext.applicationContext as SearchlightApp
@@ -434,7 +434,8 @@ class WeatherSceneDeviceTest {
         return seen
     }
 
-    private fun opaque(v: View): Boolean = onMain {
+    /** Whether [v]'s background is solid (call on the main thread, e.g. inside on(h) {}). */
+    private fun opaque(v: View): Boolean = run {
         val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
         v.background.setBounds(0, 0, v.width, v.height)
         v.background.draw(android.graphics.Canvas(bmp))
@@ -1063,4 +1064,41 @@ class WeatherSceneDeviceTest {
     }
 
     @Suppress("unused") private fun f(c: Double) = WeatherText.f(c)
+}
+
+/**
+ * Fails a test that runs longer than [seconds] instead of letting it hold up the run, keeping the
+ * test on its own thread (unlike JUnit's Timeout). The failure says what the main thread was doing.
+ */
+class Watchdog(private val seconds: Long) : org.junit.rules.TestRule {
+    override fun apply(base: org.junit.runners.model.Statement, description: org.junit.runner.Description) =
+        object : org.junit.runners.model.Statement() {
+            override fun evaluate() {
+                val test = Thread.currentThread()
+                var dump: String? = null
+                val dog = Thread {
+                    try {
+                        Thread.sleep(seconds * 1000)
+                        val mainThread = android.os.Looper.getMainLooper().thread
+                        dump = "main thread:\n" + mainThread.stackTrace.joinToString("\n") { "  at $it" } +
+                            "\ntest thread:\n" + test.stackTrace.joinToString("\n") { "  at $it" }
+                        android.util.Log.e("Watchdog", "${description.methodName} stuck\n$dump")
+                        test.interrupt()
+                    } catch (_: InterruptedException) {
+                    }
+                }
+                dog.isDaemon = true
+                dog.start()
+                try {
+                    base.evaluate()
+                } catch (t: Throwable) {
+                    dump?.let { throw AssertionError("timed out after ${seconds}s\n$it", t) }
+                    throw t
+                } finally {
+                    dog.interrupt()
+                    Thread.interrupted()
+                }
+                dump?.let { throw AssertionError("timed out after ${seconds}s\n$it") }
+            }
+        }
 }
