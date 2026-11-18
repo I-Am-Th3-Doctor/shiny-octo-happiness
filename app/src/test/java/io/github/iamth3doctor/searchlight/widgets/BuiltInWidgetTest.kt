@@ -24,6 +24,11 @@ class BuiltInWidgetTest {
         assertEquals(4 to 3, BuiltInWidget.CALENDAR.defaultCols to BuiltInWidget.CALENDAR.defaultRows)
     }
 
+    @Test fun weatherIsTwoByTwo() {
+        assertEquals(BuiltInWidget.WEATHER, BuiltInWidget.fromKey("weather"))
+        assertEquals(2 to 2, BuiltInWidget.WEATHER.defaultCols to BuiltInWidget.WEATHER.defaultRows)
+    }
+
     @Test fun builtInsSurviveStorageAndRefitting() {
         val stored = listOf(GridSpec(-1, 0, 0, 4, 2), GridSpec(5, 0, 2, 2, 2))
         assertEquals(stored, WidgetGrid.parse(WidgetGrid.serialize(stored)))

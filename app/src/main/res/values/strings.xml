@@ -436,4 +436,37 @@
     <string name="lock_ask_title">Double-tap to lock</string>
     <string name="lock_ask_message">Double-tapping empty space on the home screen can lock your phone. Android only lets an app lock the screen through its accessibility service: turn on Searchlight\'s to use it.</string>
     <string name="lock_ask_open">Open settings</string>
+
+    <!-- Weather widget -->
+    <string name="widget_weather">Weather</string>
+    <string name="weather_widget_feels">Feels %1$s</string>
+    <string name="weather_widget_hi_lo">H %1$s · L %2$s</string>
+    <string name="weather_widget_updated">Updated %1$s</string>
+    <string name="weather_widget_offline">offline — showing last update</string>
+    <string name="weather_widget_offline_short">offline</string>
+    <string name="weather_widget_no_data">No weather yet</string>
+    <string name="weather_widget_desc">Weather: %1$s, %2$s in %3$s. Tap for details.</string>
+    <string name="weather_detail_now">Now</string>
+    <string name="weather_detail_hourly">Hourly</string>
+    <string name="weather_detail_daily">7 days</string>
+    <string name="weather_detail_sun">Sun</string>
+    <string name="weather_detail_moon">Moon</string>
+    <string name="weather_detail_sunrise">Sunrise</string>
+    <string name="weather_detail_sunset">Sunset</string>
+    <string name="weather_detail_moonrise">Moonrise</string>
+    <string name="weather_detail_moonset">Moonset</string>
+    <string name="weather_detail_phase">Phase</string>
+    <string name="weather_detail_humidity">Humidity</string>
+    <string name="weather_detail_dew">Dew point %1$s</string>
+    <string name="weather_detail_visibility">Visibility</string>
+    <string name="weather_detail_pressure">Pressure</string>
+    <string name="weather_detail_uv">UV index</string>
+    <string name="weather_detail_aqi">Air quality</string>
+    <string name="weather_detail_wind">Wind</string>
+    <string name="weather_detail_none">—</string>
+    <string name="weather_detail_no_rise">No rise today</string>
+    <string name="weather_detail_no_set">No set today</string>
+    <string name="weather_detail_today">Today</string>
+    <string name="weather_detail_now_hour">Now</string>
+    <string name="weather_detail_close">Close</string>
 </resources>

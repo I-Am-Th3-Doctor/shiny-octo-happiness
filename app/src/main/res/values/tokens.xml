@@ -77,6 +77,17 @@
     <dimen name="size_cal_color">8dp</dimen>          <!-- calendar color dot in a row -->
     <dimen name="size_cal_min_width">180dp</dimen>    <!-- smallest the widget resizes to -->
     <dimen name="size_cal_min_height">200dp</dimen>
+
+    <!-- Weather widget -->
+    <dimen name="size_weather_min_width">140dp</dimen>   <!-- smallest it resizes to (2x1) -->
+    <dimen name="size_weather_min_height">56dp</dimen>
+    <dimen name="size_weather_visual">48dp</dimen>       <!-- the condition visual, 2x2 / 4x2 -->
+    <dimen name="size_weather_visual_compact">40dp</dimen>
+    <dimen name="size_weather_visual_hour">22dp</dimen>  <!-- in the hourly strip -->
+    <dimen name="size_weather_detail_max">460dp</dimen>  <!-- the detail panel's widest -->
+    <dimen name="text_weather_temp">36sp</dimen>
+    <dimen name="text_weather_temp_compact">28sp</dimen>
+    <dimen name="text_weather_detail_temp">64sp</dimen>
     <dimen name="stroke_hairline">1.5dp</dimen>
     <dimen name="stroke_glass">1dp</dimen>
     <dimen name="glass_text_shadow">4dp</dimen>
@@ -137,6 +148,26 @@
 
     <!-- The predicted 6th favorite's halo: warm gold, about 60% at the icon's edge, fading out. -->
     <color name="predicted_glow">#99FFC93C</color>
+
+    <!-- Weather widget: each condition's tint (the glow behind the visual, and a wash on the glass) -->
+    <color name="weather_tint_clear_day">#FFFFC93C</color>   <!-- warm gold -->
+    <color name="weather_tint_clear_night">#FF2B3A78</color> <!-- cool dark indigo -->
+    <color name="weather_tint_partly_day">#FFE8B04A</color>
+    <color name="weather_tint_partly_night">#FF46508C</color>
+    <color name="weather_tint_cloudy">#FF8C96A0</color>
+    <color name="weather_tint_rain">#FF5E7891</color>        <!-- blue-gray -->
+    <color name="weather_tint_thunder">#FF6E5A9E</color>
+    <color name="weather_tint_snow">#FFB4D7EB</color>
+    <color name="weather_tint_fog">#FFA6A398</color>
+    <!-- the visual's own glyphs -->
+    <color name="weather_sun">#FFFFC93C</color>
+    <color name="weather_moon">#FFF4ECCB</color>
+    <color name="weather_cloud">#FFECEFF2</color>
+    <color name="weather_cloud_dark">#FFAAB4BE</color>
+    <color name="weather_drop">#FF8CC8F0</color>
+    <color name="weather_bolt">#FFFFC93C</color>
+    <color name="weather_snow">#FFFFFFFF</color>
+    <color name="weather_fog">#CCECEFF2</color>
 
     <!-- The app long-press menu: near-solid so its text reads over any wallpaper. -->
     <color name="menu_surface">#F21C1C1F</color>

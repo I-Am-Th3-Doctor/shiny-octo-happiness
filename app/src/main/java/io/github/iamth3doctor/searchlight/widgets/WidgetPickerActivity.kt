@@ -51,6 +51,8 @@ class WidgetPickerActivity : Activity() {
     private fun builtInRows(): List<Row> = listOf(
         Row(null, getString(R.string.widget_builtin_app), getString(R.string.widget_calendar),
             "${BuiltInWidget.CALENDAR.defaultCols} × ${BuiltInWidget.CALENDAR.defaultRows}", BuiltInWidget.CALENDAR),
+        Row(null, getString(R.string.widget_builtin_app), getString(R.string.widget_weather),
+            "${BuiltInWidget.WEATHER.defaultCols} × ${BuiltInWidget.WEATHER.defaultRows}", BuiltInWidget.WEATHER),
     )
 
     private val main = Handler(Looper.getMainLooper())
@@ -196,7 +198,9 @@ class WidgetPickerActivity : Activity() {
             }
             h.b.preview.setImageDrawable(null)
             if (row.builtIn != null) {
-                h.b.preview.setImageResource(R.drawable.preview_calendar_widget)
+                h.b.preview.setImageResource(
+                    if (row.builtIn == BuiltInWidget.WEATHER) R.drawable.preview_weather_widget else R.drawable.preview_calendar_widget,
+                )
                 return
             }
             val info = row.info ?: return

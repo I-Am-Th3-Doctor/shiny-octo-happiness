@@ -41,5 +41,18 @@ class OpenMeteoLiveTest {
         assertTrue(w.temperatureC in -60.0..60.0)
         assertTrue(w.lowC <= w.temperatureC && w.temperatureC <= w.highC)
         assertTrue(w.condition != "Unknown")
+
+        // The Weather widget's detail: hourly, 7 days, sun times, and the readings.
+        val d = w.detail
+        assertTrue("no detail", d != null)
+        d!!
+        println("Chicago detail: ${d.hourly.size} hours, ${d.daily.size} days, feels ${d.feelsLikeC}, hum ${d.humidity}, wind ${d.windMph} from ${d.windFromDeg}, vis ${d.visibilityM}, uv ${d.uvIndex}, pres ${d.pressureHpa}")
+        assertTrue(d.hourly.size >= 12)
+        assertTrue(d.daily.size == 7)
+        assertTrue(d.daily[0].sunrise != null && d.daily[0].sunset != null)
+        assertTrue(d.feelsLikeC != null && d.humidity != null && d.pressureHpa != null && d.windMph != null)
+        val aqi = OpenMeteo.parseAqi(get(OpenMeteo.airQualityUrl(place.latitude, place.longitude)))
+        println("Chicago AQI: $aqi")
+        assertTrue(aqi != null && aqi in 0..500)
     }
 }

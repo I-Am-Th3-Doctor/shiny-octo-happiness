@@ -6,7 +6,8 @@ package io.github.iamth3doctor.searchlight.widgets
  * hands out for app widgets. Pure; JVM-tested.
  */
 enum class BuiltInWidget(val key: String, val defaultCols: Int, val defaultRows: Int) {
-    CALENDAR("calendar", 4, 3);
+    CALENDAR("calendar", 4, 3),
+    WEATHER("weather", 2, 2);
 
     companion object {
         fun isBuiltIn(id: Int) = id < 0

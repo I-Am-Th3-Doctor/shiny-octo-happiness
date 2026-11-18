@@ -35,6 +35,8 @@ data class WeatherData(
     val highC: Double,
     val lowC: Double,
     val fetchedAt: Long,
+    /** The fuller forecast for the Weather widget and its detail view (null in readings cached before it). */
+    val detail: WeatherDetail? = null,
 ) {
     val condition: String get() = WeatherCodes.describe(weatherCode)
     val emoji: String get() = WeatherCodes.emoji(weatherCode, isDay)
@@ -43,6 +45,7 @@ data class WeatherData(
         .put("name", locationName).put("lat", latitude).put("lon", longitude)
         .put("t", temperatureC).put("code", weatherCode).put("day", isDay)
         .put("hi", highC).put("lo", lowC).put("at", fetchedAt)
+        .putOpt("detail", detail?.toJson())
         .toString()
 
     companion object {
@@ -52,6 +55,7 @@ data class WeatherData(
                 o.getString("name"), o.getDouble("lat"), o.getDouble("lon"),
                 o.getDouble("t"), o.getInt("code"), o.getBoolean("day"),
                 o.getDouble("hi"), o.getDouble("lo"), o.getLong("at"),
+                o.optJSONObject("detail")?.let { d -> runCatching { WeatherDetail.fromJson(d) }.getOrNull() },
             )
         } catch (e: Exception) {
             null
@@ -122,11 +126,23 @@ object OpenMeteo {
     fun forecastUrl(latitude: Double, longitude: Double): String = String.format(
         Locale.US,
         "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f" +
-            "&current=temperature_2m,weather_code,is_day" +
-            "&daily=temperature_2m_max,temperature_2m_min" +
-            "&temperature_unit=celsius&timezone=auto&forecast_days=1",
+            "&current=temperature_2m,weather_code,is_day,apparent_temperature,relative_humidity_2m,dew_point_2m," +
+            "pressure_msl,visibility,wind_speed_10m,wind_direction_10m,uv_index" +
+            "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset" +
+            "&hourly=temperature_2m,weather_code,is_day&forecast_hours=25" +
+            "&temperature_unit=celsius&wind_speed_unit=mph&timezone=auto&timeformat=unixtime&forecast_days=7",
         latitude, longitude,
     )
+
+    /** The US AQI now, from Open-Meteo's free air-quality service (no key either). */
+    fun airQualityUrl(latitude: Double, longitude: Double): String = String.format(
+        Locale.US,
+        "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=%.2f&longitude=%.2f&current=us_aqi&timezone=auto",
+        latitude, longitude,
+    )
+
+    fun parseAqi(json: String): Int? =
+        JSONObject(json).optJSONObject("current")?.let { c -> if (c.has("us_aqi") && !c.isNull("us_aqi")) c.optDouble("us_aqi").takeIf { !it.isNaN() }?.toInt() else null }
 
     /** City names and postal codes both work ("Austin", "78701", "London"). */
     fun geocodeUrl(query: String): String =
@@ -151,6 +167,7 @@ object OpenMeteo {
             highC = maxOf(hi, t),
             lowC = minOf(lo, t),
             fetchedAt = now,
+            detail = runCatching { WeatherDetail.parse(root, now) }.getOrNull(),
         )
     }
 

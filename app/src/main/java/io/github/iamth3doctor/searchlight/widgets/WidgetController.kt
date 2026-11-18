@@ -22,6 +22,7 @@ import android.util.SizeF
 import android.widget.Toast
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.data.Prefs
+import io.github.iamth3doctor.searchlight.searchlight
 import io.github.iamth3doctor.searchlight.ui.Posture
 import kotlin.math.roundToInt
 
@@ -148,6 +149,27 @@ class WidgetController(
 
     // ------------------------------------------------------------------ built-in widgets
 
+    /** Which built-in widget [id] is (ids placed before there was more than one are Calendars). */
+    private fun builtInType(id: Int): BuiltInWidget =
+        BuiltInWidget.fromKey(prefs.builtInTypes[id]) ?: BuiltInWidget.CALENDAR
+
+    /** Every built-in widget on the grid (frosted glass surfaces). */
+    fun builtInViews(): List<View> = views.values.filter { it is CalendarWidgetView || it is WeatherWidgetView }
+
+    /** The Weather widgets on the grid, live. */
+    fun weatherViews(): List<WeatherWidgetView> = views.values.filterIsInstance<WeatherWidgetView>()
+
+    /** The open Weather detail view, if any (tests). */
+    var weatherDetail: WeatherDetailSheet? = null
+        private set
+
+    fun openWeatherDetail(): WeatherDetailSheet =
+        WeatherDetailSheet(activity, activity.searchlight.weather, decorate).let { sheet ->
+            weatherDetail = sheet
+            sheet.onDismissed = { if (weatherDetail === sheet) weatherDetail = null }
+            sheet.show()
+        }
+
     /** The Calendar widgets on the grid (either posture), live. */
     fun calendarViews(): List<CalendarWidgetView> = views.values.filterIsInstance<CalendarWidgetView>()
 
@@ -192,6 +214,7 @@ class WidgetController(
     /** Places a built-in widget (from the picker) in the first free space that fits it. */
     private fun placeBuiltIn(type: BuiltInWidget) {
         val id = BuiltInWidget.newId(prefs.widgetGrid + prefs.widgetGridUnfolded)
+        prefs.builtInTypes = prefs.builtInTypes + (id to type.key)
         val (w, h) = type.defaultCols.coerceAtMost(grid.cols) to type.defaultRows.coerceAtMost(grid.rows)
         val (minW, minH) = minSpan(id)
         val spot = WidgetGrid.place(grid.placedSpecs(), id, w, h, minW, minH, grid.cols, grid.rows)
@@ -201,11 +224,14 @@ class WidgetController(
         }
         layout = WidgetGrid.upsert(layout, spot)
         render()
+        // A new Weather widget: fresh weather now (the last reading shows meanwhile).
+        if (type == BuiltInWidget.WEATHER) activity.searchlight.weather.refresh()
     }
 
     /** The Calendar widget splits month | agenda from three cells wide; narrower, it stacks them. */
     private fun arrange(v: View, spec: GridSpec) {
         if (v is CalendarWidgetView) v.stacked = spec.colSpan < SPLIT_MIN_COLS
+        if (v is WeatherWidgetView) v.size = WeatherWidgetView.sizeFor(spec.colSpan, spec.rowSpan)
     }
 
     /** Add / details / edit / delete for Calendar widgets' events (set by the home screen). */
@@ -215,7 +241,16 @@ class WidgetController(
             calendarViews().forEach { it.actions = value }
         }
 
-    private fun builtInView(id: Int): View = CalendarWidgetView(activity, calendarEvents).also { v ->
+    private fun builtInView(id: Int): View = when (builtInType(id)) {
+        BuiltInWidget.WEATHER -> WeatherWidgetView(activity, activity.searchlight.weather).also { v ->
+            v.onLongPress = { grid.enterEditModeFromLongPress() }
+            v.onOpen = { if (!grid.editMode) openWeatherDetail() }
+            v.onContentChanged = decorate
+        }
+        BuiltInWidget.CALENDAR -> calendarView()
+    }
+
+    private fun calendarView(): View = CalendarWidgetView(activity, calendarEvents).also { v ->
         v.onLongPress = { grid.enterEditModeFromLongPress() }
         v.onRequestPermission = ::requestCalendarPermission
         v.onContentChanged = decorate
@@ -338,7 +373,7 @@ class WidgetController(
     override fun onRemove(id: Int) {
         prefs.widgetGrid = WidgetGrid.remove(prefs.widgetGrid, id)
         prefs.widgetGridUnfolded = WidgetGrid.remove(prefs.widgetGridUnfolded, id)
-        if (!BuiltInWidget.isBuiltIn(id)) host.deleteAppWidgetId(id)
+        if (!BuiltInWidget.isBuiltIn(id)) host.deleteAppWidgetId(id) else prefs.builtInTypes = prefs.builtInTypes - id
         views.remove(id)
         reportedSizes.remove(id)
         render()
@@ -353,8 +388,12 @@ class WidgetController(
 
     override fun minSpan(id: Int): Pair<Int, Int> {
         if (BuiltInWidget.isBuiltIn(id)) {
-            return WidgetGrid.spanFor(activity.resources.getDimension(R.dimen.size_cal_min_width) / density, grid.cellWidthDp, grid.cols) to
-                WidgetGrid.spanFor(activity.resources.getDimension(R.dimen.size_cal_min_height) / density, grid.cellHeightDp, grid.rows)
+            val (wRes, hRes) = when (builtInType(id)) {
+                BuiltInWidget.WEATHER -> R.dimen.size_weather_min_width to R.dimen.size_weather_min_height
+                BuiltInWidget.CALENDAR -> R.dimen.size_cal_min_width to R.dimen.size_cal_min_height
+            }
+            return WidgetGrid.spanFor(activity.resources.getDimension(wRes) / density, grid.cellWidthDp, grid.cols) to
+                WidgetGrid.spanFor(activity.resources.getDimension(hRes) / density, grid.cellHeightDp, grid.rows)
         }
         val info = manager.getAppWidgetInfo(id) ?: return 1 to 1
         val (canH, canV) = resizable(id)

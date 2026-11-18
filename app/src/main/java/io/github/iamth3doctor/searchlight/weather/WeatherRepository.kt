@@ -79,6 +79,17 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
         }
     }
 
+    /** Tests: hold off real fetches ([refresh] only counts them in [refreshRequests]). */
+    @Volatile var holdForTest = false
+
+    /** Every [refresh] asked for, held or not (tests). */
+    var refreshRequests = 0
+        private set
+
+    /** Tests: what the home screen and widgets show, as if fetched (offline = the last fetch failed). */
+    fun showForTest(data: WeatherData?, offline: Boolean) =
+        setState(State(data, loading = false, problem = if (offline) Problem.NETWORK else null))
+
     fun refreshIfOlderThan(maxAgeMs: Long) {
         val age = System.currentTimeMillis() - (state.data?.fetchedAt ?: 0)
         if (age > maxAgeMs || state.problem != null) refresh()
@@ -86,6 +97,8 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
 
     /** Call after the location setting changes (and from "Refresh" on the card). */
     fun refresh() {
+        refreshRequests++
+        if (holdForTest) return
         if (state.loading) return
         setState(state.copy(loading = true))
         val manual = prefs.manualPlace
@@ -106,7 +119,16 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
                 } else {
                     val (name, lat, lon) = target
                     val json = httpGet(OpenMeteo.forecastUrl(lat, lon))
-                    State(OpenMeteo.parseForecast(json, name, lat, lon, System.currentTimeMillis()), false, null)
+                    var data = OpenMeteo.parseForecast(json, name, lat, lon, System.currentTimeMillis())
+                    // Air quality is its own (free) call; without it the rest still shows.
+                    val aqi = try {
+                        OpenMeteo.parseAqi(httpGet(OpenMeteo.airQualityUrl(lat, lon)))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Air quality failed", e)
+                        null
+                    }
+                    data.detail?.let { d -> data = data.copy(detail = d.copy(aqi = aqi)) }
+                    State(data, false, null)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Weather refresh failed", e)
