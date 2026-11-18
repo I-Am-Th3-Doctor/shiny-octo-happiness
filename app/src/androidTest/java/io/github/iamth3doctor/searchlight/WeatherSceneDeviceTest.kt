@@ -909,7 +909,10 @@ class WeatherSceneDeviceTest {
         for ((night, name) in listOf("no" to "91-hero-light", "yes" to "92-hero-dark")) {
             shell("cmd uimode night $night")
             Thread.sleep(1500)
+            idle()
             screen { h ->
+                // The theme change may still be landing: wait until the screen is in that theme.
+                runCatching { waitFor("theme applied") { on(h) { (it.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_YES != 0) == (night == "yes") } } }
                 force(h, reading(1, 25, 0.0))
                 assertEquals("52", on(h) { it.hero.number })
                 assertTrue("the whole number fits", on(h) { it.hero.fits() })
@@ -1083,6 +1086,7 @@ class Watchdog(private val seconds: Long) : org.junit.rules.TestRule {
             override fun evaluate() {
                 val test = Thread.currentThread()
                 var dump: String? = null
+                var summary = ""
                 val dog = Thread {
                     try {
                         Thread.sleep(seconds * 1000)
@@ -1090,6 +1094,9 @@ class Watchdog(private val seconds: Long) : org.junit.rules.TestRule {
                         dump = "main thread:\n" + mainThread.stackTrace.joinToString("\n") { "  at $it" } +
                             "\ntest thread:\n" + test.stackTrace.joinToString("\n") { "  at $it" }
                         android.util.Log.e("Watchdog", "${description.methodName} stuck\n$dump")
+                        // One line too, so the test report's console summary keeps it whole.
+                        fun line(t: Thread) = t.stackTrace.take(30).joinToString(" < ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" }
+                        summary = "MAIN: ${line(mainThread)} || TEST: ${line(test)}"
                         runCatching {
                             // Also to a file beside the screenshots, which the workflow prints.
                             val reg = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
@@ -1108,13 +1115,13 @@ class Watchdog(private val seconds: Long) : org.junit.rules.TestRule {
                 try {
                     base.evaluate()
                 } catch (t: Throwable) {
-                    dump?.let { throw AssertionError("timed out after ${seconds}s\n$it", t) }
+                    dump?.let { throw AssertionError("timed out after ${seconds}s $summary\n$it", t) }
                     throw t
                 } finally {
                     dog.interrupt()
                     Thread.interrupted()
                 }
-                dump?.let { throw AssertionError("timed out after ${seconds}s\n$it") }
+                dump?.let { throw AssertionError("timed out after ${seconds}s $summary\n$it") }
             }
         }
 }

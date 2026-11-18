@@ -18,7 +18,7 @@ jobs:
   screenshots:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[screenshots]')
     runs-on: ubuntu-24.04
-    timeout-minutes: 70
+    timeout-minutes: 95
     steps:
       - uses: actions/checkout@v5
 
@@ -67,11 +67,13 @@ jobs:
             if [ -f arcticons.apk ]; then adb install -r arcticons.apk || echo "Arcticons didn't install"; else echo "No Arcticons download"; fi
             rm -f /tmp/device-tests-failed
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=folded || touch /tmp/device-tests-failed
+            adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-*.txt' || true
             adb shell wm size 1840x2208
             adb shell wm density 420
             sleep 5
             adb shell wm size
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded || touch /tmp/device-tests-failed
+            adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-unfolded-*.txt' || true
             adb shell wm size reset
             adb shell wm density reset
             mkdir -p shots
