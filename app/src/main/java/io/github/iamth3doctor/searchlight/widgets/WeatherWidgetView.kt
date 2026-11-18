@@ -99,10 +99,11 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
             t.includeFontPadding = false
             t.setShadowLayer(pxF(R.dimen.glass_text_shadow) * 1.5f, 0f, pxF(R.dimen.stroke_glass), context.color(R.color.scrim))
         }
+        // Lexend Bold exactly (weight 700): "bold" on top of the bold glance style would be faked wider.
         tempView.type(Type.GLANCE)
-        tempView.typeface = Typeface.create(tempView.typeface, Typeface.BOLD)
+        tempView.typeface = Typeface.create(tempView.typeface, 700, false)
         hiLoView.type(Type.BODY)
-        hiLoView.typeface = Typeface.create(hiLoView.typeface, Typeface.BOLD)
+        hiLoView.typeface = Typeface.create(hiLoView.typeface, 700, false)
         hiLoView.ellipsize = TextUtils.TruncateAt.END
         addView(textBox, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START))
 

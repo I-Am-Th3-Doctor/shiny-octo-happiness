@@ -58,7 +58,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
 
     private fun text(style: Int, dimmed: Boolean = false, bold: Boolean = false) = TextView(context).apply {
         type(style)
-        if (bold) typeface = Typeface.create(typeface, Typeface.BOLD)
+        if (bold) typeface = Typeface.create(typeface, 700, false) // Lexend Bold itself, never a faked heavier one
         setTextColor(if (dimmed) dim else fg)
         includeFontPadding = false
     }
