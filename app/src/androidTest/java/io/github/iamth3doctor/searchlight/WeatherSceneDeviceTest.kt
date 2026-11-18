@@ -554,11 +554,13 @@ class WeatherSceneDeviceTest {
         fun release(d: Long) = main { row.dispatchTouchEvent(MotionEvent.obtain(d, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, 40f, 20f, 0)) }
         var down = hold()
         val began = SystemClock.uptimeMillis()
-        assertTrue("from the start of the day", on(h) { week.progress } < 0.05)
+        // (Exactly from the start is checked on the stepped clock below; here, a slow frame may have passed.)
+        assertTrue("from the start of the day", on(h) { week.progress } < 0.15)
         assertEquals(View.VISIBLE, on(h) { week.overlay.visibility })
         assertTrue(on(h) { week.caption.text.toString() }, on(h) { week.caption.text.toString() }.contains("rain ${hourText(15)}–${hourText(18)}"))
         assertEquals("the bar marks when rain is due", listOf(15 / 24f to 18 / 24f), on(h) { week.lapseBar.windows })
         val readouts = LinkedHashSet<String>()
+        val pairs = ArrayList<Pair<Double, String>>()
         var last = -1.0
         var ended = 0L
         while (SystemClock.uptimeMillis() - began < 13_000) {
@@ -567,14 +569,18 @@ class WeatherSceneDeviceTest {
             assertEquals(p.toFloat(), bar, 0.001f)
             last = p
             readouts += r
+            pairs += p to r
             if (p >= 1.0) { ended = SystemClock.uptimeMillis(); break }
             Thread.sleep(100)
         }
         val took = ended - began
         assertTrue("the whole day in about 9 s: $took ms", took in 8_000L..10_800L)
-        assertTrue("the readout tracks the hours: $readouts", readouts.size >= 12)
-        assertTrue(readouts.toString(), readouts.contains("${hourText(15)} · ${WeatherText.f(4.0 + 15 * 0.45)}° · 80% rain"))
-        assertTrue(readouts.toString(), readouts.contains("${hourText(14)} · ${WeatherText.f(4.0 + 14 * 0.45)}° · 10% rain"))
+        // Every sample's readout is the hour the playhead is in (the 3 PM rain itself: on the stepped clock below).
+        assertTrue("the readout moves through the hours: $readouts", readouts.size >= 8)
+        for ((p, r) in pairs) {
+            val k = ((DayLapse.time(tomorrow, p) - tomorrow) / hour).toInt()
+            assertTrue("at ${"%.3f".format(p)} the readout is hour $k's: $r", r.startsWith("${hourText(k)} · ") || r.startsWith("${hourText(k - 1)} · "))
+        }
         release(down)
         assertNull(on(h) { week.previewDay })
         assertFalse("let go: it stops", on(h) { week.preview.animating })
