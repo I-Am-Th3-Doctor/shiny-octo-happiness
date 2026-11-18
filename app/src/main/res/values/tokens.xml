@@ -90,6 +90,7 @@
     <dimen name="text_weather_temp_wide">44sp</dimen>
     <dimen name="size_weather_bar">104dp</dimen>         <!-- the day bar on the weather screen -->
     <dimen name="size_weather_week_preview">200dp</dimen> <!-- the 7-day view's window on the held day -->
+    <dimen name="size_weather_metric_art">150dp</dimen> <!-- an open metric card's animated picture -->
     <dimen name="size_weather_island">128dp</dimen>      <!-- the precip card's island -->
     <dimen name="size_weather_precip_graph">112dp</dimen>
     <dimen name="text_weather_detail_temp">64sp</dimen>

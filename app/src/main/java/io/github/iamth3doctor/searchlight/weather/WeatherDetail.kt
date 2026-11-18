@@ -21,6 +21,8 @@ data class HourPoint(
     val precipProb: Int? = null,
     val windMph: Double? = null,
     val windFromDeg: Double? = null,
+    /** Sea-level pressure (hPa): the pressure card's trend. */
+    val pressureHpa: Double? = null,
 )
 
 /** One day: [date] is its local midnight in epoch ms; sun times in epoch ms. */
@@ -66,7 +68,7 @@ data class WeatherDetail(
             hourly.forEach {
                 put(JSONObject().put("t", it.time).put("c", it.tempC).put("k", it.code).put("d", it.isDay)
                     .putOpt("cc", it.cloudPct).putOpt("pr", it.precipMm).putOpt("pp", it.precipProb)
-                    .putOpt("ws", it.windMph).putOpt("wd", it.windFromDeg))
+                    .putOpt("ws", it.windMph).putOpt("wd", it.windFromDeg).putOpt("ps", it.pressureHpa))
             }
         })
         .put("days", JSONArray().apply {
@@ -89,7 +91,7 @@ data class WeatherDetail(
                 (0 until a.length()).map { i ->
                     a.getJSONObject(i).let {
                         HourPoint(it.getLong("t"), it.getDouble("c"), it.getInt("k"), it.getBoolean("d"),
-                            it.int("cc"), it.dbl("pr"), it.int("pp"), it.dbl("ws"), it.dbl("wd"))
+                            it.int("cc"), it.dbl("pr"), it.int("pp"), it.dbl("ws"), it.dbl("wd"), it.dbl("ps"))
                     }
                 }
             }.orEmpty(),
@@ -129,6 +131,7 @@ data class WeatherDetail(
                     precipProb = dAt(arr(hourlyJ, "precipitation_probability"), i)?.toInt(),
                     windMph = dAt(arr(hourlyJ, "wind_speed_10m"), i),
                     windFromDeg = dAt(arr(hourlyJ, "wind_direction_10m"), i),
+                    pressureHpa = dAt(arr(hourlyJ, "pressure_msl"), i),
                 )
             }
             val days = ArrayList<DayPoint>()
@@ -167,7 +170,8 @@ data class WeatherDetail(
             )
         }
 
-        const val KEEP_BEFORE_MS = 4 * 3_600_000L
+        /** The whole of today stays (the 7-day view plays today from midnight). */
+        const val KEEP_BEFORE_MS = 24 * 3_600_000L
         const val KEEP_AFTER_MS = 7 * 24 * 3_600_000L
     }
 }

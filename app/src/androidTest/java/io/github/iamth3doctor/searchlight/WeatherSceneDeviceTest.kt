@@ -15,6 +15,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.viewpager2.widget.ViewPager2
 import io.github.iamth3doctor.searchlight.cards.WeatherCard
 import io.github.iamth3doctor.searchlight.weather.DayBar
+import io.github.iamth3doctor.searchlight.weather.DayLapse
+import io.github.iamth3doctor.searchlight.weather.MetricArt
 import io.github.iamth3doctor.searchlight.weather.DayPoint
 import io.github.iamth3doctor.searchlight.weather.GeoPlace
 import io.github.iamth3doctor.searchlight.weather.HourPoint
@@ -189,7 +191,7 @@ class WeatherSceneDeviceTest {
             val wet = i in 3..5
             HourPoint(base + i * hour, 11.1 + i * 0.25, if (wet) 63 else code, true,
                 cloudPct = if (wet) 100 else cloud, precipMm = if (wet) 4.0 else precip, precipProb = if (wet) 80 else 5,
-                windMph = wind, windFromDeg = windFrom)
+                windMph = wind, windFromDeg = windFrom, pressureHpa = 1016.6 - i * 0.4)
         }
         val dayStart = Moon.dayStart(now, off)
         val days = (0 until 7).map { i ->
@@ -199,6 +201,22 @@ class WeatherSceneDeviceTest {
         val detail = WeatherDetail(off, 7.2, 81, 6.4, 1016.6, 24140.0, wind, windFrom, 1.4, hours, days, 42,
             cloudPct = cloud, precipMm = precip)
         return WeatherData("Tacoma", 47.25, -122.44, 11.1, code, true, 11.1, 3.9, now, detail)
+    }
+
+    /**
+     * [reading] with the hourly forecast running from today's midnight through tomorrow, tomorrow
+     * dry until 3 PM, raining 3 PM to 6 PM (80%), dry after: the 7-day time-lapse plays it.
+     */
+    private fun lapseReading(): WeatherData {
+        val w = reading(2, 40, 0.0)
+        val start = Moon.dayStart(System.currentTimeMillis(), off)
+        val hours = (0 until 48).map { i ->
+            val wet = i - 24 in 15..17
+            HourPoint(start + i * hour, 4.0 + (i % 24) * 0.45, if (wet) 63 else 2, (i % 24) in 8..16,
+                cloudPct = if (wet) 100 else 35, precipMm = if (wet) 3.0 else 0.0, precipProb = if (wet) 80 else 10,
+                windMph = 7.0, windFromDeg = 200.0, pressureHpa = 1016.6)
+        }
+        return w.copy(detail = w.detail!!.copy(hourly = hours))
     }
 
     private fun show(w: WeatherData, offline: Boolean = false) = main { repo.showForTest(w, offline) }
@@ -516,24 +534,83 @@ class WeatherSceneDeviceTest {
         assertTrue(on(h) { rows[1].contentDescription.toString() }.contains("Rain", ignoreCase = true))
         shot("99-week")
 
-        // Hold a day: its scene plays; let go: it stops.
+        // Hold a day: that whole day plays as a time-lapse, midnight to midnight in about 9 seconds,
+        // the hour readout and the bar riding along; let go: it stops, still, on that day.
+        show(lapseReading())
+        idle()
+        val lapseRows = on(h) { (0 until week.list.childCount).map { i -> week.list.getChildAt(i) } }
+        val row = lapseRows[1]
+        val tomorrow = Moon.dayStart(System.currentTimeMillis(), off) + 24 * hour
+        val hf = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.hour(app)
+        fun hourText(k: Int) = hf.format(java.time.Instant.ofEpochMilli(tomorrow + k * hour).atOffset(java.time.ZoneOffset.ofTotalSeconds(off)))
         assertFalse(on(h) { week.preview.animating })
-        val d = SystemClock.uptimeMillis()
-        val row = rows[5]
-        main { row.dispatchTouchEvent(MotionEvent.obtain(d, d, MotionEvent.ACTION_DOWN, 40f, 20f, 0)) }
-        waitFor("holding plays the day") { on(h) { week.previewDay == 5 && week.preview.animating } }
-        val c = on(h) { week.preview.conditions!! }
-        assertTrue("that day's weather: thunder ($c)", c.code == 95 && c.thunder)
-        val t1 = on(h) { week.previewTime }
-        val frames = on(h) { week.preview.renderer.frames }
-        Thread.sleep(1500)
-        assertNotEquals("the day plays on", t1, on(h) { week.previewTime })
-        assertTrue(on(h) { week.preview.renderer.frames } > frames + 10)
-        assertTrue(on(h) { week.caption.text.toString() }, on(h) { week.caption.text.toString() }.contains("Thunderstorm"))
-        shot("100-week-hold")
-        main { row.dispatchTouchEvent(MotionEvent.obtain(d, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, 40f, 20f, 0)) }
+        assertEquals(View.GONE, on(h) { week.overlay.visibility })
+        fun hold(): Long {
+            val d = SystemClock.uptimeMillis()
+            main { row.dispatchTouchEvent(MotionEvent.obtain(d, d, MotionEvent.ACTION_DOWN, 40f, 20f, 0)) }
+            waitFor("holding plays the day") { on(h) { week.previewDay == 1 && week.preview.animating } }
+            return d
+        }
+        fun release(d: Long) = main { row.dispatchTouchEvent(MotionEvent.obtain(d, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, 40f, 20f, 0)) }
+        var down = hold()
+        val began = SystemClock.uptimeMillis()
+        assertTrue("from the start of the day", on(h) { week.progress } < 0.05)
+        assertEquals(View.VISIBLE, on(h) { week.overlay.visibility })
+        assertTrue(on(h) { week.caption.text.toString() }, on(h) { week.caption.text.toString() }.contains("rain ${hourText(15)}–${hourText(18)}"))
+        assertEquals("the bar marks when rain is due", listOf(15 / 24f to 18 / 24f), on(h) { week.lapseBar.windows })
+        val readouts = LinkedHashSet<String>()
+        var last = -1.0
+        var ended = 0L
+        while (SystemClock.uptimeMillis() - began < 13_000) {
+            val (p, r, bar) = on(h) { Triple(week.progress, week.readout.text.toString(), week.lapseBar.progress) }
+            assertTrue("it only moves forward", p >= last)
+            assertEquals(p.toFloat(), bar, 0.001f)
+            last = p
+            readouts += r
+            if (p >= 1.0) { ended = SystemClock.uptimeMillis(); break }
+            Thread.sleep(100)
+        }
+        val took = ended - began
+        assertTrue("the whole day in about 9 s: $took ms", took in 8_000L..10_800L)
+        assertTrue("the readout tracks the hours: $readouts", readouts.size >= 12)
+        assertTrue(readouts.toString(), readouts.contains("${hourText(15)} · ${WeatherText.f(4.0 + 15 * 0.45)}° · 80% rain"))
+        assertTrue(readouts.toString(), readouts.contains("${hourText(14)} · ${WeatherText.f(4.0 + 14 * 0.45)}° · 10% rain"))
+        release(down)
         assertNull(on(h) { week.previewDay })
         assertFalse("let go: it stops", on(h) { week.preview.animating })
+        assertEquals(View.GONE, on(h) { week.overlay.visibility })
+        assertEquals("still, on that day", 1, on(h) { week.stillDay })
+        val still = on(h) { week.preview.conditions!!.timeMs }
+        assertTrue(still in tomorrow until tomorrow + 24 * hour)
+
+        // Again, on a clock the test drives: from the start once more, and rain exactly at 3 PM.
+        var fake = 1_000_000L
+        main { week.playClock = { fake } }
+        down = hold()
+        assertEquals("replays from the start", 0.0, on(h) { week.progress }, 0.001)
+        fun at(hours: Double) {
+            fake = 1_000_000L + (DayLapse.PLAY_MS * hours / 24).toLong()
+            waitFor("the playhead at $hours h") { abs(on(h) { week.progress } - hours / 24) < 0.002 }
+        }
+        at(14.95)
+        assertEquals("${hourText(14)} · ${WeatherText.f(4.0 + 14 * 0.45)}° · 10% rain", on(h) { week.readout.text.toString() })
+        assertEquals("dry until 3", 0.0, on(h) { week.preview.conditions!!.rain }, 0.0)
+        at(15.1)
+        assertEquals("${hourText(15)} · ${WeatherText.f(4.0 + 15 * 0.45)}° · 80% rain", on(h) { week.readout.text.toString() })
+        assertTrue("raining from 3", on(h) { week.preview.conditions!!.rain } > 0.4)
+        assertEquals("Rain", on(h) { week.lapseCondition.text.toString() })
+        assertEquals("${WeatherText.f(on(h) { week.preview.conditions!!.tempC })}°", on(h) { week.lapseTemp.text.toString() })
+        waitFor("the rain falls in the window") { on(h) { week.preview.renderer.dropCount } > 10 }
+        at(16.5)
+        shot("100-week-hold")
+        at(18.2)
+        assertEquals("stopped by 6", 0.0, on(h) { week.preview.conditions!!.rain }, 0.0)
+        assertTrue("the sun has set", on(h) { week.preview.conditions!!.sunAltDeg } < 0)
+        at(12.5)
+        assertTrue("midday: the sun is up", on(h) { week.preview.conditions!!.sunAltDeg } > 5)
+        release(down)
+        main { week.playClock = { SystemClock.uptimeMillis() } }
+        assertNull(on(h) { week.previewDay })
 
         // The details from the 7 days, then back twice: never two at once.
         val seen = watchForOverlap(h, 2200) {
@@ -559,6 +636,127 @@ class WeatherSceneDeviceTest {
         settle(h)
         assertTrue("swiped down to the scene", on(h) { it.heroScreen.isShown && !it.weekShown })
         assertEquals(Lifecycle.State.RESUMED, h.state)
+    }
+
+    @Test fun metricCardsOpenIntoPicturesOfTheirNumbers() = screen { h ->
+        force(h, reading(2, 40, 0.0))
+        h.onActivity { it.openDetails() }
+        settle(h)
+        val panel = on(h) { it.panel }
+        main { panel.animateOverride = true }
+        val keys = listOf("sun", "moon", "humidity", "visibility", "pressure", "uv", "aqi", "wind")
+        assertEquals(keys, on(h) { panel.cards.keys.toList() })
+        val cards = on(h) { panel.cards.toMap() }
+        // Shut: as before, label, value and line; every row's cards level.
+        val shutHeights = onMain { cards.mapValues { it.value.height } }
+        for (pair in keys.chunked(2)) assertEquals(pair.toString(), shutHeights[pair[0]], shutHeights[pair[1]])
+        assertTrue(onMain { cards.values.all { it.expander.height == 0 && !it.art.active } })
+        val scroll = onMain { generateSequence(cards.getValue("sun").parent) { it.parent }.first { it is android.widget.ScrollView } as android.widget.ScrollView }
+
+        fun cardText(k: String) = texts(cards.getValue(k)).joinToString(" | ") { it.text.toString() }
+        fun row(k: String) = cards.getValue(k).parent as View
+        val body = on(h) { panel.body }
+        fun below(k: String): View? = onMain { body.getChildAt(body.indexOfChild(row(k)) + 1) }
+
+        var previous: String? = null
+        for ((n, k) in keys.withIndex()) {
+            val card = cards.getValue(k)
+            main { scroll.scrollTo(0, (row(k).top - 24 * app.resources.displayMetrics.density).toInt().coerceAtLeast(0)) }
+            idle()
+            val next = below(k)
+            // Tap: it grows smoothly, the cards under it sliding down with it; nothing overlaps or jumps.
+            // Each sample: the card's height, its bottom, the next row's top, this row's top (the panel's coordinates).
+            val samples = ArrayList<List<Int>>()
+            main { card.performClick() }
+            val t0 = SystemClock.uptimeMillis()
+            while (SystemClock.uptimeMillis() - t0 < 700) {
+                samples += onMain { listOf(card.height, row(k).top + card.bottom, next?.top ?: Int.MAX_VALUE, row(k).top) }
+                Thread.sleep(12)
+            }
+            idle()
+            assertEquals(k, on(h) { panel.expanded })
+            assertTrue("$k: grows over several frames: ${samples.map { it[0] }.distinct()}", samples.map { it[0] }.distinct().size >= 4)
+            // A jump would be the whole change in one step; easing spreads it over many (even with a slow frame or two).
+            val gaps = samples.map { it[2] - it[3] }
+            val tops = samples.map { it[3] }
+            val jump = maxOf(90 * app.resources.displayMetrics.density,
+                0.6f * maxOf(gaps.max() - gaps.min(), tops.max() - tops.min()))
+            for (j in 1 until samples.size) {
+                assertTrue("$k: only ever grows: $samples", samples[j][0] >= samples[j - 1][0])
+                // The cards below follow smoothly: no step bigger than a frame's worth of easing.
+                if (next != null) assertTrue("$k: the cards below jumped: $samples",
+                    abs((samples[j][2] - samples[j][3]) - (samples[j - 1][2] - samples[j - 1][3])) <= jump)
+                assertTrue("$k: the rows above moved smoothly: $samples", abs(samples[j][3] - samples[j - 1][3]) <= jump)
+            }
+            assertTrue("$k: never over the cards below: $samples", samples.all { it[1] <= it[2] })
+            assertTrue(onMain { card.expander.open == 1f && card.height > shutHeights.getValue(k) + 100 * app.resources.displayMetrics.density })
+            // The other card in its row stays its shut size.
+            val partner = keys[n xor 1]
+            assertEquals("$partner stays shut beside it", shutHeights[partner], onMain { cards.getValue(partner).height })
+            // Only one open: the one before has closed.
+            previous?.let { p ->
+                assertTrue("$p closed when $k opened", onMain { cards.getValue(p).expander.open == 0f && !cards.getValue(p).art.active })
+            }
+            // The picture plays, and draws.
+            val f0 = on(h) { card.art.frames }
+            Thread.sleep(600)
+            assertTrue("$k animates", on(h) { card.art.frames } > f0 + 5)
+            val inked = onMain {
+                val a = card.art
+                val bmp = android.graphics.Bitmap.createBitmap(a.width, a.height, android.graphics.Bitmap.Config.ARGB_8888)
+                a.draw(android.graphics.Canvas(bmp))
+                var c = 0
+                for (y in 0 until bmp.height step 4) for (x in 0 until bmp.width step 4) if (android.graphics.Color.alpha(bmp.getPixel(x, y)) > 40) c++
+                bmp.recycle()
+                c
+            }
+            assertTrue("$k draws its picture: $inked", inked > 40)
+            assertTrue("$k: the shut card is still there on top: ${cardText(k)}", cardText(k).isNotBlank())
+            shot("${105 + n}-metric-$k")
+            previous = k
+        }
+
+        // Each picture is of the card's own numbers.
+        val info = onMain { cards.mapValues { it.value.art.info!! } }
+        val note = onMain { cards.mapValues { (it.value.note).text.toString() } }
+        assertEquals(42, info.getValue("aqi").aqi)
+        assertTrue(note.getValue("aqi"), note.getValue("aqi").startsWith("AQI 42 · Good"))
+        assertEquals(1.4, info.getValue("uv").uv, 1e-9)
+        assertTrue(note.getValue("uv"), note.getValue("uv").startsWith("UV 1 · Low"))
+        assertEquals(0.81, info.getValue("humidity").humidity, 1e-9)
+        assertTrue(note.getValue("humidity"), note.getValue("humidity").startsWith("Dew point 44°: "))
+        assertEquals(15.0, info.getValue("visibility").visMiles, 0.1)
+        assertEquals("You can see about 15 mi: Good", note.getValue("visibility"))
+        assertEquals(MetricArt.pressureFraction(1016.6), info.getValue("pressure").pressureF, 1e-9)
+        assertEquals("falling 0.4 hPa an hour", MetricArt.Trend.FALLING, info.getValue("pressure").trend)
+        assertTrue(note.getValue("pressure"), note.getValue("pressure").startsWith("30.02 inHg ↓ Falling"))
+        assertEquals("from SSW (200°): blowing toward 20°", 20.0, info.getValue("wind").windTowardDeg, 1e-9)
+        assertEquals("6 mph from SSW: gentle drift", note.getValue("wind"))
+        assertEquals(6.0, info.getValue("wind").windMph, 1e-9)
+        val sun = info.getValue("sun")
+        assertTrue(sun.riseText!!.startsWith("7:25"))
+        assertTrue(note.getValue("sun"), note.getValue("sun").startsWith("Daylight 9h 05m"))
+        val moon = info.getValue("moon")
+        assertEquals(Moon.illumination(System.currentTimeMillis()), moon.illumination, 0.01)
+        assertEquals(144, moon.moonDay!!.steps)
+        assertTrue(note.getValue("moon"), note.getValue("moon").contains("% lit"))
+
+        // Tap the open one: it closes; everything is back as it was.
+        main { cards.getValue("wind").performClick() }
+        waitFor("closed") { on(h) { panel.expanded == null && cards.getValue("wind").expander.open == 0f } }
+        idle()
+        assertEquals(shutHeights, onMain { cards.mapValues { it.value.height } })
+        assertFalse(onMain { cards.values.any { it.art.active } })
+
+        // Open stays open when the details rebuild (a new reading).
+        main { panel.animateOverride = false }
+        main { cards.getValue("pressure").performClick() }
+        show(reading(2, 40, 0.0))
+        idle()
+        waitFor("rebuilt") { on(h) { panel.cards["pressure"] !== cards.getValue("pressure") } }
+        assertTrue(on(h) { panel.cards.getValue("pressure").expander.open == 1f && panel.expanded == "pressure" })
+        assertTrue("°F everywhere", texts(on(h) { panel.body }).none { it.text.contains("°C") })
+        main { panel.animateOverride = null }
     }
 
     @Test fun theGiantNumberIsAFidget() = screen { h ->

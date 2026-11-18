@@ -80,6 +80,12 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
     /** Whether a lightning flash is lit right now. */
     val flashing: Boolean get() = flash > 0.05
 
+    /**
+     * How quickly the drawn scene catches up with a change (seconds): a new reading eases in; a
+     * time-lapse, where an hour passes in a third of a second, keeps up close behind.
+     */
+    var easeSec = 0.7
+
     fun setTarget(c: SceneConditions, immediate: Boolean) {
         target = c
         if (immediate || !hasState) {
@@ -117,7 +123,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         frames++
         val dt = dtSec.coerceIn(0.0, 0.1)
         time += dt
-        val k = 1 - exp(-dt / 0.7)
+        val k = 1 - exp(-dt / easeSec)
         cover += (c.cloudCover - cover) * k
         rain += (c.rain - rain) * k
         snow += (c.snow - snow) * k

@@ -29,6 +29,8 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.TextStyle
 import java.util.Date
+import io.github.iamth3doctor.searchlight.weather.MetricArt
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -229,55 +231,181 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         section("daily", box)
     }
 
-    private fun tile(key: String, labelRes: Int, value: String, sub: String?): View {
-        val t = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
+    /** The open metric card ("sun", "moon", ...), or null. Stays open when the details rebuild. */
+    var expanded: String? = null
+        private set
+
+    /** The metric cards by key (tests). */
+    val cards = LinkedHashMap<String, MetricTile>()
+
+    /** Tests: whether opening a card animates (null: as the system's animation setting says). */
+    var animateOverride: Boolean? = null
+
+    private val moving = HashMap<String, Runnable>()
+    private val ease = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+
+    private fun tile(key: String, labelRes: Int, value: String, sub: String?, art: ArtInfo, note: String): MetricTile {
+        val t = MetricTile(context, key, light).apply {
             background = inset()
             val p = px(R.dimen.space_s) + px(R.dimen.space_xs)
             setPadding(p, p, p, p)
-            tag = "weather_section_$key"
         }
-        t.addView(label(labelRes))
-        t.addView(text(Type.TILE_TITLE, bold = true).apply {
+        t.addHeader(label(labelRes), lp())
+        t.addHeader(text(Type.TILE_TITLE, bold = true).apply {
             text = value
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }, lp(px(R.dimen.space_xs)))
-        if (!sub.isNullOrBlank()) t.addView(text(Type.BODY, dimmed = true).apply { text = sub }, lp(px(R.dimen.space_xs) / 2))
+        if (!sub.isNullOrBlank()) t.addHeader(text(Type.BODY, dimmed = true).apply { text = sub }, lp(px(R.dimen.space_xs) / 2))
+        t.art.info = art
+        t.note.apply {
+            type(Type.BODY)
+            setTextColor(fg)
+            text = note
+            setLineSpacing(0f, 1.15f)
+            tag = "weather_metric_note"
+        }
+        t.finish(px(R.dimen.size_weather_metric_art), px(R.dimen.space_s))
+        t.setOnClickListener { toggle(key) }
+        androidx.core.view.ViewCompat.setStateDescription(t, context.getString(if (expanded == key) R.string.weather_metric_open else R.string.weather_metric_hint))
+        if (expanded == key) {
+            t.expander.open = 1f
+            t.art.active = true
+        }
         sections[key] = t
+        cards[key] = t
         return t
+    }
+
+    /** Opens card [key] (closing any other), or closes it if it's the one open. */
+    fun toggle(key: String) {
+        val old = expanded
+        expanded = if (old == key) null else key
+        old?.let { k -> cards[k]?.let { slide(it, open = false) } }
+        expanded?.let { k -> cards[k]?.let { slide(it, open = true) } }
+    }
+
+    /** Eases [t]'s picture open or shut: its height grows or shrinks, the cards below follow. */
+    private fun slide(t: MetricTile, open: Boolean) {
+        moving.remove(t.key)?.let { t.removeCallbacks(it) }
+        val from = t.expander.open
+        val to = if (open) 1f else 0f
+        if (open) t.art.active = true
+        androidx.core.view.ViewCompat.setStateDescription(t, context.getString(if (open) R.string.weather_metric_open else R.string.weather_metric_hint))
+        fun done() {
+            moving.remove(t.key)
+            if (open) t.requestRectangleOnScreen(android.graphics.Rect(0, 0, t.width, t.height)) else t.art.active = false
+        }
+        if (!(animateOverride ?: android.animation.ValueAnimator.areAnimatorsEnabled())) {
+            t.expander.open = to
+            done()
+            return
+        }
+        val start = android.os.SystemClock.uptimeMillis()
+        val ms = (EXPAND_MS * abs(to - from)).toLong().coerceAtLeast(1)
+        val step = object : Runnable {
+            override fun run() {
+                val f = ((android.os.SystemClock.uptimeMillis() - start).toFloat() / ms).coerceIn(0f, 1f)
+                t.expander.open = from + (to - from) * ease.getInterpolation(f)
+                if (f < 1f) t.postOnAnimation(this) else done()
+            }
+        }
+        moving[t.key] = step
+        t.postOnAnimation(step)
     }
 
     private fun tiles(data: WeatherData) {
         val d = data.detail ?: return
+        moving.clear()
+        cards.clear()
         val zone = ZoneOffset.ofTotalSeconds(d.utcOffsetSec)
         val tf = WeatherFormat.time(context)
         fun at(ms: Long?) = ms?.let { tf.format(Instant.ofEpochMilli(it).atOffset(zone)) }
         val none = context.getString(R.string.weather_detail_none)
         val today = d.daily.firstOrNull()
         val now = clock()
-        val moon = Moon.times(Moon.dayStart(now, d.utcOffsetSec), data.latitude, data.longitude)
+        val dayStart = Moon.dayStart(now, d.utcOffsetSec)
+        val nowF = ((now - dayStart).toDouble() / DAY_MS).coerceIn(0.0, 1.0)
+        val moon = Moon.times(dayStart, data.latitude, data.longitude)
+
+        // Sun: its arc today, where it is on it, how long the day is.
+        val rise = today?.sunrise
+        val set = today?.sunset
+        val sunNote = if (rise != null && set != null) {
+            context.getString(R.string.weather_metric_daylight, MetricArt.duration(set - rise)) + " · " + when {
+                now < rise -> context.getString(R.string.weather_metric_sun_before, MetricArt.duration(rise - now))
+                now < set -> context.getString(R.string.weather_metric_sun_up, MetricArt.duration(set - now))
+                else -> context.getString(R.string.weather_metric_sun_down)
+            }
+        } else none
+        val sunArt = ArtInfo("sun", sunF = if (rise != null && set != null) MetricArt.sunFraction(rise, set, now) else null,
+            riseText = at(rise), setText = at(set))
+
+        // Moon: its phase as it is, and when it's up (and up in a dark sky) today.
+        val moonDay = MetricArt.moonDay(dayStart, data.latitude, data.longitude)
+        val hf = WeatherFormat.hour(context)
+        val ticks = (0 until 4).map { hf.format(Instant.ofEpochMilli(dayStart + it * 6 * 3_600_000L).atOffset(zone)) }
+        val lit = (Moon.illumination(now) * 100).roundToInt()
+        val firstDark = moonDay.visible.indexOfFirst { it }
+        val moonNote = Moon.phase(now).label + " · " + context.getString(R.string.weather_detail_lit, lit) + "\n" + when {
+            !moonDay.upAtAll -> context.getString(R.string.weather_metric_moon_none)
+            firstDark < 0 -> context.getString(R.string.weather_metric_moon_day)
+            else -> {
+                var end = firstDark
+                while (end + 1 < moonDay.steps && moonDay.visible[end + 1]) end++
+                fun step(k: Int) = dayStart + k * MetricArt.STEP_MIN * 60_000L
+                context.getString(R.string.weather_metric_moon_dark, "${at(step(firstDark))}–${at(step(end + 1))}")
+            }
+        }
+        val moonArt = ArtInfo("moon", illumination = Moon.illumination(now), waxing = MetricArt.waxing(now), moonDay = moonDay,
+            nowF = nowF, ticks = ticks)
+
+        val humNote = d.dewPointC?.let { dew ->
+            context.getString(R.string.weather_metric_dew, deg(dew), MetricArt.humidityNote(data.temperatureC, dew))
+        } ?: none
+        val visNote = d.visibilityM?.let { context.getString(R.string.weather_metric_vis, WeatherText.visibility(it), WeatherText.visibilityRating(it)) } ?: none
+        val trend = MetricArt.pressureTrend(d.hourly, now)
+        val presNote = d.pressureHpa?.let { p ->
+            (trend?.let { "${WeatherText.pressure(p)} ${it.arrow} ${it.note}\n" } ?: "") + MetricArt.pressureLevel(p)
+        } ?: none
+        val uvNote = d.uvIndex?.let { context.getString(R.string.weather_metric_uv, it.roundToInt().toString(), WeatherText.uvRating(it), MetricArt.uvAdvice(it)) } ?: none
+        val aqiNote = d.aqi?.let { context.getString(R.string.weather_metric_aqi, it, WeatherText.aqiRating(it), MetricArt.aqiAdvice(it)) } ?: none
+        val windNote = d.windMph?.let { mph ->
+            if (mph.roundToInt() < 1) context.getString(R.string.weather_metric_calm)
+            else context.getString(R.string.weather_metric_wind, mph.roundToInt().toString(),
+                WeatherText.compass(d.windFromDeg ?: 0.0), MetricArt.windWord(mph))
+        } ?: none
+
         val list = listOf(
-            tile("sun", R.string.weather_detail_sun, "↑ ${at(today?.sunrise) ?: none}", "↓ ${at(today?.sunset) ?: none}"),
+            tile("sun", R.string.weather_detail_sun, "↑ ${at(today?.sunrise) ?: none}", "↓ ${at(today?.sunset) ?: none}", sunArt, sunNote),
             tile("moon", R.string.weather_detail_moon, Moon.phase(now).label,
                 "↑ ${at(moon.rise) ?: context.getString(R.string.weather_detail_no_rise)}   ↓ ${at(moon.set) ?: context.getString(R.string.weather_detail_no_set)}" +
-                    "\n" + context.getString(R.string.weather_detail_lit, (Moon.illumination(now) * 100).roundToInt())),
+                    "\n" + context.getString(R.string.weather_detail_lit, lit), moonArt, moonNote),
             tile("humidity", R.string.weather_detail_humidity, d.humidity?.let { "$it%" } ?: none,
-                d.dewPointC?.let { context.getString(R.string.weather_detail_dew, deg(it)) }),
+                d.dewPointC?.let { context.getString(R.string.weather_detail_dew, deg(it)) },
+                ArtInfo("humidity", humidity = (d.humidity ?: 0) / 100.0), humNote),
             tile("visibility", R.string.weather_detail_visibility, d.visibilityM?.let { WeatherText.visibility(it) } ?: none,
-                d.visibilityM?.let { WeatherText.visibilityRating(it) }),
-            tile("pressure", R.string.weather_detail_pressure, d.pressureHpa?.let { WeatherText.pressure(it) } ?: none, null),
-            tile("uv", R.string.weather_detail_uv, d.uvIndex?.let { it.roundToInt().toString() } ?: none, d.uvIndex?.let { WeatherText.uvRating(it) }),
-            tile("aqi", R.string.weather_detail_aqi, d.aqi?.toString() ?: none, d.aqi?.let { WeatherText.aqiRating(it) }),
-            tile("wind", R.string.weather_detail_wind, d.windMph?.let { WeatherText.wind(it, d.windFromDeg) } ?: none, null),
+                d.visibilityM?.let { WeatherText.visibilityRating(it) },
+                ArtInfo("visibility", visMiles = d.visibilityM?.let { WeatherText.miles(it) } ?: 0.0), visNote),
+            tile("pressure", R.string.weather_detail_pressure, d.pressureHpa?.let { WeatherText.pressure(it) } ?: none, null,
+                ArtInfo("pressure", pressureF = d.pressureHpa?.let { MetricArt.pressureFraction(it) } ?: 0.5, trend = trend), presNote),
+            tile("uv", R.string.weather_detail_uv, d.uvIndex?.let { it.roundToInt().toString() } ?: none, d.uvIndex?.let { WeatherText.uvRating(it) },
+                ArtInfo("uv", uv = d.uvIndex ?: 0.0), uvNote),
+            tile("aqi", R.string.weather_detail_aqi, d.aqi?.toString() ?: none, d.aqi?.let { WeatherText.aqiRating(it) },
+                ArtInfo("aqi", aqi = d.aqi ?: 0), aqiNote),
+            tile("wind", R.string.weather_detail_wind, d.windMph?.let { WeatherText.wind(it, d.windFromDeg) } ?: none, null,
+                ArtInfo("wind", windTowardDeg = ((d.windFromDeg ?: 0.0) + 180) % 360, windMph = d.windMph ?: 0.0), windNote),
         )
         val gap = px(R.dimen.space_s)
         list.chunked(2).forEachIndexed { i, pair ->
-            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-            pair.forEachIndexed { j, t ->
-                row.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { if (j > 0) marginStart = gap })
-            }
+            val row = MetricRow(context, gap).apply { tag = "weather_metric_row" }
+            pair.forEach { row.addView(it) }
             body.addView(row, lp(if (i == 0) px(R.dimen.space_m) else gap))
         }
+    }
+
+    private companion object {
+        const val EXPAND_MS = 320L
+        const val DAY_MS = 24 * 3_600_000L
     }
 }
