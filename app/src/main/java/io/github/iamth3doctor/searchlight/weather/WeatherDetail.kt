@@ -10,8 +10,18 @@ import org.json.JSONObject
  * Android types); JVM-tested. Temperatures stay Celsius, like the rest of WeatherData.
  */
 
-/** One hour ahead: [time] in epoch ms. */
-data class HourPoint(val time: Long, val tempC: Double, val code: Int, val isDay: Boolean)
+/** One hour: [time] in epoch ms; what drives the scene at that hour (null: not reported). */
+data class HourPoint(
+    val time: Long,
+    val tempC: Double,
+    val code: Int,
+    val isDay: Boolean,
+    val cloudPct: Int? = null,
+    val precipMm: Double? = null,
+    val precipProb: Int? = null,
+    val windMph: Double? = null,
+    val windFromDeg: Double? = null,
+)
 
 /** One day: [date] is its local midnight in epoch ms; sun times in epoch ms. */
 data class DayPoint(
@@ -39,13 +49,21 @@ data class WeatherDetail(
     val daily: List<DayPoint>,
     /** US AQI; null when the air-quality call didn't answer. */
     val aqi: Int?,
+    /** Cloud cover now (%), and the precipitation now (mm in the last 15 min to hour, as reported). */
+    val cloudPct: Int? = null,
+    val precipMm: Double? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("off", utcOffsetSec)
         .putOpt("feel", feelsLikeC).putOpt("hum", humidity).putOpt("dew", dewPointC).putOpt("pres", pressureHpa)
         .putOpt("vis", visibilityM).putOpt("wind", windMph).putOpt("wdir", windFromDeg).putOpt("uv", uvIndex).putOpt("aqi", aqi)
+        .putOpt("cc", cloudPct).putOpt("pr", precipMm)
         .put("hours", JSONArray().apply {
-            hourly.forEach { put(JSONObject().put("t", it.time).put("c", it.tempC).put("k", it.code).put("d", it.isDay)) }
+            hourly.forEach {
+                put(JSONObject().put("t", it.time).put("c", it.tempC).put("k", it.code).put("d", it.isDay)
+                    .putOpt("cc", it.cloudPct).putOpt("pr", it.precipMm).putOpt("pp", it.precipProb)
+                    .putOpt("ws", it.windMph).putOpt("wd", it.windFromDeg))
+            }
         })
         .put("days", JSONArray().apply {
             daily.forEach {
@@ -64,7 +82,12 @@ data class WeatherDetail(
             feelsLikeC = o.dbl("feel"), humidity = o.int("hum"), dewPointC = o.dbl("dew"), pressureHpa = o.dbl("pres"),
             visibilityM = o.dbl("vis"), windMph = o.dbl("wind"), windFromDeg = o.dbl("wdir"), uvIndex = o.dbl("uv"),
             hourly = o.optJSONArray("hours")?.let { a ->
-                (0 until a.length()).map { i -> a.getJSONObject(i).let { HourPoint(it.getLong("t"), it.getDouble("c"), it.getInt("k"), it.getBoolean("d")) } }
+                (0 until a.length()).map { i ->
+                    a.getJSONObject(i).let {
+                        HourPoint(it.getLong("t"), it.getDouble("c"), it.getInt("k"), it.getBoolean("d"),
+                            it.int("cc"), it.dbl("pr"), it.int("pp"), it.dbl("ws"), it.dbl("wd"))
+                    }
+                }
             }.orEmpty(),
             daily = o.optJSONArray("days")?.let { a ->
                 (0 until a.length()).map { i ->
@@ -72,11 +95,14 @@ data class WeatherDetail(
                 }
             }.orEmpty(),
             aqi = o.int("aqi"),
+            cloudPct = o.int("cc"),
+            precipMm = o.dbl("pr"),
         )
 
         /**
          * The detail from an Open-Meteo forecast asked for with [OpenMeteo.forecastUrl]
-         * (`timeformat=unixtime`, wind in mph). Hours from the current one on.
+         * (`timeformat=unixtime`, wind in mph). Hours from [KEEP_BEFORE_MS] before now to [KEEP_AFTER_MS] after
+         * (the day bar plays a few hours back, the hourly strip a day ahead).
          */
         fun parse(root: JSONObject, nowMs: Long): WeatherDetail {
             val current = root.optJSONObject("current") ?: JSONObject()
@@ -90,9 +116,16 @@ data class WeatherDetail(
             val ht = arr(hourlyJ, "time")
             if (ht != null) for (i in 0 until ht.length()) {
                 val t = ht.getLong(i) * 1000L
-                if (t < nowMs - 3_600_000L) continue // only from the current hour on
+                if (t < nowMs - KEEP_BEFORE_MS || t > nowMs + KEEP_AFTER_MS) continue
                 val c = dAt(arr(hourlyJ, "temperature_2m"), i) ?: continue
-                hours += HourPoint(t, c, arr(hourlyJ, "weather_code")?.optInt(i) ?: 0, (arr(hourlyJ, "is_day")?.optInt(i, 1) ?: 1) == 1)
+                hours += HourPoint(
+                    t, c, arr(hourlyJ, "weather_code")?.optInt(i) ?: 0, (arr(hourlyJ, "is_day")?.optInt(i, 1) ?: 1) == 1,
+                    cloudPct = dAt(arr(hourlyJ, "cloud_cover"), i)?.toInt(),
+                    precipMm = dAt(arr(hourlyJ, "precipitation"), i),
+                    precipProb = dAt(arr(hourlyJ, "precipitation_probability"), i)?.toInt(),
+                    windMph = dAt(arr(hourlyJ, "wind_speed_10m"), i),
+                    windFromDeg = dAt(arr(hourlyJ, "wind_direction_10m"), i),
+                )
             }
             val days = ArrayList<DayPoint>()
             val dt = arr(dailyJ, "time")
@@ -123,8 +156,13 @@ data class WeatherDetail(
                 hourly = hours,
                 daily = days,
                 aqi = null,
+                cloudPct = cur("cloud_cover")?.toInt(),
+                precipMm = cur("precipitation"),
             )
         }
+
+        const val KEEP_BEFORE_MS = 4 * 3_600_000L
+        const val KEEP_AFTER_MS = 48 * 3_600_000L
     }
 }
 

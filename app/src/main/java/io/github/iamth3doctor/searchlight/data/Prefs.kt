@@ -223,6 +223,11 @@ class Prefs(context: Context) {
         }.toMap()
         set(value) = sp.edit().putString(KEY_BUILTIN_TYPES, value.entries.joinToString(";") { "${it.key}:${it.value}" }).apply()
 
+    /** The weather screen's sound and haptics (on unless turned off there; never while the phone is silenced). */
+    var weatherSound: Boolean
+        get() = sp.getBoolean(KEY_WEATHER_SOUND, true)
+        set(value) = sp.edit().putBoolean(KEY_WEATHER_SOUND, value).apply()
+
     var widgetGridUnfolded: List<GridSpec>
         get() = WidgetGrid.parse(sp.getString(KEY_WIDGET_GRID_UNFOLDED, null))
         set(value) = sp.edit().putString(KEY_WIDGET_GRID_UNFOLDED, WidgetGrid.serialize(value)).apply()
@@ -517,6 +522,7 @@ class Prefs(context: Context) {
         private const val KEY_WIDGET_GRID = "widget_grid"
         private const val KEY_WIDGET_GRID_UNFOLDED = "widget_grid_unfolded"
         private const val KEY_BUILTIN_TYPES = "builtin_widget_types"
+        private const val KEY_WEATHER_SOUND = "weather_sound"
         private const val KEY_CALENDAR_PERMISSION_ASKED = "calendar_permission_asked"
         private const val KEY_CALENDAR_TARGET = "calendar_target"
         private const val KEY_NEXT_UP_DISMISSED = "next_up_dismissed"

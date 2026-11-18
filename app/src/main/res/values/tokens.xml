@@ -87,6 +87,8 @@
     <dimen name="size_weather_detail_max">460dp</dimen>  <!-- the detail panel's widest -->
     <dimen name="text_weather_temp">36sp</dimen>
     <dimen name="text_weather_temp_compact">28sp</dimen>
+    <dimen name="text_weather_temp_wide">44sp</dimen>
+    <dimen name="size_weather_bar">104dp</dimen>         <!-- the day bar on the weather screen -->
     <dimen name="text_weather_detail_temp">64sp</dimen>
     <dimen name="stroke_hairline">1.5dp</dimen>
     <dimen name="stroke_glass">1dp</dimen>

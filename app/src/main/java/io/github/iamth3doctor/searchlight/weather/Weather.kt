@@ -127,9 +127,10 @@ object OpenMeteo {
         Locale.US,
         "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f" +
             "&current=temperature_2m,weather_code,is_day,apparent_temperature,relative_humidity_2m,dew_point_2m," +
-            "pressure_msl,visibility,wind_speed_10m,wind_direction_10m,uv_index" +
+            "pressure_msl,visibility,wind_speed_10m,wind_direction_10m,uv_index,cloud_cover,precipitation" +
             "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset" +
-            "&hourly=temperature_2m,weather_code,is_day&forecast_hours=25" +
+            "&hourly=temperature_2m,weather_code,is_day,cloud_cover,precipitation,precipitation_probability," +
+            "wind_speed_10m,wind_direction_10m" +
             "&temperature_unit=celsius&wind_speed_unit=mph&timezone=auto&timeformat=unixtime&forecast_days=7",
         latitude, longitude,
     )

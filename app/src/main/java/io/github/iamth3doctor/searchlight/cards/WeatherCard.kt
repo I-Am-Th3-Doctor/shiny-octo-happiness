@@ -54,8 +54,8 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
             when {
                 repo.state.problem == WeatherRepository.Problem.NEEDS_LOCATION -> openSettings()
                 repo.state.data == null -> repo.refresh() // the tile says "tap to retry"
-                else -> weatherApp()?.let { activity.searchlight.apps.launch(it, v, activity) }
-                    ?: activity.pickWeatherApp { picked -> picked?.let { activity.searchlight.apps.launch(it, v, activity) } }
+                // The weather screen: the living scene of the conditions now.
+                else -> io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity)
             }
         }
         card.setOnLongClickListener { showMenu(it); true }

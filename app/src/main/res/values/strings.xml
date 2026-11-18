@@ -469,4 +469,15 @@
     <string name="weather_detail_today">Today</string>
     <string name="weather_detail_now_hour">Now</string>
     <string name="weather_detail_close">Close</string>
+    <!-- Weather screen -->
+    <string name="weather_bar_desc">The day\'s forecast. Tap or drag to preview an hour; tap Now for live weather.</string>
+    <string name="weather_bar_now">Now</string>
+    <string name="weather_bar_rain">%1$d%% rain</string>
+    <string name="weather_offline_desc">Offline — showing the last update</string>
+    <string name="weather_scene_desc">Weather scene: %1$s, %2$s. Tap for details.</string>
+    <string name="weather_sound_on">Sound on</string>
+    <string name="weather_sound_off">Sound off</string>
+    <string name="weather_sound_silenced">Your phone is silenced, so the weather stays quiet</string>
+    <string name="weather_wind_arrow_desc">Wind %1$d mph, blowing %2$s</string>
+    <string name="weather_detail_lit">%1$d%% lit</string>
 </resources>

@@ -159,17 +159,6 @@ class WidgetController(
     /** The Weather widgets on the grid, live. */
     fun weatherViews(): List<WeatherWidgetView> = views.values.filterIsInstance<WeatherWidgetView>()
 
-    /** The open Weather detail view, if any (tests). */
-    var weatherDetail: WeatherDetailSheet? = null
-        private set
-
-    fun openWeatherDetail(): WeatherDetailSheet =
-        WeatherDetailSheet(activity, activity.searchlight.weather, decorate).let { sheet ->
-            weatherDetail = sheet
-            sheet.onDismissed = { if (weatherDetail === sheet) weatherDetail = null }
-            sheet.show()
-        }
-
     /** The Calendar widgets on the grid (either posture), live. */
     fun calendarViews(): List<CalendarWidgetView> = views.values.filterIsInstance<CalendarWidgetView>()
 
@@ -244,8 +233,7 @@ class WidgetController(
     private fun builtInView(id: Int): View = when (builtInType(id)) {
         BuiltInWidget.WEATHER -> WeatherWidgetView(activity, activity.searchlight.weather).also { v ->
             v.onLongPress = { grid.enterEditModeFromLongPress() }
-            v.onOpen = { if (!grid.editMode) openWeatherDetail() }
-            v.onContentChanged = decorate
+            v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity) }
         }
         BuiltInWidget.CALENDAR -> calendarView()
     }

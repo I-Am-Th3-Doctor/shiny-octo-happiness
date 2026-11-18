@@ -46,9 +46,11 @@ class WeatherDetailTest {
         assertNull(d.aqi)
     }
 
-    @Test fun oldHoursAreDropped() {
-        val w = OpenMeteo.parseForecast(forecastJson(), "Tacoma", 47.25, -122.44, now + 3 * 3_600_000L)
-        assertTrue(w.detail!!.hourly.first().time >= now + 2 * 3_600_000L)
+    @Test fun hoursKeptAroundNow() {
+        // A few hours back (the day bar starts before now), up to two days ahead.
+        val later = now + 6 * 3_600_000L
+        val w = OpenMeteo.parseForecast(forecastJson(), "Tacoma", 47.25, -122.44, later)
+        assertTrue(w.detail!!.hourly.first().time >= later - WeatherDetail.KEEP_BEFORE_MS)
     }
 
     @Test fun cacheRoundTrip() {
@@ -139,6 +141,18 @@ class WeatherDetailTest {
         java.time.LocalDateTime.of(y, mo, d, h, mi).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
 
     @Test fun knownPhases() {
+        // The true moon: within a degree (about two hours) of the almanac's exact moments.
+        fun near(target: Double, ms: Long) {
+            val e = Moon.elongation(ms)
+            val diff = Math.abs(((e - target + 540) % 360) - 180)
+            assertTrue("elongation $e vs $target", diff < 1.0)
+        }
+        near(0.0, utc(2024, 4, 8, 18, 21))
+        near(90.0, utc(2024, 4, 15, 19, 13))
+        near(180.0, utc(2024, 4, 23, 23, 49))
+        near(270.0, utc(2024, 5, 1, 11, 27))
+        near(0.0, utc(2025, 9, 21, 19, 54))
+        near(180.0, utc(2026, 1, 3, 10, 3))
         // New moon 2024-04-08 18:21 UTC (the eclipse); full moon 2024-04-23 23:49 UTC; first quarter 2024-04-15 19:13 UTC
         assertEquals(Moon.Phase.NEW, Moon.phase(utc(2024, 4, 8, 18, 21)))
         assertEquals(Moon.Phase.FULL, Moon.phase(utc(2024, 4, 23, 23, 49)))
