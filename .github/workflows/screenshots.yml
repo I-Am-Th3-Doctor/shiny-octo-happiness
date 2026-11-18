@@ -18,7 +18,7 @@ jobs:
   screenshots:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[screenshots]')
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v5
 

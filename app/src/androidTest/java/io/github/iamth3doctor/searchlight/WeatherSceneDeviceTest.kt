@@ -476,7 +476,7 @@ class WeatherSceneDeviceTest {
             }
             Thread.sleep(500)
             assertEquals(mode, on(h) { v.size })
-            assertTrue("$size: temperature and high/low whole and inside", on(h) { v.contentFits() })
+            assertNull("$size: temperature and high/low whole and inside", on(h) { v.fitProblem() })
             assertEquals(listOf("52°F", "H 52° · L 39°"), texts(v).map { it.text.toString() })
             assertTrue("$size animating", on(h) { v.scene.animating })
             shot(name)

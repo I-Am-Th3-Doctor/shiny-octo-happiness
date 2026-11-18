@@ -190,17 +190,23 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
     private fun placeholder(now: Long) = WeatherData("Tacoma", 47.25, -122.44, 12.0, 2, true, 14.0, 6.0, now)
 
     /** Whether the temperature and high/low show whole, inside the widget (tests). */
-    fun contentFits(): Boolean {
+    fun contentFits(): Boolean = fitProblem() == null
+
+    /** What doesn't fit, or null (tests). */
+    fun fitProblem(): String? {
         for (t in listOf(tempView, hiLoView)) {
             if (t.visibility != VISIBLE) continue
-            val l = t.layout ?: return false
-            if ((0 until l.lineCount).any { l.getEllipsisCount(it) > 0 }) return false
-            if (l.getLineWidth(0) > t.width + 1) return false
+            val name = "'${t.text}' (${t.width}x${t.height} at ${t.left},${t.top} in box ${textBox.left},${textBox.top} " +
+                "${textBox.width}x${textBox.height}; widget ${width}x$height)"
+            val l = t.layout ?: return "$name: no layout"
+            if ((0 until l.lineCount).any { l.getEllipsisCount(it) > 0 }) return "$name: cut short"
+            val textW = l.getLineWidth(0) + t.totalPaddingLeft + t.totalPaddingRight
+            if (textW > t.width + 1) return "$name: text $textW wider than its view"
             val left = textBox.left + t.left
             val top = textBox.top + t.top
-            if (left < 0 || top < 0 || left + t.width > width + 1 || top + t.height > height + 1) return false
+            if (left < 0 || top < 0 || left + t.width > width + 1 || top + t.height > height + 1) return "$name: outside the widget"
         }
-        return true
+        return null
     }
 
     companion object {

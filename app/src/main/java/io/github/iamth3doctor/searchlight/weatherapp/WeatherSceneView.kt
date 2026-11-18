@@ -15,7 +15,8 @@ import io.github.iamth3doctor.searchlight.weather.SceneConditions
  * The living weather scene as a View ([SceneRenderer] does the drawing). It animates only while
  * it can be seen (attached, its window visible, the view shown) and never in battery saver: then
  * it holds still on its last frame. The home screen's widget [mini] runs at 30 fps, the full
- * screen at the display's rate.
+ * screen at 30: weather moves slowly, and between frames the UI thread is left idle (good for the
+ * battery, and for anything waiting on the app to settle).
  */
 class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
 
@@ -42,21 +43,19 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
         private set
 
     private var lastNs = 0L
-    private var sinceStep = 0.0
     private val choreographer = Choreographer.getInstance()
+    private val frameMs = if (mini) 1000L / 24 else 1000L / 30
 
     private val frame = object : Choreographer.FrameCallback {
         override fun doFrame(now: Long) {
             if (!animating) return
             val dt = if (lastNs == 0L) 0.0 else (now - lastNs) / 1e9
             lastNs = now
-            sinceStep += dt
-            if (!mini || sinceStep >= 1.0 / 31) {
-                renderer.step(sinceStep)
-                sinceStep = 0.0
-                invalidate()
-            }
-            choreographer.postFrameCallback(this)
+            renderer.step(dt)
+            invalidate()
+            // The next frame after a pause, not on every vsync: the thread idles in between.
+            val spent = (System.nanoTime() - now) / 1_000_000
+            choreographer.postFrameCallbackDelayed(this, (frameMs - spent - 8).coerceAtLeast(1))
         }
     }
 
