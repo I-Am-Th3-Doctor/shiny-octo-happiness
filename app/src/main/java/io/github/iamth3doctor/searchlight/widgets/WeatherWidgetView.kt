@@ -245,6 +245,18 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
             }
             super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         }
+
+        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+            super.onLayout(changed, left, top, right, bottom)
+            // The line as finally laid out can come out wider than measured (a large size with a smaller
+            // unit span): if so, ask for exactly that width and lay out again, so nothing is clipped.
+            val l = layout?.takeIf { it.lineCount > 0 } ?: return
+            val drawn = kotlin.math.ceil(l.getLineWidth(0)).toInt() + totalPaddingLeft + totalPaddingRight + 1
+            if (drawn > width && drawn > minWidth) {
+                minWidth = drawn
+                post { requestLayout() }
+            }
+        }
     }
 
     companion object {
