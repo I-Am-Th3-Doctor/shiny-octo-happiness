@@ -34,6 +34,8 @@ data class DayPoint(
     val sunset: Long?,
     /** The day's total precipitation (mm). */
     val precipMm: Double? = null,
+    /** The day's highest UV index. */
+    val uvMax: Double? = null,
 )
 
 data class WeatherDetail(
@@ -70,7 +72,7 @@ data class WeatherDetail(
         .put("days", JSONArray().apply {
             daily.forEach {
                 put(JSONObject().put("t", it.date).put("hi", it.highC).put("lo", it.lowC).put("k", it.code)
-                    .putOpt("p", it.precipPct).putOpt("rise", it.sunrise).putOpt("set", it.sunset).putOpt("pm", it.precipMm))
+                    .putOpt("p", it.precipPct).putOpt("rise", it.sunrise).putOpt("set", it.sunset).putOpt("pm", it.precipMm).putOpt("uv", it.uvMax))
             }
         })
 
@@ -93,7 +95,7 @@ data class WeatherDetail(
             }.orEmpty(),
             daily = o.optJSONArray("days")?.let { a ->
                 (0 until a.length()).map { i ->
-                    a.getJSONObject(i).let { DayPoint(it.getLong("t"), it.getDouble("hi"), it.getDouble("lo"), it.getInt("k"), it.int("p"), it.lng("rise"), it.lng("set"), it.dbl("pm")) }
+                    a.getJSONObject(i).let { DayPoint(it.getLong("t"), it.getDouble("hi"), it.getDouble("lo"), it.getInt("k"), it.int("p"), it.lng("rise"), it.lng("set"), it.dbl("pm"), it.dbl("uv")) }
                 }
             }.orEmpty(),
             aqi = o.int("aqi"),
@@ -104,7 +106,7 @@ data class WeatherDetail(
         /**
          * The detail from an Open-Meteo forecast asked for with [OpenMeteo.forecastUrl]
          * (`timeformat=unixtime`, wind in mph). Hours from [KEEP_BEFORE_MS] before now to [KEEP_AFTER_MS] after
-         * (the day bar plays a few hours back, the hourly strip a day ahead).
+         * (the day bar plays a few hours back; the 7-day view previews any day hour by hour).
          */
         fun parse(root: JSONObject, nowMs: Long): WeatherDetail {
             val current = root.optJSONObject("current") ?: JSONObject()
@@ -143,6 +145,7 @@ data class WeatherDetail(
                     sunrise = lAt(arr(dailyJ, "sunrise"), i)?.times(1000L),
                     sunset = lAt(arr(dailyJ, "sunset"), i)?.times(1000L),
                     precipMm = dAt(arr(dailyJ, "precipitation_sum"), i),
+                    uvMax = dAt(arr(dailyJ, "uv_index_max"), i),
                 )
             }
             fun cur(k: String): Double? = if (current.has(k) && !current.isNull(k)) current.optDouble(k).takeIf { !it.isNaN() } else null
@@ -165,7 +168,7 @@ data class WeatherDetail(
         }
 
         const val KEEP_BEFORE_MS = 4 * 3_600_000L
-        const val KEEP_AFTER_MS = 48 * 3_600_000L
+        const val KEEP_AFTER_MS = 7 * 24 * 3_600_000L
     }
 }
 

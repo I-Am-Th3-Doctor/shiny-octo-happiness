@@ -56,6 +56,27 @@ object SceneModel {
 
     private const val HOUR = 3_600_000L
 
+    /**
+     * [data] with an hourly forecast made up from the day [timeMs] falls in (its condition, low at
+     * dawn, high mid-afternoon, its precipitation spread over the day), or null if no day covers it.
+     */
+    fun fromDay(data: WeatherData, timeMs: Long): WeatherData? {
+        val d = data.detail ?: return null
+        val day = d.daily.lastOrNull { it.date <= timeMs && timeMs < it.date + 24 * HOUR } ?: return null
+        val wet = isWet(day.code) || isSnow(day.code)
+        val hours = (0..24).map { k ->
+            val t = day.date + k * HOUR
+            // Coolest around 6 AM, warmest around 3 PM.
+            val warm = (1 - cos(((k - 6).coerceIn(0, 9) / 9.0) * PI)) / 2 * (if (k <= 15) 1.0 else 1 - (k - 15) / 15.0)
+            val (alt, _) = Sun.position(t, data.latitude, data.longitude)
+            HourPoint(t, day.lowC + (day.highC - day.lowC) * warm.coerceIn(0.0, 1.0), day.code, alt > 0,
+                cloudPct = (coverFromCode(day.code) * 100).roundToInt(),
+                precipMm = if (wet) maxOf(0.3, (day.precipMm ?: 2.4) / 24 * 1.5) else 0.0,
+                precipProb = day.precipPct, windMph = d.windMph, windFromDeg = d.windFromDeg)
+        }
+        return data.copy(detail = d.copy(hourly = hours))
+    }
+
     /** Cloud cover when the forecast didn't give a number: from the condition. */
     fun coverFromCode(code: Int): Double = when (code) {
         0 -> 0.03
@@ -92,6 +113,10 @@ object SceneModel {
     fun at(data: WeatherData, timeMs: Long, live: Boolean): SceneConditions {
         val d = data.detail
         val hours = d?.hourly.orEmpty()
+        // Past the hourly forecast: that day's forecast, played through the day.
+        if (!live && d != null && (hours.isEmpty() || timeMs > hours.last().time + 2 * HOUR)) {
+            fromDay(data, timeMs)?.let { return at(it, timeMs, live = false) }
+        }
         val i = hours.indexOfLast { it.time <= timeMs }
         val h0 = hours.getOrNull(i)
         val h1 = hours.getOrNull(i + 1)
@@ -205,6 +230,27 @@ object DayBar {
         return hours.maxBy { it.tempC } to hours.minBy { it.tempC }
     }
 
+    /** The top of the hour [i] hours into the bar. */
+    fun hourTime(i: Int, nowMs: Long): Long = start(nowMs) + i.coerceIn(0, HOURS) * HOUR
+
+    /** Which hour of the bar (0..[HOURS]) [timeMs] is nearest. */
+    fun hourIndex(timeMs: Long, nowMs: Long): Int =
+        Math.round((timeMs - start(nowMs)).toDouble() / HOUR).toInt().coerceIn(0, HOURS)
+
+    /** Extra distance (in hours, beyond halfway) a drag must go before it leaves the hour it's on. */
+    const val SNAP_HYSTERESIS = 0.2
+
+    /**
+     * The hour a scrub at [position] (in hours across the bar) lands on, given the hour it's on now
+     * ([current], null if none): snapped to the nearest hour, but sticky, so a finger resting between
+     * two hours (or a short wobble) doesn't flick back and forth or skip past one.
+     */
+    fun snap(position: Double, current: Int?): Int {
+        val p = position.coerceIn(0.0, HOURS.toDouble())
+        if (current != null && kotlin.math.abs(p - current) < 0.5 + SNAP_HYSTERESIS) return current
+        return Math.round(p).toInt().coerceIn(0, HOURS)
+    }
+
     /** Whether rain (or snow) is expected in [h]: a real chance or a real amount. */
     fun wet(h: HourPoint): Boolean = (h.precipProb ?: 0) >= 30 || (h.precipMm ?: 0.0) >= 0.1 || SceneModel.isWet(h.code) || SceneModel.isSnow(h.code)
 
@@ -255,4 +301,20 @@ object ScenePhysics {
 
     /** The arrow's screen vector (north up) for wind blowing toward [towardDeg]. */
     fun arrow(towardDeg: Double): Pair<Double, Double> = sin(towardDeg * PI / 180) to -cos(towardDeg * PI / 180)
+}
+
+/** The scene's ambient sound for one moment: what [WeatherSound] plays (each 0..1). Pure; JVM-tested. */
+object SceneSound {
+    data class Levels(val rain: Float, val wind: Float, val crickets: Float)
+
+    /**
+     * Rain as hard as it rains; wind once it's more than a breeze; crickets on a dry, mild night
+     * (fewer as the wind picks up). A clear, calm day: silence.
+     */
+    fun levels(c: SceneConditions): Levels {
+        val rain = c.rain.coerceIn(0.0, 1.0)
+        val wind = ((c.windMph - 6) / 24).coerceIn(0.0, 1.0)
+        val crickets = if (c.darkness > 0.6 && rain < 0.02 && c.snow < 0.02 && !c.thunder && c.tempC > 2) 0.8 * (1 - wind) else 0.0
+        return Levels(rain.toFloat(), wind.toFloat(), crickets.toFloat())
+    }
 }

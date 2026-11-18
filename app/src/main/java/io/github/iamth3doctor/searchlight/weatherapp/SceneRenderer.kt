@@ -29,6 +29,8 @@ import kotlin.math.sin
  * shape, drifting with the wind), rain as falling particles (denser and faster the harder it
  * rains, slanted by the wind), snow, lightning, fog, and hills on the horizon. Every number comes
  * from [SceneConditions]; changes (a new reading, scrubbing the day) ease in rather than jump.
+ * The small things that make it alive: birds crossing a fair sky, drops on the glass while it
+ * rains, gusts that sway the rain and hurry the clouds.
  *
  * Shared by the full-screen weather view and the home-screen widget ([mini]: fewer particles and
  * bigger features for a small window). Not thread-safe: step and draw on the UI thread.
@@ -71,6 +73,10 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         private set
     var skyBottom = 0
         private set
+    /** Birds in the sky now. */
+    val birdCount: Int get() = birds.size
+    /** Raindrops on the glass now (full screen only). */
+    val glassDropCount: Int get() = glass.size
     /** Whether a lightning flash is lit right now. */
     val flashing: Boolean get() = flash > 0.05
 
@@ -124,10 +130,23 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         moonAz += (c.moonAz - moonAz) * k
         moonAge = c.moonAge
 
+        stepGust()
         stepClouds(dt)
+        stepBirds(dt)
+        stepGlass(dt)
         stepRain(dt)
         stepSnow(dt)
         stepLightning(dt, c.thunder)
+    }
+
+    // ------------------------------------------------------------------ wind gusts
+
+    /** 1 in still air; in a wind, swings above and below as gusts come and go. */
+    private var gust = 1.0
+
+    private fun stepGust() {
+        val amount = (abs(windEast) / 35).coerceIn(0.0, 0.5)
+        gust = 1 + amount * (0.6 * sin(time * 0.9) + 0.4 * sin(time * 0.37 + 1.7))
     }
 
     // ------------------------------------------------------------------ clouds
@@ -182,7 +201,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         } else if (alive > want) {
             clouds.filter { it.fade >= 0 }.shuffled(rnd).take(alive - want).forEach { it.fade = -1 }
         }
-        val v = ScenePhysics.cloudSpeed(windEast) * density * (if (mini) 0.6 else 1.0)
+        val v = ScenePhysics.cloudSpeed(windEast) * density * (if (mini) 0.6 else 1.0) * (0.8 + 0.2 * gust)
         val it = clouds.iterator()
         while (it.hasNext()) {
             val c = it.next()
@@ -219,7 +238,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
 
     private fun rainVelocity(): Pair<Float, Float> {
         val vy = (ScenePhysics.fallSpeed(rain) * density * (if (mini) 0.7 else 1.0)).toFloat()
-        val vx = (ScenePhysics.drift(windEast) * density * (if (mini) 0.7 else 1.0)).toFloat()
+        val vx = (ScenePhysics.drift(windEast) * gust * density * (if (mini) 0.7 else 1.0)).toFloat()
         return vx to vy
     }
 
@@ -273,6 +292,108 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
             sx[i] += ((drift + sin(time * 1.3 + sp[i]) * 16 * density) * dt).toFloat()
             if (sy[i] > h) { sy[i] = -4f; sx[i] = rnd.nextFloat() * w }
             if (sx[i] < -8) sx[i] += w + 16 else if (sx[i] > w + 8) sx[i] -= w + 16
+        }
+    }
+
+    // ------------------------------------------------------------------ birds
+
+    private class Bird(var x: Float, var y: Float, val vx: Float, val size: Float, val phase: Float, var flap: Float)
+
+    private val birds = ArrayList<Bird>()
+    private var nextFlock = 0.6
+
+    /** Fair weather in daylight: a calm enough sky for birds. */
+    private fun birdWeather() = darkness < 0.35 && rain < 0.05 && snow < 0.05 && storm < 0.1 && cover < 0.65 && fog < 0.3
+
+    private fun stepBirds(dt: Double) {
+        val dir = if (windEast < -3) -1f else 1f
+        if (birdWeather()) {
+            nextFlock -= dt
+            if (nextFlock <= 0 && birds.size < 8) {
+                // A small flock: three to five, loosely together, coming in from upwind.
+                val n = 3 + rnd.nextInt(3)
+                val y0 = h * (0.12f + rnd.nextFloat() * 0.25f)
+                val speed = (28 + rnd.nextFloat() * 18) * density * (if (mini) 0.6f else 1f) * dir
+                val size = (if (mini) 3.2f else 5.5f) * density
+                for (i in 0 until n) {
+                    val x0 = if (dir > 0) -size * 4 - i * size * 5 else w + size * 4 + i * size * 5
+                    birds += Bird(x0, y0 + (rnd.nextFloat() - 0.5f) * size * 6, speed * (0.9f + rnd.nextFloat() * 0.2f),
+                        size * (0.8f + rnd.nextFloat() * 0.4f), rnd.nextFloat() * 6.28f, 0f)
+                }
+                nextFlock = 7.0 + rnd.nextDouble() * 9
+            }
+        } else {
+            nextFlock = 0.6
+        }
+        val it = birds.iterator()
+        while (it.hasNext()) {
+            val b = it.next()
+            b.x += (b.vx * dt).toFloat()
+            b.y += (sin(time * 0.8 + b.phase) * 4 * density * dt).toFloat()
+            b.flap = sin(time * 7.5 + b.phase).toFloat()
+            if (b.x < -w * 0.3f || b.x > w * 1.3f) it.remove()
+        }
+    }
+
+    private val birdPath = Path()
+
+    private fun drawBirds(canvas: Canvas) {
+        if (birds.isEmpty()) return
+        val c = mix(0xFF2A2F3A.toInt(), 0xFF101318.toInt(), darkness)
+        boltPaint.color = c
+        boltPaint.strokeWidth = (if (mini) 1.1f else 1.6f) * density
+        for (b in birds) {
+            val lift = b.size * (0.15f + 0.55f * b.flap)
+            birdPath.reset()
+            birdPath.moveTo(b.x - b.size, b.y - lift)
+            birdPath.quadTo(b.x - b.size * 0.45f, b.y - lift * 0.2f - b.size * 0.15f, b.x, b.y)
+            birdPath.quadTo(b.x + b.size * 0.45f, b.y - lift * 0.2f - b.size * 0.15f, b.x + b.size, b.y - lift)
+            canvas.drawPath(birdPath, boltPaint)
+        }
+    }
+
+    // ------------------------------------------------------------------ drops on the glass
+
+    private class GlassDrop(var x: Float, var y: Float, val r: Float, var vy: Float, var alpha: Float, var fading: Boolean = false)
+
+    private val glass = ArrayList<GlassDrop>()
+
+    private fun stepGlass(dt: Double) {
+        if (mini) return
+        val want = if (rain < 0.08) 0 else (8 + rain * 34).toInt()
+        val d = dt.toFloat()
+        // While it rains, drops land on the glass; when it stops, they dry away.
+        if (glass.count { !it.fading } < want && rnd.nextFloat() < d * (2 + rain.toFloat() * 10)) {
+            glass += GlassDrop(rnd.nextFloat() * w, rnd.nextFloat() * h * 0.9f, (2.5f + rnd.nextFloat() * 5.5f) * density, 0f, 0f)
+        }
+        var extra = glass.count { !it.fading } - want
+        val it = glass.iterator()
+        while (it.hasNext()) {
+            val g = it.next()
+            if (extra > 0 && !g.fading) { g.fading = true; extra-- }
+            g.alpha = if (g.fading) g.alpha - d / 2.5f else (g.alpha + d / 0.6f).coerceAtMost(1f)
+            // Big drops give way now and then and run down the glass.
+            if (g.r > 5 * density && g.vy == 0f && rnd.nextFloat() < d * 0.08f) g.vy = (30 + rnd.nextFloat() * 50) * density
+            if (g.vy > 0f) {
+                g.vy *= (1 - d * 0.6f)
+                if (g.vy < 4 * density) g.vy = 0f
+            }
+            g.y += g.vy * d
+            if (g.alpha <= 0f || g.y > h + g.r) it.remove()
+        }
+    }
+
+    private fun drawGlass(canvas: Canvas) {
+        if (glass.isEmpty()) return
+        paint.style = Paint.Style.FILL
+        for (g in glass) {
+            val a = g.alpha.coerceIn(0f, 1f).toDouble()
+            paint.color = withAlpha(mix(skyBottom, Color.WHITE, 0.35), 0.28 * a)
+            canvas.drawCircle(g.x, g.y, g.r, paint)
+            paint.color = withAlpha(0xFF0A0E14.toInt(), 0.22 * a)
+            canvas.drawCircle(g.x + g.r * 0.15f, g.y + g.r * 0.25f, g.r * 0.85f, paint)
+            paint.color = withAlpha(Color.WHITE, 0.7 * a)
+            canvas.drawCircle(g.x - g.r * 0.35f, g.y - g.r * 0.35f, g.r * 0.28f, paint)
         }
     }
 
@@ -384,6 +505,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         drawStars(canvas)
         drawMoon(canvas)
         drawSun(canvas)
+        drawBirds(canvas)
         drawClouds(canvas)
         drawOvercast(canvas)
         if (boltLife > 0) {
@@ -395,6 +517,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         drawRain(canvas)
         drawSnow(canvas)
         drawFog(canvas)
+        drawGlass(canvas)
         if (flash > 0) canvas.drawColor(Color.argb((110 * flash * flash).toInt(), 235, 238, 255))
     }
 

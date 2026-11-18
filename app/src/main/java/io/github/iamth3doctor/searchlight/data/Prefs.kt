@@ -298,6 +298,33 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_WEATHER, null)?.let(WeatherData::fromJson)
         set(value) = sp.edit().putString(KEY_WEATHER, value?.toJson()).apply()
 
+    /** The city the weather shows (picked on the weather screen); null = home (device location or [manualPlace]). */
+    var weatherCity: GeoPlace?
+        get() = sp.getString("weather_city", null)?.let { runCatching { placeFromJson(org.json.JSONObject(it)) }.getOrNull() }
+        set(value) = sp.edit().putString("weather_city", value?.let { placeToJson(it).toString() }).apply()
+
+    /** Cities saved on the weather screen (besides home), in the order saved. */
+    var weatherCities: List<GeoPlace>
+        get() = runCatching {
+            val a = org.json.JSONArray(sp.getString("weather_cities", "[]"))
+            (0 until a.length()).map { placeFromJson(a.getJSONObject(it)) }
+        }.getOrDefault(emptyList())
+        set(value) = sp.edit().putString("weather_cities",
+            org.json.JSONArray().apply { value.forEach { put(placeToJson(it)) } }.toString()).apply()
+
+    /** The last good reading for each place ([key]: "home", or the city's coordinates), for switching back offline. */
+    fun cachedWeather(key: String): WeatherData? =
+        sp.getString("weather_cache_$key", null)?.let { runCatching { WeatherData.fromJson(it) }.getOrNull() }
+
+    fun cacheWeather(key: String, data: WeatherData?) =
+        sp.edit().putString("weather_cache_$key", data?.toJson()).apply()
+
+    private fun placeToJson(p: GeoPlace) = org.json.JSONObject().put("n", p.name).putOpt("a", p.admin).putOpt("c", p.countryCode)
+        .put("lat", p.latitude).put("lon", p.longitude)
+
+    private fun placeFromJson(o: org.json.JSONObject) = GeoPlace(o.getString("n"), o.optString("a").takeIf { it.isNotBlank() },
+        o.optString("c").takeIf { it.isNotBlank() }, o.getDouble("lat"), o.getDouble("lon"))
+
     // ---- Favorites: an ordered list of up to MAX_FAVORITES app keys ----
 
     /** Manual = the six you pick; Automatic = picked from your app usage (see AutoFavorites). */

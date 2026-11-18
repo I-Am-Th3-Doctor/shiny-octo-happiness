@@ -126,4 +126,56 @@ class SceneTest {
         assertEquals(0.0, az * 180 / Math.PI, 3.0)
         assertTrue(Sun.altitudeDeg(noon + 12 * hour, 47.25, -122.44) < -15)
     }
+
+    @Test fun scrubSnapsToWholeHoursAndIsSticky() {
+        val start = DayBar.start(now)
+        // A drag anywhere lands on a whole hour.
+        assertEquals(start + 5 * hour, DayBar.hourTime(DayBar.snap(4.6, null), now))
+        assertEquals(5, DayBar.hourIndex(start + 5 * hour + 10 * 60_000L, now))
+        // Resting just past halfway between hours, or wobbling, it stays on the hour it's on.
+        assertEquals(4, DayBar.snap(4.55, 4))
+        assertEquals(4, DayBar.snap(3.35, 4))
+        // A clear move goes to the next hour, never past it.
+        assertEquals(5, DayBar.snap(4.75, 4))
+        assertEquals(5, DayBar.snap(5.2, 4))
+        // A drag past the ends stays on the bar.
+        assertEquals(DayBar.HOURS, DayBar.snap(40.0, null))
+        assertEquals(0, DayBar.snap(-3.0, 2))
+    }
+
+    @Test fun eachHourHasItsOwnSound() {
+        val rainy = SceneModel.at(data(0, 2, 0.0), now + 4 * hour, live = false)
+        val r = SceneSound.levels(rainy)
+        assertTrue(r.rain > 0.3f)
+        assertEquals(0f, r.crickets)
+        // A clear, calm afternoon: silence.
+        val calm = SceneSound.levels(SceneModel.at(data(0, 2, 0.0, wind = 1.0), now - 2 * hour, live = false))
+        assertEquals(0f, calm.rain)
+        assertEquals(0f, calm.crickets)
+        assertTrue(calm.wind < 0.05f)
+        // A dry night: crickets.
+        val night = SceneSound.levels(SceneModel.at(data(0, 2, 0.0, wind = 1.0), now + 10 * hour, live = false))
+        assertTrue(night.crickets > 0.3f)
+        assertEquals(0f, night.rain)
+        // A gale: wind.
+        val windy = SceneSound.levels(SceneModel.at(data(0, 2, 0.0, wind = 24.0), now, live = true))
+        assertTrue(windy.wind > 0.6f)
+    }
+
+    @Test fun daysPastTheHourlyForecastPlayTheirDailyForecast() {
+        val base = data(0, 2, 0.0)
+        val start = now / hour * hour - 12 * hour
+        val days = (0 until 7).map { i -> DayPoint(start + i * 24 * hour, 12.0 + i, 3.0, listOf(0, 61, 3, 0, 2, 95, 71)[i], listOf(0, 80, 40, 0, 20, 60, 30)[i], null, null, 6.0) }
+        val w = base.copy(detail = base.detail!!.copy(daily = days))
+        val stormDay = start + 5 * 24 * hour
+        val c = SceneModel.at(w, stormDay + 15 * hour, live = false)
+        assertEquals(95, c.code)
+        assertTrue(c.thunder && c.rain > 0.5)
+        // Warmest mid-afternoon, coolest at dawn.
+        assertEquals(17.0, c.tempC, 0.3)
+        assertEquals(3.0, SceneModel.at(w, stormDay + 6 * hour, live = false).tempC, 0.3)
+        assertEquals(71, SceneModel.at(w, start + 6 * 24 * hour + 12 * hour, live = false).code)
+        // Within the hourly forecast, the hours themselves.
+        assertEquals(63, SceneModel.at(w, now + 4 * hour, live = false).code)
+    }
 }

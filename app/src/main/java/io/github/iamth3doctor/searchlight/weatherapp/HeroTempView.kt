@@ -6,7 +6,10 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.annotation.SuppressLint
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import androidx.core.content.res.ResourcesCompat
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.ui.color
@@ -16,6 +19,9 @@ import kotlin.math.max
  * The weather screen's hero: the temperature as oversized, dimensional numbers in Lexend Bold:
  * a gold face over a rust extrusion stepping down and right, with a soft shadow, so it stands off
  * the scene behind it. "58°" with a small "F". Shrinks to fit its width; never clipped.
+ *
+ * It's also a fidget: drag it sideways to scrub the day, an hour per [stepPx] of drag
+ * ([onScrubStart], then [onScrubSteps] with the hours moved so far); a tap is a click.
  */
 class HeroTempView(context: Context) : View(context) {
 
@@ -46,6 +52,49 @@ class HeroTempView(context: Context) : View(context) {
 
     private fun depth() = textSize * 0.07f
     private val degree = "°"
+
+    /** Drag distance per hour. */
+    var stepPx: () -> Float = { 24 * density }
+    var onScrubStart: (() -> Unit)? = null
+    /** Hours moved since the drag began (negative: back). */
+    var onScrubSteps: ((Int) -> Unit)? = null
+
+    private val slop = ViewConfiguration.get(context).scaledTouchSlop
+    private var downX = 0f
+    private var downY = 0f
+    private var dragging = false
+    private var steps = 0
+
+    /** Whether the number is being dragged (tests). */
+    val scrubbing: Boolean get() = dragging
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y; dragging = false; steps = 0 }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = e.x - downX
+                if (!dragging && kotlin.math.abs(dx) > slop && kotlin.math.abs(dx) > kotlin.math.abs(e.y - downY)) {
+                    dragging = true
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    onScrubStart?.invoke()
+                }
+                if (dragging) {
+                    // Whole hours, and sticky like the bar: a hand resting between two hours stays put.
+                    val pos = dx / stepPx()
+                    if (kotlin.math.abs(pos - steps) >= 0.5f + io.github.iamth3doctor.searchlight.weather.DayBar.SNAP_HYSTERESIS) {
+                        steps = Math.round(pos)
+                        onScrubSteps?.invoke(steps)
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP -> { if (!dragging) performClick(); dragging = false }
+            MotionEvent.ACTION_CANCEL -> dragging = false
+        }
+        return true
+    }
+
+    override fun performClick(): Boolean = super.performClick()
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES

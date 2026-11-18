@@ -427,8 +427,8 @@ class PrecipGraphView(context: Context, private val light: Boolean) : View(conte
             if (hs.isEmpty()) return
             val max = maxOf(1.0, hs.maxOf { it.precipMm ?: 0.0 })
             fun y(mm: Double) = (bottom - (mm / max) * (bottom - top)).toFloat()
-            area(canvas, hs.map { xOf(it.time) to y(it.precipMm ?: 0.0) })
             chance(canvas, hs.map { xOf(it.time) to (it.precipProb ?: 0) })
+            area(canvas, hs.map { xOf(it.time) to y(it.precipMm ?: 0.0) })
             // Labels every 6 hours.
             text.color = dim
             for (h in hs) {
@@ -446,8 +446,8 @@ class PrecipGraphView(context: Context, private val light: Boolean) : View(conte
             if (ds.isEmpty()) return
             val max = maxOf(2.0, ds.maxOf { it.precipMm ?: 0.0 })
             fun y(mm: Double) = (bottom - (mm / max) * (bottom - top)).toFloat()
-            area(canvas, ds.mapIndexed { i, d -> xOfDay(i) to y(d.precipMm ?: 0.0) })
             chance(canvas, ds.mapIndexed { i, d -> xOfDay(i) to (d.precipPct ?: 0) })
+            area(canvas, ds.mapIndexed { i, d -> xOfDay(i) to y(d.precipMm ?: 0.0) })
             text.color = dim
             val locale = resources.configuration.locales[0]
             ds.forEachIndexed { i, d ->
@@ -460,30 +460,45 @@ class PrecipGraphView(context: Context, private val light: Boolean) : View(conte
         }
     }
 
+    /** The amount (mm), in front: a solid, deeper fill. */
     private fun area(canvas: Canvas, points: List<Pair<Float, Float>>) {
-        if (points.size < 2) return
-        path.reset()
-        path.moveTo(points.first().first, bottom)
-        for ((x, y) in points) path.lineTo(x, y)
+        if (points.size < 2 || points.all { it.second >= bottom - 0.5f }) return
+        smooth(points)
         path.lineTo(points.last().first, bottom)
+        path.lineTo(points.first().first, bottom)
         path.close()
-        fill.shader = LinearGradient(0f, top, 0f, bottom, SceneRenderer.withAlpha(drop, 0.85), SceneRenderer.withAlpha(drop, 0.2), Shader.TileMode.CLAMP)
+        fill.shader = LinearGradient(0f, top, 0f, bottom, SceneRenderer.withAlpha(drop, 0.95), SceneRenderer.withAlpha(drop, 0.55), Shader.TileMode.CLAMP)
         canvas.drawPath(path, fill)
         fill.shader = null
     }
 
+    /** The chance (%), behind: a filled area chart with a solid edge along its top. */
     private fun chance(canvas: Canvas, points: List<Pair<Float, Int>>) {
         if (points.size < 2) return
-        path.reset()
-        points.forEachIndexed { i, (x, p) ->
-            val y = bottom - p / 100f * (bottom - top)
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        line.color = SceneRenderer.withAlpha(fg, 0.55)
-        line.strokeWidth = 1.2f * density
-        line.pathEffect = android.graphics.DashPathEffect(floatArrayOf(4 * density, 3 * density), 0f)
-        canvas.drawPath(path, line)
+        val pts = points.map { (x, p) -> x to (bottom - p.coerceIn(0, 100) / 100f * (bottom - top)) }
+        smooth(pts)
+        line.color = SceneRenderer.withAlpha(drop, 0.9)
+        line.strokeWidth = 1.6f * density
         line.pathEffect = null
+        canvas.drawPath(path, line)
+        path.lineTo(pts.last().first, bottom)
+        path.lineTo(pts.first().first, bottom)
+        path.close()
+        fill.shader = LinearGradient(0f, top, 0f, bottom, SceneRenderer.withAlpha(drop, 0.45), SceneRenderer.withAlpha(drop, 0.08), Shader.TileMode.CLAMP)
+        canvas.drawPath(path, fill)
+        fill.shader = null
+    }
+
+    /** [path] through [points], curved (never overshooting between neighbours). */
+    private fun smooth(points: List<Pair<Float, Float>>) {
+        path.reset()
+        points.forEachIndexed { i, (x, y) ->
+            if (i == 0) path.moveTo(x, y) else {
+                val (px, py) = points[i - 1]
+                val mx = (px + x) / 2
+                path.cubicTo(mx, py, mx, y, x, y)
+            }
+        }
     }
 
     private fun marker(canvas: Canvas, x: Float, color: Int, w: Float) {

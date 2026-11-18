@@ -235,13 +235,15 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
      */
     private class WholeText(context: Context) : TextView(context) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-            val line = layout?.takeIf { it.lineCount > 0 }?.getLineWidth(0) ?: return
-            val need = kotlin.math.ceil(line).toInt() + totalPaddingLeft + totalPaddingRight
-            if (need > measuredWidth && MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.EXACTLY) {
-                val max = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.AT_MOST) MeasureSpec.getSize(widthMeasureSpec) else need
-                setMeasuredDimension(minOf(need, max), measuredHeight)
+            // Ask for the width the drawn line really takes (measured the same way the layout lays it out).
+            val t = text
+            if (t.isNotEmpty()) {
+                val l = android.text.StaticLayout.Builder.obtain(t, 0, t.length, paint, 1_000_000)
+                    .setIncludePad(includeFontPadding).setMaxLines(1).build()
+                val need = kotlin.math.ceil(l.getLineWidth(0)).toInt() + compoundPaddingLeft + compoundPaddingRight + 2
+                if (need != minWidth) minWidth = need
             }
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         }
     }
 

@@ -13,8 +13,8 @@ import io.github.iamth3doctor.searchlight.weather.SceneConditions
 
 /**
  * The living weather scene as a View ([SceneRenderer] does the drawing). It animates only while
- * it can be seen (attached, its window visible, the view shown) and never in battery saver: then
- * it holds still on its last frame. The home screen's widget [mini] runs at 30 fps, the full
+ * it can be seen (attached, its window visible, the view shown, not [paused]) and never in battery saver: then
+ * it holds still on its last frame. The home screen's widget [mini] runs at 24 fps, the full
  * screen at 30: weather moves slowly, and between frames the UI thread is left idle (good for the
  * battery, and for anything waiting on the app to settle).
  */
@@ -37,6 +37,10 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
         renderer.setTarget(c, immediate = true)
         invalidate()
     }
+
+    /** Held still on its current frame (a preview that isn't playing). */
+    var paused = false
+        set(value) { field = value; updateRunning() }
 
     /** Whether the scene is animating now (tests). */
     var animating = false
@@ -74,7 +78,7 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
     /** Starts or stops the animation to match whether it may run now. */
     fun updateRunning() {
         val should = isAttachedToWindow && windowVisibility == VISIBLE && isShown && conditions != null &&
-            width > 0 && !powerSave()
+            width > 0 && !paused && !powerSave()
         if (should == animating) return
         animating = should
         if (should) {

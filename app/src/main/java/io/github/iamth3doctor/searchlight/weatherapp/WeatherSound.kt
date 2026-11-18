@@ -11,14 +11,18 @@ import kotlin.math.sin
 
 /**
  * The scene's soft soundtrack, synthesized on the phone (no sound files): rain as a hiss with
- * patters of drops, wind as a low gusting rush, thunder as a rumble when lightning strikes.
- * Levels follow the scene ([rain], [wind], 0..1). Plays on the media stream, quietly; the
+ * patters of drops, wind as a low gusting rush, crickets on a dry night, thunder as a rumble when
+ * lightning strikes; a clear, calm day is silent. Levels follow the scene ([rain], [wind],
+ * [crickets], 0..1) and crossfade as they change (scrubbing from hour to hour). Plays on the media stream, quietly; the
  * weather screen starts it only when sound is on and the phone isn't silenced or in Do Not Disturb.
  */
 class WeatherSound {
 
     @Volatile var rain = 0f
     @Volatile var wind = 0f
+    @Volatile var crickets = 0f
+    /** 0..1 overall: lower while the day is being scrubbed. */
+    @Volatile var volume = 1f
     @Volatile private var thunderPending = 0
 
     /** Thunder claps asked for (tests). */
@@ -76,6 +80,12 @@ class WeatherSound {
         var thunderEnv = 0.0
         var crack = 0.0
         var t = 0.0
+        var cricketAmp = 0.0
+        var vol = 1.0
+        // A few crickets, each chirping its own rhythm (pulse trains of a high tone).
+        val cricketHz = doubleArrayOf(4300.0, 4650.0, 3950.0)
+        val cricketPeriod = doubleArrayOf(0.83, 1.07, 0.71)
+        val cricketPhase = doubleArrayOf(0.0, 0.31, 0.57)
         // Fade in so it never starts with a click.
         var master = 0.0
         try {
@@ -83,6 +93,8 @@ class WeatherSound {
             while (running) {
                 val rainTarget = rain * 0.22
                 val windTarget = wind * 0.45
+                val cricketTarget = crickets * 0.05
+                val volTarget = volume.toDouble()
                 if (thunderPending > 0) {
                     thunderPending = 0
                     thunderEnv = 1.0
@@ -90,8 +102,11 @@ class WeatherSound {
                 }
                 for (i in buf.indices) {
                     t += 1.0 / rate
-                    rainAmp += (rainTarget - rainAmp) * 0.0004
-                    windAmp += (windTarget - windAmp) * 0.0002
+                    // About a third of a second to crossfade from one hour's sound to the next.
+                    rainAmp += (rainTarget - rainAmp) * 0.00015
+                    windAmp += (windTarget - windAmp) * 0.00015
+                    cricketAmp += (cricketTarget - cricketAmp) * 0.00015
+                    vol += (volTarget - vol) * 0.0002
                     master += (1.0 - master) * 0.0002
                     val n = rnd.nextDouble() * 2 - 1
                     // Rain: brightened noise, plus the odd nearby drop.
@@ -110,7 +125,17 @@ class WeatherSound {
                     thunderEnv *= exp(-1.0 / (2.8 * rate))
                     crack *= exp(-1.0 / (0.12 * rate))
                     val thunderS = thunderEnv * lp2 * 9 + crack * n * 0.25
-                    val s = (rainS + windS + thunderS) * master * 0.7
+                    // Crickets: each a short burst of three pulses, then a pause.
+                    var cricketS = 0.0
+                    if (cricketAmp > 1e-4) for (c in cricketHz.indices) {
+                        val ph = ((t + cricketPhase[c]) % cricketPeriod[c])
+                        if (ph < 0.15) {
+                            val pulse = (ph % 0.05) / 0.05
+                            if (pulse < 0.6) cricketS += sin(2 * PI * cricketHz[c] * t) * sin(PI * pulse / 0.6)
+                        }
+                    }
+                    cricketS *= cricketAmp
+                    val s = (rainS + windS + thunderS + cricketS) * master * vol * 0.7
                     buf[i] = (s.coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort()
                 }
                 track.write(buf, 0, buf.size)

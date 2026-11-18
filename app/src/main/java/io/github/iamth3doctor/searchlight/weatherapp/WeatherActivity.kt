@@ -4,14 +4,14 @@ import android.app.Activity
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.RenderEffect
-import android.graphics.Shader
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -20,10 +20,12 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.searchlight
 import io.github.iamth3doctor.searchlight.ui.FrostedDrawable
+import io.github.iamth3doctor.searchlight.ui.Type
 import io.github.iamth3doctor.searchlight.ui.color
 import io.github.iamth3doctor.searchlight.ui.edgeToEdge
 import io.github.iamth3doctor.searchlight.ui.isLightTheme
@@ -31,16 +33,26 @@ import io.github.iamth3doctor.searchlight.ui.padForSystemBars
 import io.github.iamth3doctor.searchlight.ui.px
 import io.github.iamth3doctor.searchlight.ui.pxF
 import io.github.iamth3doctor.searchlight.ui.type
+import io.github.iamth3doctor.searchlight.weather.DayBar
+import io.github.iamth3doctor.searchlight.weather.NwsAlerts
 import io.github.iamth3doctor.searchlight.weather.SceneConditions
 import io.github.iamth3doctor.searchlight.weather.SceneModel
+import io.github.iamth3doctor.searchlight.weather.SceneSound
+import io.github.iamth3doctor.searchlight.weather.WeatherCodes
 import io.github.iamth3doctor.searchlight.weather.WeatherData
 import io.github.iamth3doctor.searchlight.weather.WeatherRepository
+import io.github.iamth3doctor.searchlight.weather.WeatherText
 
 /**
- * The weather, as a place: a full-screen living scene of the conditions right now (sky, sun or
- * moon, clouds, rain, snow, lightning, fog, all moving with the wind), with the day along the
- * bottom to scrub through like a timelapse. Tap the scene for the numbers; tap again (or Back,
- * or ×) to go back to just the scene. Opened from the Weather widget and the Weather tile.
+ * The weather, as a place: a full-screen living scene of the conditions (sky, sun or moon, clouds,
+ * rain, snow, lightning, fog, birds, all moving with the wind), the temperature as a giant number,
+ * the day along the bottom to scrub through like a timelapse. Drag the bar, or the number itself,
+ * and the scene, number, condition and sound all follow the hour. Tap the scene for the quick
+ * numbers over it; swipe up for the 7 days; the precipitation opens the full details; the place
+ * name opens locations.
+ *
+ * Every other view (7 days, details, an alert, locations) is a screen of its own, opaque, that
+ * replaces the scene rather than floating over it: one goes out completely before the next comes in.
  */
 class WeatherActivity : Activity() {
 
@@ -52,8 +64,6 @@ class WeatherActivity : Activity() {
         private set
     lateinit var panel: WeatherDataPanel
         private set
-    lateinit var dataOverlay: FrameLayout
-        private set
     lateinit var muteButton: ImageView
         private set
     lateinit var offlineGlyph: ImageView
@@ -62,17 +72,45 @@ class WeatherActivity : Activity() {
         private set
     lateinit var hero: HeroTempView
         private set
-    lateinit var heroCondition: android.widget.TextView
+    lateinit var heroBox: LinearLayout
         private set
-    lateinit var heroHiLo: android.widget.TextView
+    lateinit var heroCondition: TextView
         private set
-    lateinit var alertPill: android.widget.TextView
+    lateinit var heroHiLo: TextView
         private set
-    lateinit var alertOverlay: FrameLayout
+    lateinit var alertPill: TextView
         private set
-    private lateinit var alertList: LinearLayout
+    lateinit var placeButton: TextView
+        private set
+    lateinit var weekHandle: View
+        private set
+    lateinit var scrim: View
+        private set
+    lateinit var quick: QuickDataView
+        private set
+    lateinit var week: WeekView
+        private set
+    lateinit var places: PlacesView
+        private set
 
-    val alertShown: Boolean get() = alertOverlay.visibility == View.VISIBLE
+    /** The scene and everything on it (the "hero" screen). */
+    lateinit var heroScreen: SwipeFrame
+        private set
+    lateinit var weekScreen: SwipeFrame
+        private set
+    lateinit var dataScreen: SwipeFrame
+        private set
+    lateinit var alertScreen: SwipeFrame
+        private set
+    lateinit var placesScreen: SwipeFrame
+        private set
+    lateinit var screens: ScreenStack
+        private set
+
+    private lateinit var quickScroll: ScrollView
+    private lateinit var alertList: LinearLayout
+    private lateinit var dataTitle: TextView
+
     val sound = WeatherSound()
 
     /** Now, in ms (tests may pin it). */
@@ -81,7 +119,11 @@ class WeatherActivity : Activity() {
     /** The previewed time, or null: live. */
     val scrubTime: Long? get() = bar.scrubTime
 
-    val dataShown: Boolean get() = dataOverlay.visibility == View.VISIBLE
+    val quickShown: Boolean get() = quickScroll.visibility == View.VISIBLE
+    val dataShown: Boolean get() = screens.top === dataScreen
+    val weekShown: Boolean get() = screens.top === weekScreen
+    val alertShown: Boolean get() = screens.top === alertScreen
+    val placesShown: Boolean get() = screens.top === placesScreen
 
     private val main = Handler(Looper.getMainLooper())
     private val listener: () -> Unit = { render() }
@@ -93,178 +135,51 @@ class WeatherActivity : Activity() {
         }
     }
 
+    private var light = false
+    private val fg get() = if (light) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
+    private val dim get() = if (light) 0xA61C1C21.toInt() else color(R.color.on_surface_dim)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val light = isLightTheme()
+        light = isLightTheme()
         edgeToEdge(lightBackground = false)
 
         val root = FrameLayout(this)
-        scene = WeatherSceneView(this, mini = false).apply {
-            setOnClickListener { toggleData() }
-            renderer.onStrike = { main.post { onStrike() } }
-        }
-        root.addView(scene, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        heroScreen = buildHero()
+        root.addView(heroScreen, match())
 
-        // Chrome, kept small: the wind (and, offline, a small glyph) top left; sound top right; the day at the bottom.
-        val chrome = FrameLayout(this)
-        val m = px(R.dimen.space_m)
-        chrome.setPadding(m, m, m, m)
-        val button = px(R.dimen.size_cal_chevron) + px(R.dimen.space_xs)
-        val topLeft = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        windArrow = WindArrowView(this).apply { background = chip(light) }
-        topLeft.addView(windArrow, LinearLayout.LayoutParams(button, button))
-        offlineGlyph = ImageView(this).apply {
-            setImageResource(R.drawable.ic_cloud_off)
-            alpha = 0.8f
-            contentDescription = getString(R.string.weather_offline_desc)
-            visibility = View.GONE
-        }
-        val g = px(R.dimen.space_m) + px(R.dimen.space_xs)
-        topLeft.addView(offlineGlyph, LinearLayout.LayoutParams(g, g).apply { marginStart = px(R.dimen.space_s) })
-        chrome.addView(topLeft, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START))
-
-        muteButton = ImageView(this).apply {
-            background = chip(light)
-            val p = px(R.dimen.space_s) + px(R.dimen.space_xs) / 2
-            setPadding(p, p, p, p)
-            setOnClickListener { toggleSound() }
-        }
-        chrome.addView(muteButton, FrameLayout.LayoutParams(button, button, Gravity.TOP or Gravity.END))
-
-        // A severe-weather alert, when there is one: a bold pill between the wind and the sound.
-        alertPill = android.widget.TextView(this).apply {
-            type(io.github.iamth3doctor.searchlight.ui.Type.BODY)
-            typeface = android.graphics.Typeface.create(typeface, 700, false)
-            letterSpacing = 0.08f
-            isSingleLine = true
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            gravity = Gravity.CENTER
-            val p = px(R.dimen.space_s)
-            setPadding(p * 2, p, p * 2, p)
-            setTextColor(if (light) 0xFFFFFFFF.toInt() else color(R.color.on_gold))
-            background = GradientDrawable().apply { cornerRadius = 999f; setColor(color(if (light) R.color.accent else R.color.gold)) }
-            elevation = px(R.dimen.space_xs).toFloat()
-            visibility = View.GONE
-            setOnClickListener { showAlerts() }
-        }
-        chrome.addView(alertPill, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, button, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
-            .apply { leftMargin = button + px(R.dimen.space_m) * 2; rightMargin = button + px(R.dimen.space_s) })
-
-        // The hero: the temperature, oversized and dimensional, over the scene; the condition and high/low on glass under it.
-        val heroBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
-        hero = HeroTempView(this)
-        heroBox.addView(hero, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        val heroText = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            val p = px(R.dimen.space_s)
-            setPadding(p * 2, p, p * 2, p)
-            background = GradientDrawable().apply { cornerRadius = pxF(R.dimen.radius_card) / 1.5f; setColor(glass(light)) }
-        }
-        heroCondition = android.widget.TextView(this).apply {
-            type(io.github.iamth3doctor.searchlight.ui.Type.TILE_TITLE)
-            typeface = android.graphics.Typeface.create(typeface, 700, false)
-            setTextColor(if (light) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt())
-            gravity = Gravity.CENTER
-        }
-        heroHiLo = android.widget.TextView(this).apply {
-            type(io.github.iamth3doctor.searchlight.ui.Type.BODY)
-            typeface = android.graphics.Typeface.create(typeface, 600, false)
-            setTextColor(if (light) 0xA61C1C21.toInt() else color(R.color.on_surface_dim))
-            gravity = Gravity.CENTER
-        }
-        heroText.addView(heroCondition)
-        heroText.addView(heroHiLo)
-        heroBox.addView(heroText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { topMargin = px(R.dimen.space_xs) })
-        chrome.addView(heroBox, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP)
-            .apply { topMargin = button + px(R.dimen.space_m) })
-
-        bar = DayBarView(this).apply {
-            this.light = light
-            background = FrostedDrawable(this, pxF(R.dimen.radius_card) / 1.5f, glass(light), glass(light),
-                color(if (light) R.color.settings_glass_border_light else R.color.glass_border), pxF(R.dimen.stroke_glass), wallpaper = false)
-            onScrub = { render() }
-        }
-        chrome.addView(bar, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(R.dimen.size_weather_bar), Gravity.BOTTOM))
-
-        // The numbers: over the scene (blurred behind them), above the bar.
-        dataOverlay = FrameLayout(this).apply {
-            visibility = View.GONE
-            setOnClickListener { toggleData() } // outside the panel: back to the scene
-        }
+        // The other screens: each opaque, each on its own.
         panel = WeatherDataPanel(this, light).apply { clock = { this@WeatherActivity.clock() } }
-        val card = FrameLayout(this).apply {
-            isClickable = true
-            background = FrostedDrawable(this, pxF(R.dimen.radius_card), glass(light), glass(light),
-                color(if (light) R.color.settings_glass_border_light else R.color.glass_border), pxF(R.dimen.stroke_glass), wallpaper = false)
-            clipToOutline = true
-        }
-        val scroll = ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-            val p = px(R.dimen.space_m)
-            setPadding(p, p, p, p)
-            clipToPadding = false
-            addView(panel.body)
-        }
-        card.addView(scroll)
-        val close = ImageView(this).apply {
-            setImageResource(R.drawable.ic_close)
-            setColorFilter(if (light) 0xA61C1C21.toInt() else color(R.color.on_surface_dim))
-            val p = px(R.dimen.space_s)
-            setPadding(p, p, p, p)
-            contentDescription = getString(R.string.weather_detail_close)
-            setOnClickListener { toggleData() }
-        }
-        card.addView(close, FrameLayout.LayoutParams(button, button, Gravity.TOP or Gravity.END))
-        dataOverlay.addView(card, FrameLayout.LayoutParams(
-            minOf(px(R.dimen.size_weather_detail_max), resources.displayMetrics.widthPixels - 2 * m),
-            ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER_HORIZONTAL,
-        ).apply { topMargin = button + px(R.dimen.space_s); bottomMargin = px(R.dimen.size_weather_bar) + px(R.dimen.space_s) })
-        chrome.addView(dataOverlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        // With the numbers open, the bar, the sound, the wind and any alert stay at hand above them.
-        bar.bringToFront()
-        topLeft.bringToFront()
-        muteButton.bringToFront()
-        alertPill.bringToFront()
         panel.precip.onScrub = { t -> if (t == null) bar.goLive() else bar.scrubTo(t) }
+        dataTitle = title("")
+        dataScreen = screen(dataTitle, null, panel.body, "weather_screen_data")
 
-        // The alert's details: over everything, until closed.
-        alertOverlay = FrameLayout(this).apply {
-            visibility = View.GONE
-            setBackgroundColor(0x66000000)
-            setOnClickListener { hideAlerts() }
-        }
-        val alertCard = FrameLayout(this).apply {
-            isClickable = true
-            background = FrostedDrawable(this, pxF(R.dimen.radius_card), glass(light), glass(light),
-                color(if (light) R.color.settings_glass_border_light else R.color.glass_border), pxF(R.dimen.stroke_glass), wallpaper = false)
-            clipToOutline = true
-        }
-        alertList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        alertCard.addView(ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-            val p = px(R.dimen.space_m)
-            setPadding(p, p, p, p)
-            addView(alertList)
-        })
-        alertCard.addView(ImageView(this).apply {
-            setImageResource(R.drawable.ic_close)
-            setColorFilter(if (light) 0xA61C1C21.toInt() else color(R.color.on_surface_dim))
+        week = WeekView(this, light).apply { clock = { this@WeatherActivity.clock() } }
+        val details = TextView(this).apply {
+            type(Type.BODY)
+            typeface = Typeface.create(typeface, 700, false)
+            setTextColor(color(if (light) R.color.accent else R.color.gold))
+            text = getString(R.string.weather_details)
+            gravity = Gravity.CENTER
             val p = px(R.dimen.space_s)
             setPadding(p, p, p, p)
-            contentDescription = getString(R.string.weather_detail_close)
-            setOnClickListener { hideAlerts() }
-        }, FrameLayout.LayoutParams(button, button, Gravity.TOP or Gravity.END))
-        alertOverlay.addView(alertCard, FrameLayout.LayoutParams(
-            minOf(px(R.dimen.size_weather_detail_max), resources.displayMetrics.widthPixels - 2 * m),
-            ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER,
-        ).apply { topMargin = button; bottomMargin = button })
-        chrome.addView(alertOverlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        lightTheme = light
+            tag = "weather_week_details"
+            setOnClickListener { openDetails() }
+        }
+        weekScreen = screen(title(getString(R.string.weather_week_title)), details, week.root, "weather_screen_week")
 
-        root.addView(chrome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        chrome.padForSystemBars()
+        alertList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        alertScreen = screen(title(getString(R.string.weather_alert_title)), null, alertList, "weather_screen_alert")
+
+        places = PlacesView(this, light, repo).apply { onPicked = { screens.pop(); render() } }
+        placesScreen = screen(title(getString(R.string.weather_places_title)), null, places.root, "weather_screen_places")
+
+        for (s in listOf(weekScreen, dataScreen, alertScreen, placesScreen)) {
+            s.visibility = View.GONE
+            root.addView(s, match())
+        }
+        screens = ScreenStack(heroScreen) { onScreen(it) }
+
         setContentView(root)
         current = this
         updateSoundButton()
@@ -276,25 +191,282 @@ class WeatherActivity : Activity() {
         if (intent.getBooleanExtra(EXTRA_ALERT, false)) showAlerts()
     }
 
-    private var lightTheme = false
+    private fun match() = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
-    /** Back: an alert's details close first, then the numbers, then the screen. */
+    // ------------------------------------------------------------------ the hero screen
+
+    private fun buildHero(): SwipeFrame {
+        val frame = SwipeFrame(this).apply { tag = "weather_screen_hero" }
+        scene = WeatherSceneView(this, mini = false).apply {
+            setOnClickListener { toggleQuick() }
+            renderer.onStrike = { main.post { onStrike() } }
+        }
+        frame.addView(scene, match())
+        // Under the quick numbers, the scene dims.
+        scrim = View(this).apply { setBackgroundColor(0x8C000000.toInt()); visibility = View.GONE }
+        frame.addView(scrim, match())
+
+        // Top to bottom, never overlapping: the top row, an alert, the number (or the quick numbers), "7 days", the day.
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val m = px(R.dimen.space_m)
+        column.setPadding(m, m, m, m)
+        val button = px(R.dimen.size_cal_chevron) + px(R.dimen.space_xs)
+
+        val top = FrameLayout(this)
+        val topLeft = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        windArrow = WindArrowView(this).apply { background = chip() }
+        topLeft.addView(windArrow, LinearLayout.LayoutParams(button, button))
+        offlineGlyph = ImageView(this).apply {
+            setImageResource(R.drawable.ic_cloud_off)
+            alpha = 0.8f
+            contentDescription = getString(R.string.weather_offline_desc)
+            visibility = View.GONE
+        }
+        val g = px(R.dimen.space_m) + px(R.dimen.space_xs)
+        topLeft.addView(offlineGlyph, LinearLayout.LayoutParams(g, g).apply { marginStart = px(R.dimen.space_s) })
+        top.addView(topLeft, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, button, Gravity.START or Gravity.CENTER_VERTICAL))
+        placeButton = TextView(this).apply {
+            type(Type.BODY)
+            typeface = Typeface.create(typeface, 700, false)
+            setTextColor(fg)
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER
+            val p = px(R.dimen.space_s)
+            setPadding(p * 2, 0, p * 2, 0)
+            background = GradientDrawable().apply { cornerRadius = 999f; setColor(glass()) }
+            tag = "weather_place_button"
+            setOnClickListener { openPlaces() }
+        }
+        top.addView(placeButton, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, button, Gravity.CENTER)
+            .apply { leftMargin = button * 2 + px(R.dimen.space_s); rightMargin = button + px(R.dimen.space_s) })
+        muteButton = ImageView(this).apply {
+            background = chip()
+            val p = px(R.dimen.space_s) + px(R.dimen.space_xs) / 2
+            setPadding(p, p, p, p)
+            setOnClickListener { toggleSound() }
+        }
+        top.addView(muteButton, FrameLayout.LayoutParams(button, button, Gravity.END or Gravity.CENTER_VERTICAL))
+        column.addView(top, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, button))
+
+        // A severe-weather alert, when there is one: a bold pill on its own row.
+        alertPill = TextView(this).apply {
+            type(Type.BODY)
+            typeface = Typeface.create(typeface, 700, false)
+            letterSpacing = 0.08f
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER
+            val p = px(R.dimen.space_s)
+            setPadding(p * 2, p, p * 2, p)
+            setTextColor(if (light) 0xFFFFFFFF.toInt() else color(R.color.on_gold))
+            background = GradientDrawable().apply { cornerRadius = 999f; setColor(color(if (light) R.color.accent else R.color.gold)) }
+            elevation = px(R.dimen.space_xs).toFloat()
+            visibility = View.GONE
+            setOnClickListener { showAlerts() }
+        }
+        column.addView(alertPill, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, button)
+            .apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = px(R.dimen.space_s) })
+
+        val middle = FrameLayout(this)
+        // The hero: the temperature, oversized and dimensional; the condition and high/low on glass under it.
+        heroBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
+        hero = HeroTempView(this).apply {
+            stepPx = { (bar.width / DayBar.HOURS.toFloat()).coerceAtLeast(18 * resources.displayMetrics.density) }
+            onScrubStart = { dragBase = bar.scrubHour ?: DayBar.BEFORE_HOURS }
+            onScrubSteps = { steps -> bar.scrubToHour((dragBase + steps).coerceIn(0, DayBar.HOURS)) }
+            setOnClickListener { toggleQuick() }
+        }
+        heroBox.addView(hero, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val heroText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            val p = px(R.dimen.space_s)
+            setPadding(p * 2, p, p * 2, p)
+            background = GradientDrawable().apply { cornerRadius = pxF(R.dimen.radius_card) / 1.5f; setColor(glass()) }
+        }
+        heroCondition = TextView(this).apply {
+            type(Type.TILE_TITLE)
+            typeface = Typeface.create(typeface, 700, false)
+            setTextColor(fg)
+            gravity = Gravity.CENTER
+        }
+        heroHiLo = TextView(this).apply {
+            type(Type.BODY)
+            typeface = Typeface.create(typeface, 600, false)
+            setTextColor(dim)
+            gravity = Gravity.CENTER
+        }
+        heroText.addView(heroCondition)
+        heroText.addView(heroHiLo)
+        heroBox.addView(heroText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = px(R.dimen.space_xs) })
+        middle.addView(heroBox, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+
+        // The quick numbers: in the hero's place (never over it), over the dimmed scene. Tap to put them away.
+        quick = QuickDataView(this).apply { onMore = { openDetails() } }
+        quickScroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            visibility = View.GONE
+            addView(quick.root)
+            quick.root.setOnClickListener { toggleQuick() }
+        }
+        middle.addView(quickScroll, match())
+        column.addView(middle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = px(R.dimen.space_s) })
+
+        // "7 days" (or swipe up), just over the day.
+        weekHandle = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            val p = px(R.dimen.space_xs)
+            setPadding(p * 3, p, p * 3, p)
+            contentDescription = getString(R.string.weather_week_open_desc)
+            tag = "weather_week_handle"
+            addView(ImageView(this@WeatherActivity).apply { setImageResource(R.drawable.ic_arrow_up); setColorFilter(0xFFFFFFFF.toInt()) },
+                LinearLayout.LayoutParams(px(R.dimen.space_m), px(R.dimen.space_m)))
+            addView(TextView(this@WeatherActivity).apply {
+                type(Type.CAPTION)
+                typeface = Typeface.create(typeface, 700, false)
+                letterSpacing = 0.08f
+                setTextColor(0xFFFFFFFF.toInt())
+                setShadowLayer(pxF(R.dimen.glass_text_shadow), 0f, 1f, 0x99000000.toInt())
+                text = getString(R.string.weather_week_open).uppercase()
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = px(R.dimen.space_xs) })
+            setOnClickListener { openWeek() }
+        }
+        column.addView(weekHandle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = px(R.dimen.space_xs) })
+
+        bar = DayBarView(this).apply {
+            this.light = this@WeatherActivity.light
+            background = FrostedDrawable(this, pxF(R.dimen.radius_card) / 1.5f, glass(), glass(),
+                color(if (light) R.color.settings_glass_border_light else R.color.glass_border), pxF(R.dimen.stroke_glass), wallpaper = false)
+            onScrub = { render() }
+        }
+        column.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(R.dimen.size_weather_bar)))
+        frame.addView(column, match())
+        column.padForSystemBars()
+
+        frame.onSwipeUp = { openWeek() }
+        frame.canSwipeUp = { !quickShown || !quickScroll.canScrollVertically(1) }
+        return frame
+    }
+
+    private var dragBase = DayBar.BEFORE_HOURS
+
+    private fun glass() = color(if (light) R.color.settings_glass_light else R.color.settings_glass_dark)
+
+    private fun chip() = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(glass())
+        setStroke(resources.displayMetrics.density.toInt().coerceAtLeast(1),
+            color(if (light) R.color.settings_glass_border_light else R.color.glass_border))
+    }
+
+    // ------------------------------------------------------------------ the other screens
+
+    private fun title(text: String) = TextView(this).apply {
+        type(Type.TILE_TITLE)
+        typeface = Typeface.create(typeface, 700, false)
+        setTextColor(fg)
+        isSingleLine = true
+        ellipsize = TextUtils.TruncateAt.END
+        this.text = text
+    }
+
+    /** A screen of its own: opaque, a header (back, [titleView], [action]), then [content] scrolling under it. */
+    private fun screen(titleView: TextView, action: View?, content: View, tag: String): SwipeFrame {
+        val frame = SwipeFrame(this).apply {
+            this.tag = tag
+            isClickable = true
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(
+                color(if (light) R.color.settings_page_light_top else R.color.settings_page_dark_top),
+                color(if (light) R.color.settings_page_light_bottom else R.color.settings_page_dark_bottom),
+            ))
+        }
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val m = px(R.dimen.space_m)
+        val button = px(R.dimen.size_cal_chevron) + px(R.dimen.space_xs)
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(m - px(R.dimen.space_s), m / 2, m - px(R.dimen.space_s), m / 2)
+        }
+        header.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_arrow_down)
+            setColorFilter(fg)
+            val p = px(R.dimen.space_s)
+            setPadding(p, p, p, p)
+            contentDescription = getString(R.string.weather_back)
+            this.tag = "weather_screen_back"
+            setOnClickListener { back() }
+        }, LinearLayout.LayoutParams(button, button))
+        header.addView(titleView, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(R.dimen.space_s) })
+        if (action != null) header.addView(action)
+        col.addView(header)
+        val scroll = TopScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            clipToPadding = false
+            setPadding(m, 0, m, m)
+            addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        col.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        frame.addView(col, match())
+        col.padForSystemBars()
+        // Swipe down (from the top of the list) to go back.
+        frame.onSwipeDown = { back() }
+        frame.canSwipeDown = { !scroll.canScrollVertically(-1) }
+        return frame
+    }
+
+    /** A screen came in: status bar icons to suit it; anything left playing on the way out stops. */
+    private fun onScreen(v: View) {
+        val onHero = v === heroScreen
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !onHero && light
+            isAppearanceLightNavigationBars = !onHero && light
+        }
+        if (v !== weekScreen) week.stopPreview()
+    }
+
+    fun openWeek() {
+        if (quickShown) setQuick(false)
+        week.haptics = soundOn()
+        week.render(repo.state.data)
+        weekRendered = repo.state
+        screens.push(weekScreen)
+    }
+
+    fun openDetails() {
+        if (quickShown) setQuick(false)
+        panel.render(repo.state)
+        panelState = repo.state
+        panel.precip.update(repo.state.data, clock(), bar.scrubTime)
+        dataTitle.text = repo.state.data?.locationName ?: getString(R.string.weather_details_title)
+        screens.push(dataScreen)
+    }
+
+    fun openPlaces() {
+        if (quickShown) setQuick(false)
+        places.render()
+        screens.push(placesScreen)
+    }
+
+    /** The details open or closed (from the scene). */
+    fun toggleData() {
+        if (dataShown) back() else openDetails()
+    }
+
+    /** Back: the quick numbers go first, then the screen on top, then the weather. */
     fun back() {
         when {
-            alertShown -> hideAlerts()
-            dataShown -> toggleData()
+            screens.depth > 0 -> screens.pop()
+            quickShown -> setQuick(false)
             else -> finish()
         }
     }
 
-    private fun glass(light: Boolean) = color(if (light) R.color.settings_glass_light else R.color.settings_glass_dark)
-
-    private fun chip(light: Boolean) = GradientDrawable().apply {
-        shape = GradientDrawable.OVAL
-        setColor(glass(light))
-        setStroke(resources.displayMetrics.density.toInt().coerceAtLeast(1),
-            color(if (light) R.color.settings_glass_border_light else R.color.glass_border))
-    }
+    // ------------------------------------------------------------------ lifecycle
 
     override fun onStart() {
         super.onStart()
@@ -314,6 +486,7 @@ class WeatherActivity : Activity() {
 
     override fun onPause() {
         sound.stop()
+        week.stopPreview()
         super.onPause()
     }
 
@@ -324,11 +497,12 @@ class WeatherActivity : Activity() {
     }
 
     override fun onDestroy() {
+        week.stop()
         if (current === this) current = null
         super.onDestroy()
     }
 
-    @Deprecated("Back hides the numbers first")
+    @Deprecated("Back closes the screen on top first")
     @Suppress("DEPRECATION")
     override fun onBackPressed() = back()
 
@@ -344,83 +518,97 @@ class WeatherActivity : Activity() {
     /** Before any reading: a mild day over Tacoma, so the screen is never blank. */
     private fun placeholder() = WeatherData("Tacoma", 47.25, -122.44, 12.0, 2, true, 14.0, 6.0, clock())
 
+    private var panelState: WeatherRepository.State? = null
+    private var weekRendered: WeatherRepository.State? = null
+
     fun render() {
-        if (!::bar.isInitialized) return
+        if (!::bar.isInitialized || !::screens.isInitialized) return
         val state = repo.state
         val now = clock()
         bar.update(state.data, now, bar.scrubTime)
         val c = conditions()
         scene.conditions = c
-        windArrow.color = if (isLightTheme()) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
+        windArrow.color = fg
         windArrow.set(c.windTowardDeg, c.windMph)
         offlineGlyph.visibility = if (state.data != null && state.problem == WeatherRepository.Problem.NETWORK) View.VISIBLE else View.GONE
-        offlineGlyph.setColorFilter(if (isLightTheme()) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt())
-        sound.rain = c.rain.toFloat()
-        sound.wind = (c.windMph / 30.0).coerceIn(0.0, 1.0).toFloat()
+        offlineGlyph.setColorFilter(fg)
+
+        // The sound of the hour showing: rain, wind, crickets at night, or quiet; a little softer while scrubbing.
+        val levels = SceneSound.levels(c)
+        sound.rain = levels.rain
+        sound.wind = levels.wind
+        sound.crickets = levels.crickets
+        sound.volume = if (bar.scrubTime != null) 0.6f else 1f
 
         // The hero follows the scene: now, or the hour being played.
         val data = state.data
-        hero.number = if (data != null) io.github.iamth3doctor.searchlight.weather.WeatherText.f(c.tempC).toString() else "--"
-        heroCondition.text = if (data != null) io.github.iamth3doctor.searchlight.weather.WeatherCodes.describe(c.code) else getString(R.string.weather_loading)
-        heroHiLo.text = if (data != null) getString(R.string.weather_widget_hi_lo,
-            "${io.github.iamth3doctor.searchlight.weather.WeatherText.f(data.highC)}°", "${io.github.iamth3doctor.searchlight.weather.WeatherText.f(data.lowC)}°") else ""
+        hero.number = if (data != null) WeatherText.f(c.tempC).toString() else "--"
+        heroCondition.text = if (data != null) WeatherCodes.describe(c.code) else getString(R.string.weather_loading)
+        heroHiLo.text = if (data != null) getString(R.string.weather_widget_hi_lo, "${WeatherText.f(data.highC)}°", "${WeatherText.f(data.lowC)}°") else ""
         heroHiLo.visibility = if (data != null) View.VISIBLE else View.GONE
+        val place = data?.locationName ?: repo.city?.name ?: repo.homeName() ?: getString(R.string.weather_places_home_unknown)
+        placeButton.text = "$place  ▾"
+        placeButton.contentDescription = getString(R.string.weather_places_desc, place)
 
         // Alerts: a pill only while one is in effect; nothing at all otherwise.
-        val alerts = io.github.iamth3doctor.searchlight.weather.NwsAlerts.active(data?.alerts, now)
+        val alerts = NwsAlerts.active(data?.alerts, now)
         if (alerts.isEmpty()) {
             alertPill.visibility = View.GONE
-            if (alertShown) hideAlerts()
+            if (alertShown) screens.pop()
         } else {
             alertPill.visibility = View.VISIBLE
-            alertPill.text = io.github.iamth3doctor.searchlight.weather.NwsAlerts.pill(alerts.first()) +
-                if (alerts.size > 1) "  +${alerts.size - 1}" else ""
+            alertPill.text = NwsAlerts.pill(alerts.first()) + if (alerts.size > 1) "  +${alerts.size - 1}" else ""
             alertPill.contentDescription = getString(R.string.weather_alert_pill_desc, alerts.first().event)
         }
 
-        // The numbers rebuild when the reading changes; scrubbing only moves the precip card along.
+        if (quickShown) quick.render(data, c)
+        // The details and 7 days rebuild when the reading changes; scrubbing only moves the precip card along.
         if (dataShown && state !== panelState) {
             panel.render(state)
             panelState = state
+            dataTitle.text = data?.locationName ?: getString(R.string.weather_details_title)
+        }
+        if (weekShown && state !== weekRendered) {
+            week.render(data)
+            weekRendered = state
         }
         panel.precip.update(data, now, bar.scrubTime)
-        scene.contentDescription = getString(R.string.weather_scene_desc, "${io.github.iamth3doctor.searchlight.weather.WeatherText.f(c.tempC)}°F",
-            io.github.iamth3doctor.searchlight.weather.WeatherCodes.describe(c.code))
+        scene.contentDescription = getString(R.string.weather_scene_desc, "${WeatherText.f(c.tempC)}°F", WeatherCodes.describe(c.code))
     }
 
-    private var panelState: WeatherRepository.State? = null
+    /** Tap on the scene: the quick numbers over the dimmed scene, or back to the scene alone. */
+    fun toggleQuick() = setQuick(!quickShown)
 
-    fun toggleData() {
-        val show = !dataShown
+    fun setQuick(show: Boolean) {
+        if (show == quickShown) return
+        if (show) quick.render(repo.state.data, conditions())
+        // The quick numbers take the hero's place: never both.
+        heroBox.visibility = if (show) View.GONE else View.VISIBLE
+        quickScroll.visibility = if (show) View.VISIBLE else View.GONE
+        scrim.visibility = if (show) View.VISIBLE else View.GONE
         if (show) {
-            panel.render(repo.state)
-            panelState = repo.state
-            panel.precip.update(repo.state.data, clock(), bar.scrubTime)
-        }
-        dataOverlay.visibility = if (show) View.VISIBLE else View.GONE
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            scene.setRenderEffect(if (show) RenderEffect.createBlurEffect(28f, 28f, Shader.TileMode.CLAMP) else null)
+            scrim.alpha = 0f
+            scrim.animate().alpha(1f).setDuration(180).start()
         }
     }
 
     // ------------------------------------------------------------------ alerts
 
-    /** The alerts in effect, in full: event, headline, when, what's happening, what to do. */
+    /** The alerts in effect, in full, on their own screen: event, headline, when, what's happening, what to do. */
     fun showAlerts() {
         val data = repo.state.data ?: return
-        val alerts = io.github.iamth3doctor.searchlight.weather.NwsAlerts.active(data.alerts, clock())
+        val alerts = NwsAlerts.active(data.alerts, clock())
         if (alerts.isEmpty()) return
+        if (quickShown) setQuick(false)
         alertList.removeAllViews()
-        val fg = if (lightTheme) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
-        val dim = if (lightTheme) 0xA61C1C21.toInt() else color(R.color.on_surface_dim)
-        val accent = color(if (lightTheme) R.color.accent else R.color.gold)
+        val accent = color(if (light) R.color.accent else R.color.gold)
         val zone = java.time.ZoneOffset.ofTotalSeconds(data.detail?.utcOffsetSec ?: 0)
         val fmt = java.time.format.DateTimeFormatter.ofPattern(
             if (android.text.format.DateFormat.is24HourFormat(this)) "EEE HH:mm" else "EEE h:mm a", resources.configuration.locales[0])
         fun at(ms: Long?) = ms?.let { fmt.format(java.time.Instant.ofEpochMilli(it).atOffset(zone)) }
-        fun text(style: Int, color: Int, weight: Int = 400, value: CharSequence) = android.widget.TextView(this).apply {
+        fun text(style: Int, color: Int, weight: Int = 400, value: CharSequence) = TextView(this).apply {
             type(style)
-            if (weight != 400) typeface = android.graphics.Typeface.create(typeface, weight, false)
+            if (weight != 400) typeface = Typeface.create(typeface, weight, false)
             setTextColor(color)
             text = value
             setLineSpacing(0f, 1.15f)
@@ -428,26 +616,25 @@ class WeatherActivity : Activity() {
         fun lp(top: Int) = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = top }
         alerts.forEachIndexed { i, a ->
             val top = if (i == 0) 0 else px(R.dimen.space_l)
-            alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.CAPTION, accent, 700,
-                io.github.iamth3doctor.searchlight.weather.NwsAlerts.pill(a)).apply { letterSpacing = 0.08f; tag = "alert_pill" }, lp(top))
-            alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.TILE_TITLE, fg, 700, a.event).apply { tag = "alert_event" }, lp(px(R.dimen.space_xs)))
-            if (a.headline.isNotBlank()) alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.BODY, fg, 600, a.headline).apply { tag = "alert_headline" }, lp(px(R.dimen.space_xs)))
+            alertList.addView(text(Type.CAPTION, accent, 700, NwsAlerts.pill(a)).apply { letterSpacing = 0.08f; tag = "alert_pill" }, lp(top))
+            alertList.addView(text(Type.TILE_TITLE, fg, 700, a.event).apply { tag = "alert_event" }, lp(px(R.dimen.space_xs)))
+            if (a.headline.isNotBlank()) alertList.addView(text(Type.BODY, fg, 600, a.headline).apply { tag = "alert_headline" }, lp(px(R.dimen.space_xs)))
             val whenText = listOfNotNull(at(a.effective)?.let { getString(R.string.weather_alert_effective, it) },
                 at(a.expires)?.let { getString(R.string.weather_alert_expires, it) }).joinToString("  ·  ")
-            if (whenText.isNotBlank()) alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.CAPTION, dim, 600, whenText).apply { tag = "alert_times" }, lp(px(R.dimen.space_xs)))
-            if (a.description.isNotBlank()) alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.BODY, fg, value = a.description).apply { tag = "alert_description" }, lp(px(R.dimen.space_s)))
+            if (whenText.isNotBlank()) alertList.addView(text(Type.CAPTION, dim, 600, whenText).apply { tag = "alert_times" }, lp(px(R.dimen.space_xs)))
+            if (a.description.isNotBlank()) alertList.addView(text(Type.BODY, fg, value = a.description).apply { tag = "alert_description" }, lp(px(R.dimen.space_s)))
             if (a.instruction.isNotBlank()) {
-                alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.CAPTION, accent, 700, getString(R.string.weather_alert_what_to_do).uppercase())
+                alertList.addView(text(Type.CAPTION, accent, 700, getString(R.string.weather_alert_what_to_do).uppercase())
                     .apply { letterSpacing = 0.08f }, lp(px(R.dimen.space_s)))
-                alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.BODY, fg, value = a.instruction).apply { tag = "alert_instruction" }, lp(px(R.dimen.space_xs)))
+                alertList.addView(text(Type.BODY, fg, value = a.instruction).apply { tag = "alert_instruction" }, lp(px(R.dimen.space_xs)))
             }
-            if (a.sender.isNotBlank()) alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.CAPTION, dim, value = a.sender), lp(px(R.dimen.space_s)))
+            if (a.sender.isNotBlank()) alertList.addView(text(Type.CAPTION, dim, value = a.sender), lp(px(R.dimen.space_s)))
         }
-        alertOverlay.visibility = View.VISIBLE
+        screens.push(alertScreen)
     }
 
     fun hideAlerts() {
-        alertOverlay.visibility = View.GONE
+        if (alertShown) screens.pop()
     }
 
     // ------------------------------------------------------------------ sound and haptics
@@ -480,7 +667,7 @@ class WeatherActivity : Activity() {
     fun updateSoundButton() {
         val on = soundOn()
         muteButton.setImageResource(if (on) R.drawable.ic_volume else R.drawable.ic_volume_off)
-        muteButton.setColorFilter(if (isLightTheme()) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt())
+        muteButton.setColorFilter(fg)
         muteButton.contentDescription = getString(if (on) R.string.weather_sound_on else R.string.weather_sound_off)
         bar.haptics = on
     }

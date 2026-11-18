@@ -69,6 +69,7 @@ class DayBarView(context: Context) : View(context) {
         this.data = data
         this.nowMs = nowMs
         this.scrubTime = scrub
+        if (scrub == null) lastHour = Math.floorDiv(nowMs, 3_600_000L)
         hours = DayBar.hours(data, nowMs)
         invalidate()
     }
@@ -213,8 +214,18 @@ class DayBarView(context: Context) : View(context) {
     private var downX = 0f
     private var dragging = false
     private var lastHour = Long.MIN_VALUE
+    /** The bar hour (0..24) the drag sits on, or null. */
+    private var dragHour: Int? = null
 
-    private fun timeAtX(x: Float): Long = DayBar.timeAt(((x - pad) / (width - 2 * pad)).toDouble(), nowMs)
+    /** Haptic ticks given as the scrub passed an hour (tests). */
+    var ticks = 0
+        private set
+
+    /** Where [x] falls along the bar, in hours from its start. */
+    private fun hoursAtX(x: Float): Double = ((x - pad) / (width - 2 * pad)).toDouble().coerceIn(0.0, 1.0) * DayBar.HOURS
+
+    /** The bar hour being shown (scrubbed), or null when live. */
+    val scrubHour: Int? get() = scrubTime?.let { DayBar.hourIndex(it, nowMs) }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
@@ -222,12 +233,23 @@ class DayBarView(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN -> {
                 downX = e.x
                 dragging = false
+                dragHour = scrubHour
                 parent?.requestDisallowInterceptTouchEvent(true)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (!dragging && abs(e.x - downX) > 6 * density) dragging = true
-                if (dragging) scrubTo(timeAtX(e.x))
+                if (!dragging && abs(e.x - downX) > 8 * density) {
+                    dragging = true
+                    if (dragHour == null) dragHour = DayBar.hourIndex(nowMs, nowMs)
+                }
+                if (dragging) {
+                    // Snapped to whole hours, and sticky: only a clear move goes to the next hour.
+                    val hour = DayBar.snap(hoursAtX(e.x), dragHour)
+                    if (hour != dragHour || scrubTime == null) {
+                        dragHour = hour
+                        scrubToHour(hour)
+                    }
+                }
                 return true
             }
             MotionEvent.ACTION_UP -> {
@@ -240,15 +262,18 @@ class DayBarView(context: Context) : View(context) {
         return super.onTouchEvent(e)
     }
 
-    /** A tap at [x]: on the "now" marker, back to live; anywhere else, that time. */
+    /** A tap at [x]: on the "now" marker, back to live; anywhere else, the nearest hour. */
     fun tap(x: Float) {
-        if (abs(x - xOf(nowMs)) <= 22 * density) goLive() else scrubTo(timeAtX(x))
+        if (abs(x - xOf(nowMs)) <= 22 * density) goLive() else scrubToHour(DayBar.snap(hoursAtX(x), null))
         performClick()
     }
 
+    /** Shows the bar's [i]th hour (0..24). */
+    fun scrubToHour(i: Int) = scrubTo(DayBar.hourTime(i, nowMs))
+
     fun goLive() {
         scrubTime = null
-        lastHour = Long.MIN_VALUE
+        lastHour = Math.floorDiv(nowMs, 3_600_000L)
         onScrub?.invoke(null)
         invalidate()
     }
@@ -257,7 +282,10 @@ class DayBarView(context: Context) : View(context) {
         scrubTime = t
         val hour = Math.floorDiv(t, 3_600_000L)
         if (hour != lastHour) {
-            if (lastHour != Long.MIN_VALUE && haptics) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            if (lastHour != Long.MIN_VALUE && haptics) {
+                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                ticks++
+            }
             lastHour = hour
         }
         onScrub?.invoke(t)
