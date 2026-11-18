@@ -220,7 +220,8 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
             val l = t.layout ?: return "$name: no layout"
             if ((0 until l.lineCount).any { l.getEllipsisCount(it) > 0 }) return "$name: cut short"
             val textW = l.getLineWidth(0) + t.totalPaddingLeft + t.totalPaddingRight
-            if (textW > t.width + 1) return "$name: text $textW wider than its view"
+            if (textW > t.width + 1) return "$name: text $textW wider than its view (min ${t.minWidth}, size ${t.textSize}, " +
+                "bounds ${if (android.os.Build.VERSION.SDK_INT >= 35) t.useBoundsForWidth else false}, ${l.javaClass.simpleName} ${l.width})"
             val left = textBox.left + t.left
             val top = textBox.top + t.top
             if (left < 0 || top < 0 || left + t.width > width + 1 || top + t.height > height + 1) return "$name: outside the widget"
@@ -238,8 +239,11 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
             // Ask for the width the drawn line really takes (measured the same way the layout lays it out).
             val t = text
             if (t.isNotEmpty()) {
-                val l = android.text.StaticLayout.Builder.obtain(t, 0, t.length, paint, 1_000_000)
-                    .setIncludePad(includeFontPadding).setMaxLines(1).build()
+                val b = android.text.StaticLayout.Builder.obtain(t, 0, t.length, paint, 1_000_000)
+                    .setIncludePad(includeFontPadding).setMaxLines(1)
+                // Android 15 can size a line by its glyphs' ink rather than their advances: measure it the way it's laid out.
+                if (android.os.Build.VERSION.SDK_INT >= 35) b.setUseBoundsForWidth(useBoundsForWidth)
+                val l = b.build()
                 val need = kotlin.math.ceil(l.getLineWidth(0)).toInt() + compoundPaddingLeft + compoundPaddingRight + 2
                 // Never below what the last layout showed this same text needs.
                 val want = if ("$t@$textSize" == drawnText) maxOf(need, drawnWidth) else need
