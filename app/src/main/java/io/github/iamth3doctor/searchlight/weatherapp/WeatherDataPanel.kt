@@ -241,6 +241,9 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     /** Tests: whether opening a card animates (null: as the system's animation setting says). */
     var animateOverride: Boolean? = null
 
+    /** The clock the open/close easing runs on (tests step it a frame at a time). */
+    var expandClock: () -> Long = { android.os.SystemClock.uptimeMillis() }
+
     private val moving = HashMap<String, Runnable>()
     private val ease = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
 
@@ -301,11 +304,11 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
             done()
             return
         }
-        val start = android.os.SystemClock.uptimeMillis()
+        val start = expandClock()
         val ms = (EXPAND_MS * abs(to - from)).toLong().coerceAtLeast(1)
         val step = object : Runnable {
             override fun run() {
-                val f = ((android.os.SystemClock.uptimeMillis() - start).toFloat() / ms).coerceIn(0f, 1f)
+                val f = ((expandClock() - start).toFloat() / ms).coerceIn(0f, 1f)
                 t.expander.open = from + (to - from) * ease.getInterpolation(f)
                 if (f < 1f) t.postOnAnimation(this) else done()
             }

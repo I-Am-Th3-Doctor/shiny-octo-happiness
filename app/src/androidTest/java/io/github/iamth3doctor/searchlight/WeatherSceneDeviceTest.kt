@@ -667,13 +667,19 @@ class WeatherSceneDeviceTest {
             // Tap: it grows smoothly, the cards under it sliding down with it; nothing overlaps or jumps.
             // Each sample: the card's height, its bottom, the next row's top, this row's top (the panel's coordinates).
             val samples = ArrayList<List<Int>>()
+            // The easing runs on a stepped clock, a 30 ms frame at a time, so a slow emulator can't skip frames.
+            val clock = java.util.concurrent.atomic.AtomicLong(1_000_000L)
+            main { panel.expandClock = { clock.get() } }
             main { card.performClick() }
-            val t0 = SystemClock.uptimeMillis()
-            while (SystemClock.uptimeMillis() - t0 < 700) {
+            repeat(14) {
+                Thread.sleep(50)
+                idle() // that frame laid out
                 samples += onMain { listOf(card.height, row(k).top + card.bottom, next?.top ?: Int.MAX_VALUE, row(k).top) }
-                Thread.sleep(12)
+                clock.addAndGet(30)
             }
+            Thread.sleep(150)
             idle()
+            main { panel.expandClock = { SystemClock.uptimeMillis() } }
             assertEquals(k, on(h) { panel.expanded })
             assertTrue("$k: grows over several frames: ${samples.map { it[0] }.distinct()}", samples.map { it[0] }.distinct().size >= 4)
             // A jump would be the whole change in one step; easing spreads it over many (even with a slow frame or two).
