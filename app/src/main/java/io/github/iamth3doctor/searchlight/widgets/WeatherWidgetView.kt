@@ -242,7 +242,7 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
                     .setIncludePad(includeFontPadding).setMaxLines(1).build()
                 val need = kotlin.math.ceil(l.getLineWidth(0)).toInt() + compoundPaddingLeft + compoundPaddingRight + 2
                 // Never below what the last layout showed this same text needs.
-                val want = if (t.toString() == drawnText) maxOf(need, drawnWidth) else need
+                val want = if ("$t@$textSize" == drawnText) maxOf(need, drawnWidth) else need
                 if (want != minWidth) minWidth = want
             }
             super.onMeasure(widthMeasureSpec, heightMeasureSpec)
@@ -255,7 +255,7 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
             val l = layout?.takeIf { it.lineCount > 0 } ?: return
             val drawn = kotlin.math.ceil(l.getLineWidth(0)).toInt() + totalPaddingLeft + totalPaddingRight + 1
             if (drawn > width && drawn > minWidth) {
-                drawnText = text.toString()
+                drawnText = "$text@$textSize"
                 drawnWidth = drawn
                 minWidth = drawn
                 post { requestLayout() }
