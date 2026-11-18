@@ -234,6 +234,7 @@ class WidgetController(
         BuiltInWidget.WEATHER -> WeatherWidgetView(activity, activity.searchlight.weather).also { v ->
             v.onLongPress = { grid.enterEditModeFromLongPress() }
             v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity) }
+            v.onOpenAlert = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity, alert = true) }
         }
         BuiltInWidget.CALENDAR -> calendarView()
     }

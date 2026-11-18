@@ -77,7 +77,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
     fun setTarget(c: SceneConditions, immediate: Boolean) {
         target = c
         if (immediate || !hasState) {
-            cover = c.cloudCover; rain = c.rain; snow = c.snow; fog = c.fog; storm = if (c.thunder) 1.0 else 0.0
+            cover = c.cloudCover; rain = c.rain; snow = c.snow; fog = c.fog; storm = if (c.thunder || c.severe != null) 1.0 else 0.0
             windEast = c.windEastMph; sunAlt = c.sunAltDeg; sunAz = c.sunAz; moonAlt = c.moonAltDeg; moonAz = c.moonAz
             moonAge = c.moonAge
             hasState = true
@@ -116,7 +116,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         rain += (c.rain - rain) * k
         snow += (c.snow - snow) * k
         fog += (c.fog - fog) * k
-        storm += ((if (c.thunder) 1.0 else 0.0) - storm) * k
+        storm += ((if (c.thunder || c.severe != null) 1.0 else 0.0) - storm) * k
         windEast += (c.windEastMph - windEast) * k
         sunAlt += (c.sunAltDeg - sunAlt) * k
         sunAz += (c.sunAz - sunAz) * k

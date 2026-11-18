@@ -37,6 +37,8 @@ data class WeatherData(
     val fetchedAt: Long,
     /** The fuller forecast for the Weather widget and its detail view (null in readings cached before it). */
     val detail: WeatherDetail? = null,
+    /** The National Weather Service's alerts here, as last fetched (empty: none; null: never fetched). */
+    val alerts: List<WeatherAlert>? = null,
 ) {
     val condition: String get() = WeatherCodes.describe(weatherCode)
     val emoji: String get() = WeatherCodes.emoji(weatherCode, isDay)
@@ -46,6 +48,7 @@ data class WeatherData(
         .put("t", temperatureC).put("code", weatherCode).put("day", isDay)
         .put("hi", highC).put("lo", lowC).put("at", fetchedAt)
         .putOpt("detail", detail?.toJson())
+        .putOpt("alerts", alerts?.let { l -> org.json.JSONArray().apply { l.forEach { put(it.toJson()) } } })
         .toString()
 
     companion object {
@@ -56,6 +59,7 @@ data class WeatherData(
                 o.getDouble("t"), o.getInt("code"), o.getBoolean("day"),
                 o.getDouble("hi"), o.getDouble("lo"), o.getLong("at"),
                 o.optJSONObject("detail")?.let { d -> runCatching { WeatherDetail.fromJson(d) }.getOrNull() },
+                o.optJSONArray("alerts")?.let { a -> (0 until a.length()).mapNotNull { runCatching { WeatherAlert.fromJson(a.getJSONObject(it)) }.getOrNull() } },
             )
         } catch (e: Exception) {
             null
@@ -128,7 +132,7 @@ object OpenMeteo {
         "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f" +
             "&current=temperature_2m,weather_code,is_day,apparent_temperature,relative_humidity_2m,dew_point_2m," +
             "pressure_msl,visibility,wind_speed_10m,wind_direction_10m,uv_index,cloud_cover,precipitation" +
-            "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset" +
+            "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset,precipitation_sum" +
             "&hourly=temperature_2m,weather_code,is_day,cloud_cover,precipitation,precipitation_probability," +
             "wind_speed_10m,wind_direction_10m" +
             "&temperature_unit=celsius&wind_speed_unit=mph&timezone=auto&timeformat=unixtime&forecast_days=7",

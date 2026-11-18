@@ -39,6 +39,8 @@ data class SceneConditions(
     val moonAz: Double,
     /** 0..1 through the lunar cycle (0 new, 0.5 full). */
     val moonAge: Double,
+    /** A severe-weather alert is in effect: dark storm sky, whatever its kind adds. */
+    val severe: AlertKind? = null,
 ) {
     /** Where the wind blows to (0 north, 90 east): the way the scene's arrow points. */
     val windTowardDeg: Double get() = (windFromDeg + 180) % 360
@@ -126,6 +128,24 @@ object SceneModel {
             vis != null && vis < 4000 -> 0.25
             else -> 0.0
         }
+        // A severe-weather alert in effect then: the scene turns to the storm it warns of.
+        val severe = NwsAlerts.active(data.alerts, timeMs).firstOrNull()?.let { NwsAlerts.kind(it.event) }
+        var thunder = isThunder(code)
+        var rainOut = rain
+        var snowOut = snow
+        var fogOut = fog
+        var windOut = windMph
+        if (severe != null) {
+            cover = 1.0
+            when (severe) {
+                AlertKind.THUNDER -> { thunder = true; rainOut = maxOf(rainOut, 0.85) }
+                AlertKind.RAIN -> rainOut = maxOf(rainOut, 0.9)
+                AlertKind.WIND -> { rainOut = maxOf(rainOut, 0.55); windOut = maxOf(windOut, 30.0) }
+                AlertKind.SNOW -> { snowOut = maxOf(snowOut, 0.9); rainOut = 0.0 }
+                AlertKind.FOG -> fogOut = maxOf(fogOut, 0.9)
+                AlertKind.HEAT, AlertKind.OTHER -> rainOut = maxOf(rainOut, 0.4)
+            }
+        }
         val (sAlt, sAz) = Sun.position(timeMs, data.latitude, data.longitude)
         val (mAlt, mAz) = Moon.position(timeMs, data.latitude, data.longitude)
         return SceneConditions(
@@ -136,17 +156,18 @@ object SceneModel {
             cloudCover = cover.coerceIn(0.0, 1.0),
             precipMm = precip ?: 0.0,
             precipProb = if (useLive) h0?.precipProb else h0!!.precipProb,
-            rain = rain,
-            snow = snow,
-            thunder = isThunder(code),
-            fog = fog,
-            windMph = windMph,
+            rain = rainOut,
+            snow = snowOut,
+            thunder = thunder,
+            fog = fogOut,
+            windMph = windOut,
             windFromDeg = windFrom,
             sunAltDeg = sAlt * 180 / PI,
             sunAz = sAz,
             moonAltDeg = mAlt * 180 / PI,
             moonAz = mAz,
             moonAge = Moon.age(timeMs),
+            severe = severe,
         )
     }
 }

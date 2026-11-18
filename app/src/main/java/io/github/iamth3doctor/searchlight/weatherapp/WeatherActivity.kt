@@ -30,6 +30,7 @@ import io.github.iamth3doctor.searchlight.ui.isLightTheme
 import io.github.iamth3doctor.searchlight.ui.padForSystemBars
 import io.github.iamth3doctor.searchlight.ui.px
 import io.github.iamth3doctor.searchlight.ui.pxF
+import io.github.iamth3doctor.searchlight.ui.type
 import io.github.iamth3doctor.searchlight.weather.SceneConditions
 import io.github.iamth3doctor.searchlight.weather.SceneModel
 import io.github.iamth3doctor.searchlight.weather.WeatherData
@@ -59,6 +60,19 @@ class WeatherActivity : Activity() {
         private set
     lateinit var windArrow: WindArrowView
         private set
+    lateinit var hero: HeroTempView
+        private set
+    lateinit var heroCondition: android.widget.TextView
+        private set
+    lateinit var heroHiLo: android.widget.TextView
+        private set
+    lateinit var alertPill: android.widget.TextView
+        private set
+    lateinit var alertOverlay: FrameLayout
+        private set
+    private lateinit var alertList: LinearLayout
+
+    val alertShown: Boolean get() = alertOverlay.visibility == View.VISIBLE
     val sound = WeatherSound()
 
     /** Now, in ms (tests may pin it). */
@@ -117,6 +131,55 @@ class WeatherActivity : Activity() {
         }
         chrome.addView(muteButton, FrameLayout.LayoutParams(button, button, Gravity.TOP or Gravity.END))
 
+        // A severe-weather alert, when there is one: a bold pill between the wind and the sound.
+        alertPill = android.widget.TextView(this).apply {
+            type(io.github.iamth3doctor.searchlight.ui.Type.BODY)
+            typeface = android.graphics.Typeface.create(typeface, 700, false)
+            letterSpacing = 0.08f
+            isSingleLine = true
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER
+            val p = px(R.dimen.space_s)
+            setPadding(p * 2, p, p * 2, p)
+            setTextColor(if (light) 0xFFFFFFFF.toInt() else color(R.color.on_gold))
+            background = GradientDrawable().apply { cornerRadius = 999f; setColor(color(if (light) R.color.accent else R.color.gold)) }
+            elevation = px(R.dimen.space_xs).toFloat()
+            visibility = View.GONE
+            setOnClickListener { showAlerts() }
+        }
+        chrome.addView(alertPill, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, button, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+            .apply { leftMargin = button + px(R.dimen.space_m) * 2; rightMargin = button + px(R.dimen.space_s) })
+
+        // The hero: the temperature, oversized and dimensional, over the scene; the condition and high/low on glass under it.
+        val heroBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
+        hero = HeroTempView(this)
+        heroBox.addView(hero, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val heroText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            val p = px(R.dimen.space_s)
+            setPadding(p * 2, p, p * 2, p)
+            background = GradientDrawable().apply { cornerRadius = pxF(R.dimen.radius_card) / 1.5f; setColor(glass(light)) }
+        }
+        heroCondition = android.widget.TextView(this).apply {
+            type(io.github.iamth3doctor.searchlight.ui.Type.TILE_TITLE)
+            typeface = android.graphics.Typeface.create(typeface, 700, false)
+            setTextColor(if (light) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt())
+            gravity = Gravity.CENTER
+        }
+        heroHiLo = android.widget.TextView(this).apply {
+            type(io.github.iamth3doctor.searchlight.ui.Type.BODY)
+            typeface = android.graphics.Typeface.create(typeface, 600, false)
+            setTextColor(if (light) 0xA61C1C21.toInt() else color(R.color.on_surface_dim))
+            gravity = Gravity.CENTER
+        }
+        heroText.addView(heroCondition)
+        heroText.addView(heroHiLo)
+        heroBox.addView(heroText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = px(R.dimen.space_xs) })
+        chrome.addView(heroBox, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP)
+            .apply { topMargin = button + px(R.dimen.space_m) })
+
         bar = DayBarView(this).apply {
             this.light = light
             background = FrostedDrawable(this, pxF(R.dimen.radius_card) / 1.5f, glass(light), glass(light),
@@ -158,7 +221,47 @@ class WeatherActivity : Activity() {
             minOf(px(R.dimen.size_weather_detail_max), resources.displayMetrics.widthPixels - 2 * m),
             ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER_HORIZONTAL,
         ).apply { topMargin = button + px(R.dimen.space_s); bottomMargin = px(R.dimen.size_weather_bar) + px(R.dimen.space_s) })
-        chrome.addView(dataOverlay, 0, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        chrome.addView(dataOverlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        // With the numbers open, the bar, the sound, the wind and any alert stay at hand above them.
+        bar.bringToFront()
+        topLeft.bringToFront()
+        muteButton.bringToFront()
+        alertPill.bringToFront()
+        panel.precip.onScrub = { t -> if (t == null) bar.goLive() else bar.scrubTo(t) }
+
+        // The alert's details: over everything, until closed.
+        alertOverlay = FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(0x66000000)
+            setOnClickListener { hideAlerts() }
+        }
+        val alertCard = FrameLayout(this).apply {
+            isClickable = true
+            background = FrostedDrawable(this, pxF(R.dimen.radius_card), glass(light), glass(light),
+                color(if (light) R.color.settings_glass_border_light else R.color.glass_border), pxF(R.dimen.stroke_glass), wallpaper = false)
+            clipToOutline = true
+        }
+        alertList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        alertCard.addView(ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            val p = px(R.dimen.space_m)
+            setPadding(p, p, p, p)
+            addView(alertList)
+        })
+        alertCard.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_close)
+            setColorFilter(if (light) 0xA61C1C21.toInt() else color(R.color.on_surface_dim))
+            val p = px(R.dimen.space_s)
+            setPadding(p, p, p, p)
+            contentDescription = getString(R.string.weather_detail_close)
+            setOnClickListener { hideAlerts() }
+        }, FrameLayout.LayoutParams(button, button, Gravity.TOP or Gravity.END))
+        alertOverlay.addView(alertCard, FrameLayout.LayoutParams(
+            minOf(px(R.dimen.size_weather_detail_max), resources.displayMetrics.widthPixels - 2 * m),
+            ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER,
+        ).apply { topMargin = button; bottomMargin = button })
+        chrome.addView(alertOverlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        lightTheme = light
 
         root.addView(chrome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         chrome.padForSystemBars()
@@ -168,11 +271,20 @@ class WeatherActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { back() }
         }
+        render()
+        // Opened from the widget's alert glyph: straight to the alert.
+        if (intent.getBooleanExtra(EXTRA_ALERT, false)) showAlerts()
     }
 
-    /** Back: the numbers close first, then the screen. */
+    private var lightTheme = false
+
+    /** Back: an alert's details close first, then the numbers, then the screen. */
     fun back() {
-        if (dataShown) toggleData() else finish()
+        when {
+            alertShown -> hideAlerts()
+            dataShown -> toggleData()
+            else -> finish()
+        }
     }
 
     private fun glass(light: Boolean) = color(if (light) R.color.settings_glass_light else R.color.settings_glass_dark)
@@ -245,18 +357,97 @@ class WeatherActivity : Activity() {
         offlineGlyph.setColorFilter(if (isLightTheme()) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt())
         sound.rain = c.rain.toFloat()
         sound.wind = (c.windMph / 30.0).coerceIn(0.0, 1.0).toFloat()
-        if (dataShown) panel.render(state)
+
+        // The hero follows the scene: now, or the hour being played.
+        val data = state.data
+        hero.number = if (data != null) io.github.iamth3doctor.searchlight.weather.WeatherText.f(c.tempC).toString() else "--"
+        heroCondition.text = if (data != null) io.github.iamth3doctor.searchlight.weather.WeatherCodes.describe(c.code) else getString(R.string.weather_loading)
+        heroHiLo.text = if (data != null) getString(R.string.weather_widget_hi_lo,
+            "${io.github.iamth3doctor.searchlight.weather.WeatherText.f(data.highC)}°", "${io.github.iamth3doctor.searchlight.weather.WeatherText.f(data.lowC)}°") else ""
+        heroHiLo.visibility = if (data != null) View.VISIBLE else View.GONE
+
+        // Alerts: a pill only while one is in effect; nothing at all otherwise.
+        val alerts = io.github.iamth3doctor.searchlight.weather.NwsAlerts.active(data?.alerts, now)
+        if (alerts.isEmpty()) {
+            alertPill.visibility = View.GONE
+            if (alertShown) hideAlerts()
+        } else {
+            alertPill.visibility = View.VISIBLE
+            alertPill.text = io.github.iamth3doctor.searchlight.weather.NwsAlerts.pill(alerts.first()) +
+                if (alerts.size > 1) "  +${alerts.size - 1}" else ""
+            alertPill.contentDescription = getString(R.string.weather_alert_pill_desc, alerts.first().event)
+        }
+
+        // The numbers rebuild when the reading changes; scrubbing only moves the precip card along.
+        if (dataShown && state !== panelState) {
+            panel.render(state)
+            panelState = state
+        }
+        panel.precip.update(data, now, bar.scrubTime)
         scene.contentDescription = getString(R.string.weather_scene_desc, "${io.github.iamth3doctor.searchlight.weather.WeatherText.f(c.tempC)}°F",
             io.github.iamth3doctor.searchlight.weather.WeatherCodes.describe(c.code))
     }
 
+    private var panelState: WeatherRepository.State? = null
+
     fun toggleData() {
         val show = !dataShown
-        if (show) panel.render(repo.state)
+        if (show) {
+            panel.render(repo.state)
+            panelState = repo.state
+            panel.precip.update(repo.state.data, clock(), bar.scrubTime)
+        }
         dataOverlay.visibility = if (show) View.VISIBLE else View.GONE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             scene.setRenderEffect(if (show) RenderEffect.createBlurEffect(28f, 28f, Shader.TileMode.CLAMP) else null)
         }
+    }
+
+    // ------------------------------------------------------------------ alerts
+
+    /** The alerts in effect, in full: event, headline, when, what's happening, what to do. */
+    fun showAlerts() {
+        val data = repo.state.data ?: return
+        val alerts = io.github.iamth3doctor.searchlight.weather.NwsAlerts.active(data.alerts, clock())
+        if (alerts.isEmpty()) return
+        alertList.removeAllViews()
+        val fg = if (lightTheme) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
+        val dim = if (lightTheme) 0xA61C1C21.toInt() else color(R.color.on_surface_dim)
+        val accent = color(if (lightTheme) R.color.accent else R.color.gold)
+        val zone = java.time.ZoneOffset.ofTotalSeconds(data.detail?.utcOffsetSec ?: 0)
+        val fmt = java.time.format.DateTimeFormatter.ofPattern(
+            if (android.text.format.DateFormat.is24HourFormat(this)) "EEE HH:mm" else "EEE h:mm a", resources.configuration.locales[0])
+        fun at(ms: Long?) = ms?.let { fmt.format(java.time.Instant.ofEpochMilli(it).atOffset(zone)) }
+        fun text(style: Int, color: Int, weight: Int = 400, value: CharSequence) = android.widget.TextView(this).apply {
+            type(style)
+            if (weight != 400) typeface = android.graphics.Typeface.create(typeface, weight, false)
+            setTextColor(color)
+            text = value
+            setLineSpacing(0f, 1.15f)
+        }
+        fun lp(top: Int) = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = top }
+        alerts.forEachIndexed { i, a ->
+            val top = if (i == 0) 0 else px(R.dimen.space_l)
+            alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.CAPTION, accent, 700,
+                io.github.iamth3doctor.searchlight.weather.NwsAlerts.pill(a)).apply { letterSpacing = 0.08f; tag = "alert_pill" }, lp(top))
+            alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.TILE_TITLE, fg, 700, a.event).apply { tag = "alert_event" }, lp(px(R.dimen.space_xs)))
+            if (a.headline.isNotBlank()) alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.BODY, fg, 600, a.headline).apply { tag = "alert_headline" }, lp(px(R.dimen.space_xs)))
+            val whenText = listOfNotNull(at(a.effective)?.let { getString(R.string.weather_alert_effective, it) },
+                at(a.expires)?.let { getString(R.string.weather_alert_expires, it) }).joinToString("  ·  ")
+            if (whenText.isNotBlank()) alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.CAPTION, dim, 600, whenText).apply { tag = "alert_times" }, lp(px(R.dimen.space_xs)))
+            if (a.description.isNotBlank()) alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.BODY, fg, value = a.description).apply { tag = "alert_description" }, lp(px(R.dimen.space_s)))
+            if (a.instruction.isNotBlank()) {
+                alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.CAPTION, accent, 700, getString(R.string.weather_alert_what_to_do).uppercase())
+                    .apply { letterSpacing = 0.08f }, lp(px(R.dimen.space_s)))
+                alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.BODY, fg, value = a.instruction).apply { tag = "alert_instruction" }, lp(px(R.dimen.space_xs)))
+            }
+            if (a.sender.isNotBlank()) alertList.addView(text(io.github.iamth3doctor.searchlight.ui.Type.CAPTION, dim, value = a.sender), lp(px(R.dimen.space_s)))
+        }
+        alertOverlay.visibility = View.VISIBLE
+    }
+
+    fun hideAlerts() {
+        alertOverlay.visibility = View.GONE
     }
 
     // ------------------------------------------------------------------ sound and haptics
@@ -315,9 +506,13 @@ class WeatherActivity : Activity() {
         @Volatile var current: WeatherActivity? = null
             private set
 
-        fun open(context: Context) {
+        /** Opens straight to the severe-weather alert's details. */
+        const val EXTRA_ALERT = "alert"
+
+        fun open(context: Context, alert: Boolean = false) {
             context.startActivity(Intent(context, WeatherActivity::class.java).apply {
                 if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (alert) putExtra(EXTRA_ALERT, true)
             })
         }
     }

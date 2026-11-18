@@ -46,6 +46,8 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
 
     var onLongPress: (() -> Unit)? = null
     var onOpen: (() -> Unit)? = null
+    /** The alert glyph was tapped: the weather screen, at the alert. */
+    var onOpenAlert: (() -> Unit)? = null
 
     /** Now, in ms (tests may pin it). */
     var clock: () -> Long = System::currentTimeMillis
@@ -61,12 +63,15 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
     private fun pxF(token: Int) = context.pxF(token)
 
     val scene = WeatherSceneView(context, mini = true)
-    val tempView = TextView(context)
-    val hiLoView = TextView(context)
+    val tempView: TextView = WholeText(context)
+    val hiLoView: TextView = WholeText(context)
     val offlineGlyph = ImageView(context)
+    /** A small gold glyph while a severe-weather alert is in effect. */
+    val alertGlyph = ImageView(context)
     private val textBox = LinearLayout(context)
 
     val offlineShown: Boolean get() = offlineGlyph.visibility == VISIBLE
+    val alertShown: Boolean get() = alertGlyph.visibility == VISIBLE
 
     private val listener: () -> Unit = { render() }
     private val tick = object : Runnable {
@@ -115,6 +120,18 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
         addView(offlineGlyph, LayoutParams(g, g, Gravity.TOP or Gravity.END).apply {
             topMargin = px(R.dimen.space_s) + px(R.dimen.space_xs) / 2
             marginEnd = px(R.dimen.space_s) + px(R.dimen.space_xs) / 2
+        })
+
+        alertGlyph.setImageResource(R.drawable.ic_alert)
+        alertGlyph.contentDescription = context.getString(R.string.weather_alert_glyph_desc)
+        alertGlyph.visibility = GONE
+        val ap = px(R.dimen.space_xs)
+        alertGlyph.setPadding(ap, ap, ap, ap)
+        alertGlyph.setOnClickListener { onOpenAlert?.invoke() }
+        val a = px(R.dimen.space_m) + 2 * ap
+        addView(alertGlyph, LayoutParams(a, a, Gravity.TOP or Gravity.START).apply {
+            topMargin = px(R.dimen.space_s) - ap / 2
+            marginStart = px(R.dimen.space_s) - ap / 2
         })
 
         setOnClickListener { onOpen?.invoke() }
@@ -181,6 +198,7 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
         hiLoView.text = if (data != null) context.getString(R.string.weather_widget_hi_lo, "${WeatherText.f(data.highC)}°", "${WeatherText.f(data.lowC)}°") else ""
         hiLoView.visibility = if (data != null) VISIBLE else GONE
         offlineGlyph.visibility = if (data != null && state.problem == WeatherRepository.Problem.NETWORK) VISIBLE else GONE
+        alertGlyph.visibility = if (io.github.iamth3doctor.searchlight.weather.NwsAlerts.active(data?.alerts, now).isNotEmpty()) VISIBLE else GONE
         contentDescription = if (data != null) {
             context.getString(R.string.weather_widget_desc, "${WeatherText.f(data.temperatureC)}°F", data.condition, data.locationName)
         } else {
@@ -208,6 +226,23 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
             if (left < 0 || top < 0 || left + t.width > width + 1 || top + t.height > height + 1) return "$name: outside the widget"
         }
         return null
+    }
+
+    /**
+     * A one-line text that's always as wide as the line it draws: at large sizes with a smaller
+     * unit span, TextView's measured width can come out a few pixels short of its own layout,
+     * clipping the last letter.
+     */
+    private class WholeText(context: Context) : TextView(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            val line = layout?.takeIf { it.lineCount > 0 }?.getLineWidth(0) ?: return
+            val need = kotlin.math.ceil(line).toInt() + totalPaddingLeft + totalPaddingRight
+            if (need > measuredWidth && MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.EXACTLY) {
+                val max = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.AT_MOST) MeasureSpec.getSize(widthMeasureSpec) else need
+                setMeasuredDimension(minOf(need, max), measuredHeight)
+            }
+        }
     }
 
     companion object {

@@ -54,5 +54,17 @@ class OpenMeteoLiveTest {
         val aqi = OpenMeteo.parseAqi(get(OpenMeteo.airQualityUrl(place.latitude, place.longitude)))
         println("Chicago AQI: $aqi")
         assertTrue(aqi != null && aqi in 0..500)
+
+        // National Weather Service alerts for Tacoma: any number (often none), parsed.
+        val c = URL(NwsAlerts.url(47.25, -122.44)).openConnection() as HttpURLConnection
+        c.setRequestProperty("User-Agent", "Searchlight-Launcher")
+        c.setRequestProperty("Accept", "application/geo+json")
+        try {
+            assertTrue("NWS HTTP ${c.responseCode}", c.responseCode == 200)
+            val alerts = NwsAlerts.parse(c.inputStream.bufferedReader().use { it.readText() }, System.currentTimeMillis())
+            println("Tacoma alerts: ${alerts.map { it.event }}")
+        } finally {
+            c.disconnect()
+        }
     }
 }

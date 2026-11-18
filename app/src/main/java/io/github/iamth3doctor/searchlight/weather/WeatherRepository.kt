@@ -128,6 +128,17 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
                         null
                     }
                     data.detail?.let { d -> data = data.copy(detail = d.copy(aqi = aqi)) }
+                    // Severe-weather alerts from the National Weather Service (US; free, no key). If that call
+                    // fails, the last known alerts stay; outside the US there are none.
+                    val alerts = try {
+                        NwsAlerts.parse(httpGet(NwsAlerts.url(lat, lon), accept = "application/geo+json"), System.currentTimeMillis())
+                    } catch (e: HttpStatusException) {
+                        if (e.code in 400..499) emptyList() else previous?.alerts
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Alerts failed", e)
+                        previous?.alerts
+                    }
+                    data = data.copy(alerts = alerts)
                     State(data, false, null)
                 }
             } catch (e: Exception) {
@@ -208,13 +219,16 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
         return out[0] / 1000f
     }
 
-    private fun httpGet(url: String): String {
+    private class HttpStatusException(val code: Int) : IOException("HTTP $code")
+
+    private fun httpGet(url: String, accept: String? = null): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         conn.setRequestProperty("User-Agent", "Searchlight-Launcher")
+        if (accept != null) conn.setRequestProperty("Accept", accept)
         try {
-            if (conn.responseCode != 200) throw IOException("HTTP ${conn.responseCode}")
+            if (conn.responseCode != 200) throw HttpStatusException(conn.responseCode)
             return conn.inputStream.bufferedReader().use { it.readText() }
         } finally {
             conn.disconnect()

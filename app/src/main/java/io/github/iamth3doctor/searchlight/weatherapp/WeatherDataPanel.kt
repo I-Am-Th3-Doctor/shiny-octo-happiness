@@ -48,6 +48,9 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     /** Now, in ms. */
     var clock: () -> Long = System::currentTimeMillis
 
+    /** The precip card (kept across renders, so its graph and island keep their state). */
+    val precip = PrecipCard(context, light)
+
     private fun px(token: Int) = context.px(token)
     private fun pxF(token: Int) = context.pxF(token)
 
@@ -104,6 +107,11 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         }
         now(data)
         summary(data)
+        (precip.root.parent as? ViewGroup)?.removeView(precip.root)
+        precip.root.background = inset()
+        val p = px(R.dimen.space_s) + px(R.dimen.space_xs)
+        precip.root.setPadding(p, p, p, p)
+        section("precip", precip.root)
         hourly(data)
         daily(data)
         tiles(data)

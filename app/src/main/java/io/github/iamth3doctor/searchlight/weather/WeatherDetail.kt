@@ -32,6 +32,8 @@ data class DayPoint(
     val precipPct: Int?,
     val sunrise: Long?,
     val sunset: Long?,
+    /** The day's total precipitation (mm). */
+    val precipMm: Double? = null,
 )
 
 data class WeatherDetail(
@@ -68,7 +70,7 @@ data class WeatherDetail(
         .put("days", JSONArray().apply {
             daily.forEach {
                 put(JSONObject().put("t", it.date).put("hi", it.highC).put("lo", it.lowC).put("k", it.code)
-                    .putOpt("p", it.precipPct).putOpt("rise", it.sunrise).putOpt("set", it.sunset))
+                    .putOpt("p", it.precipPct).putOpt("rise", it.sunrise).putOpt("set", it.sunset).putOpt("pm", it.precipMm))
             }
         })
 
@@ -91,7 +93,7 @@ data class WeatherDetail(
             }.orEmpty(),
             daily = o.optJSONArray("days")?.let { a ->
                 (0 until a.length()).map { i ->
-                    a.getJSONObject(i).let { DayPoint(it.getLong("t"), it.getDouble("hi"), it.getDouble("lo"), it.getInt("k"), it.int("p"), it.lng("rise"), it.lng("set")) }
+                    a.getJSONObject(i).let { DayPoint(it.getLong("t"), it.getDouble("hi"), it.getDouble("lo"), it.getInt("k"), it.int("p"), it.lng("rise"), it.lng("set"), it.dbl("pm")) }
                 }
             }.orEmpty(),
             aqi = o.int("aqi"),
@@ -140,6 +142,7 @@ data class WeatherDetail(
                     precipPct = dAt(arr(dailyJ, "precipitation_probability_max"), i)?.toInt(),
                     sunrise = lAt(arr(dailyJ, "sunrise"), i)?.times(1000L),
                     sunset = lAt(arr(dailyJ, "sunset"), i)?.times(1000L),
+                    precipMm = dAt(arr(dailyJ, "precipitation_sum"), i),
                 )
             }
             fun cur(k: String): Double? = if (current.has(k) && !current.isNull(k)) current.optDouble(k).takeIf { !it.isNaN() } else null

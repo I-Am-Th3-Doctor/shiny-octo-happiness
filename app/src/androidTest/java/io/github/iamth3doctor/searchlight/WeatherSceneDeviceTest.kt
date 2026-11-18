@@ -24,6 +24,7 @@ import io.github.iamth3doctor.searchlight.weather.WeatherData
 import io.github.iamth3doctor.searchlight.weather.WeatherDetail
 import io.github.iamth3doctor.searchlight.weather.WeatherRepository
 import io.github.iamth3doctor.searchlight.weather.WeatherText
+import io.github.iamth3doctor.searchlight.weatherapp.PrecipGraphView
 import io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity
 import io.github.iamth3doctor.searchlight.weatherapp.WeatherSceneView
 import io.github.iamth3doctor.searchlight.widgets.BuiltInWidget
@@ -103,6 +104,7 @@ class WeatherSceneDeviceTest {
     }
 
     @Before fun setUp() {
+        savedNight = if (shell("cmd uimode night").contains("yes")) "yes" else "no"
         shell("mkdir -p $dir")
         shell("cmd role add-role-holder --user 0 android.app.role.HOME $pkg")
         repo.holdForTest = true
@@ -123,6 +125,12 @@ class WeatherSceneDeviceTest {
             app.prefs.weatherSound = true
             repo.showForTest(reading(0, 2, 0.0), offline = false)
         }
+    }
+
+    private var savedNight = "no"
+
+    @After fun restoreNight() {
+        shell("cmd uimode night $savedNight")
     }
 
     @After fun restore() {
@@ -308,7 +316,7 @@ class WeatherSceneDeviceTest {
         h.onActivity { it.scene.performClick() }
         assertTrue(on(h) { it.dataShown })
         val panel = on(h) { it.panel }
-        val want = listOf("now", "summary", "hourly", "daily", "sun", "moon", "humidity", "visibility", "pressure", "uv", "aqi", "wind")
+        val want = listOf("now", "summary", "precip", "hourly", "daily", "sun", "moon", "humidity", "visibility", "pressure", "uv", "aqi", "wind")
         assertEquals(want, on(h) { panel.sections.keys.toList() })
         for (k in want) {
             val shown = texts(on(h) { panel.sections[k]!! }).map { it.text.toString() }.filter { it.isNotBlank() }
@@ -551,6 +559,152 @@ class WeatherSceneDeviceTest {
             assertTrue(now.toString(), "52°F" in now && now.any { it.startsWith("Updated ") })
         }
         shell("cmd connectivity airplane-mode disable")
+    }
+
+    // ---- phase 2: the hero, the precip card, severe alerts ----
+
+    @Test fun heroNumbersStandOverTheSceneInBothThemes() {
+        for ((night, name) in listOf("no" to "91-hero-light", "yes" to "92-hero-dark")) {
+            shell("cmd uimode night $night")
+            Thread.sleep(1500)
+            screen { h ->
+                force(h, reading(1, 25, 0.0))
+                assertEquals("52", on(h) { it.hero.number })
+                assertTrue("the whole number fits", on(h) { it.hero.fits() })
+                val minPx = 100 * app.resources.displayMetrics.density
+                assertTrue("oversized: ${on(h) { it.hero.textSize }}px", on(h) { it.hero.textSize } >= minPx)
+                val whole = on(h) {
+                    val r = android.graphics.Rect()
+                    it.hero.getGlobalVisibleRect(r) && r.width() == it.hero.width && r.height() == it.hero.height
+                }
+                assertTrue("nothing clipped", whole)
+                assertEquals("Mainly clear", on(h) { it.heroCondition.text.toString() })
+                assertEquals("H 52° · L 39°", on(h) { it.heroHiLo.text.toString() })
+                assertTrue("the scene still plays behind it", on(h) { it.scene.isShown && it.scene.animating })
+                // Scrubbing: the hero shows that hour.
+                h.onActivity { it.bar.scrubTo(h0 + 4 * hour) }
+                assertEquals("${WeatherText.f(11.1 + 4 * 0.25)}", on(h) { it.hero.number })
+                h.onActivity { it.bar.goLive() }
+                shot(name)
+            }
+        }
+        shell("cmd uimode night $savedNight")
+    }
+
+    @Test fun precipCardRowsGraphAndBarMoveTogether() = screen { h ->
+        force(h, reading(0, 2, 0.0))
+        h.onActivity { it.scene.performClick() }
+        val card = on(h) { it.panel.precip }
+        fun rows() = on(h) { listOf(card.rateValue.text.toString(), card.chanceValue.text.toString(), card.typeValue.text.toString()) }
+        assertEquals(listOf("0.00 IN", "5%", "NONE"), rows())
+        assertEquals("RATE", on(h) { card.rateLabel.text.toString() })
+        assertTrue(on(h) { card.expected.text.toString() }, on(h) { card.expected.text.toString() }.startsWith("Rain expected around "))
+        assertEquals(0, on(h) { card.island.particles })
+        assertEquals(PrecipGraphView.Mode.DAY, on(h) { card.graph.mode })
+        h.onActivity { it.panel.sections["precip"]!!.let { v -> (v.parent.parent as? android.widget.ScrollView)?.smoothScrollTo(0, v.top) } }
+        shot("93-precip-now")
+
+        // Scrub the graph into the rain: the main bar, the scene and the rows all follow.
+        val t = h0 + 3 * hour + 30 * 60_000L
+        h.onActivity { card.graph.touchAt(card.graph.xOf(t), tap = false) }
+        val barTime = on(h) { it.scrubTime!! }
+        assertTrue(abs(barTime - t) < 20 * 60_000L)
+        assertEquals(barTime, on(h) { card.graph.scrubTime })
+        assertEquals(listOf("0.16 IN", "80%", "RAIN"), rows())
+        assertTrue("rain falls on the island", on(h) { card.island.particles } > 5)
+        waitFor("rain in the scene") { look(h).drops > 100 }
+        shot("94-precip-scrubbed")
+
+        // Scrub the main bar: the graph's scrubber and the rows follow.
+        h.onActivity { it.bar.scrubTo(h0 + 10 * hour) }
+        assertEquals(on(h) { it.scrubTime }, on(h) { card.graph.scrubTime })
+        assertEquals(listOf("0.00 IN", "5%", "NONE"), rows())
+
+        // WEEK: the 7 days; pick one.
+        h.onActivity { card.weekChip.performClick() }
+        assertEquals(PrecipGraphView.Mode.WEEK, on(h) { card.graph.mode })
+        assertEquals(7, on(h) { card.graph.pointCount })
+        assertEquals("TOTAL", on(h) { card.rateLabel.text.toString() })
+        h.onActivity { card.graph.touchAt(card.graph.xOfDay(1), tap = true) }
+        assertEquals(1, on(h) { card.graph.weekIndex })
+        assertEquals("80%", rows()[1])
+        assertEquals("RAIN", rows()[2])
+        shot("95-precip-week")
+        // Back to DAY: in step with the bar again.
+        h.onActivity { card.dayChip.performClick() }
+        assertEquals(PrecipGraphView.Mode.DAY, on(h) { card.graph.mode })
+        assertEquals(on(h) { it.scrubTime }, on(h) { card.graph.scrubTime })
+        assertEquals("RATE", on(h) { card.rateLabel.text.toString() })
+        // Now, from the graph: live everywhere.
+        h.onActivity { card.graph.touchAt(card.graph.xOf(System.currentTimeMillis()), tap = true) }
+        assertNull(on(h) { it.scrubTime })
+        assertEquals(listOf("0.00 IN", "5%", "NONE"), rows())
+    }
+
+    private fun storm(w: WeatherData, offline: Boolean = false): WeatherData {
+        val now = System.currentTimeMillis()
+        return w.copy(alerts = listOf(io.github.iamth3doctor.searchlight.weather.WeatherAlert(
+            "urn:test:1", "Severe Thunderstorm Warning", "Severe Thunderstorm Warning issued for Pierce County",
+            "Severe", now - hour, now + 2 * hour,
+            "At 3:05 PM, a severe thunderstorm was located over Tacoma, moving east at 25 mph.",
+            "For your protection move to an interior room on the lowest floor of a building.", "NWS Seattle WA")))
+    }
+
+    @Test fun aSevereAlertTakesOverTheSceneAndShowsItsDetails() = screen { h ->
+        force(h, storm(reading(1, 25, 0.0)))
+        assertTrue(on(h) { it.alertPill.isShown })
+        assertEquals("! THUNDERSTORM !", on(h) { it.alertPill.text.toString() })
+        val c = on(h) { it.scene.conditions!! }
+        assertEquals(io.github.iamth3doctor.searchlight.weather.AlertKind.THUNDER, c.severe)
+        assertTrue("storm: dark clouds, heavy rain", c.thunder && c.cloudCover == 1.0 && c.rain >= 0.85)
+        waitFor("rain streaks") { look(h).drops > 200 }
+        waitFor("lightning", 12_000) { look(h).strikes > 0 }
+        shot("96-alert-scene")
+
+        h.onActivity { it.alertPill.performClick() }
+        assertTrue(on(h) { it.alertShown })
+        val details = texts(on(h) { it.alertOverlay }).joinToString(" | ") { it.text.toString() }
+        for (want in listOf("Severe Thunderstorm Warning", "issued for Pierce County", "Effective ", "Expires ",
+                "severe thunderstorm was located over Tacoma", "interior room", "WHAT TO DO")) {
+            assertTrue("$want in: $details", details.contains(want))
+        }
+        shot("97-alert-details")
+        h.onActivity { it.back() }
+        assertFalse(on(h) { it.alertShown })
+
+        // No alert: nothing about alerts anywhere.
+        force(h, reading(1, 25, 0.0))
+        assertFalse(on(h) { it.alertPill.isShown })
+        assertFalse(on(h) { it.alertShown })
+        assertNull(on(h) { it.scene.conditions!!.severe })
+        assertTrue(texts(on(h) { it.window.decorView }).none { t -> t.text.contains("!") || t.text.contains("alert", ignoreCase = true) })
+    }
+
+    @Test fun widgetAlertGlyphOpensTheAlert() = home { h ->
+        show(reading(1, 25, 0.0))
+        val v = addWeather(h)
+        assertFalse(on(h) { v.alertShown })
+        show(storm(reading(1, 25, 0.0)))
+        waitFor("alert glyph") { on(h) { v.alertShown } }
+        assertEquals("still just the temperature and high/low", listOf("52°F", "H 52° · L 39°"), texts(v).map { it.text.toString() })
+        shot("98-widget-alert")
+        val monitor = instrumentation.addMonitor(WeatherActivity::class.java.name, null, false)
+        try {
+            h.onActivity { v.alertGlyph.performClick() }
+            val opened = monitor.waitForActivityWithTimeout(10_000) as WeatherActivity?
+            assertNotNull("the weather screen opened", opened)
+            waitFor("at the alert") { onMain { opened!!.alertShown } }
+            assertTrue(onMain { opened!!.intent.getBooleanExtra(WeatherActivity.EXTRA_ALERT, false) })
+            main { opened!!.finish() }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
+        // Offline: the last known alert stays, with the small offline glyph.
+        show(storm(reading(1, 25, 0.0)), offline = true)
+        waitFor("offline") { on(h) { v.offlineShown && v.alertShown } }
+        // Cleared: the glyph goes.
+        show(reading(1, 25, 0.0))
+        waitFor("no alert glyph") { on(h) { !v.alertShown } }
     }
 
     @Suppress("unused") private fun f(c: Double) = WeatherText.f(c)

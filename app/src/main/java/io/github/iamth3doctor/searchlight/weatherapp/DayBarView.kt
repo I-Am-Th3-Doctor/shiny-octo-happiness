@@ -147,17 +147,23 @@ class DayBarView(context: Context) : View(context) {
             }
             fill.alpha = 255
 
-            // Hour labels every 6 hours.
+            // The time row: NOW (gold, at now), then every three hours: 12P, 3, 6, 9, 12A, ...
             text.textSize = 10 * density * resources.configuration.fontScale.coerceAtMost(1.3f)
-            text.color = dim()
-            val first = hs.first().time
+            val nowLabel = context.getString(R.string.weather_bar_now).uppercase()
+            val nowX = xOf(nowMs)
+            val nowW = text.measureText(nowLabel)
             for (h in hs) {
                 val local = Instant.ofEpochMilli(h.time).atOffset(zone).hour
-                if (local % 6 != 0 || h.time == first) continue
-                val label = hourLabel(h.time)
+                if (local % 3 != 0) continue
+                val x = xOf(h.time)
+                val label = compactHour(local)
                 val tw = text.measureText(label)
-                canvas.drawText(label, (xOf(h.time) - tw / 2).coerceIn(left, right - tw), height - 4 * density, text)
+                if (abs(x - nowX) < (nowW + tw) / 2 + 6 * density) continue
+                text.color = dim()
+                canvas.drawText(label, (x - tw / 2).coerceIn(left, right - tw), height - 4 * density, text)
             }
+            text.color = accent()
+            canvas.drawText(nowLabel, (nowX - nowW / 2).coerceIn(left, right - nowW), height - 4 * density, text)
         }
 
         // Now: a gold marker, labeled when live.
@@ -170,12 +176,7 @@ class DayBarView(context: Context) : View(context) {
 
         bold.textSize = 12 * density * resources.configuration.fontScale.coerceAtMost(1.3f)
         val s = scrubTime
-        if (s == null) {
-            bold.color = accent()
-            val label = context.getString(R.string.weather_bar_now)
-            val tw = bold.measureText(label)
-            canvas.drawText(label, (nx - tw / 2).coerceIn(left, right - tw), readoutH - 4 * density, bold)
-        } else {
+        if (s != null) {
             val sx = xOf(s)
             line.color = fg()
             line.strokeWidth = 1.5f * density
@@ -186,13 +187,15 @@ class DayBarView(context: Context) : View(context) {
             val label = readout(s)
             val tw = bold.measureText(label)
             canvas.drawText(label, (sx - tw / 2).coerceIn(left, right - tw), readoutH - 4 * density, bold)
-            // "Now" stays findable as a small gold tag.
-            text.textSize = 10 * density
-            text.color = accent()
-            val now = context.getString(R.string.weather_bar_now)
-            val nw = text.measureText(now)
-            if (abs(sx - nx) > nw + 40 * density) canvas.drawText(now, (nx - nw / 2).coerceIn(left, right - nw), readoutH - 4 * density, text)
         }
+    }
+
+    /** The time row's hours: "12P", "3", "6", "9", "12A" (or "15" on a 24-hour phone). */
+    private fun compactHour(h: Int): String = when {
+        android.text.format.DateFormat.is24HourFormat(context) -> h.toString().padStart(2, '0')
+        h == 0 -> "12A"
+        h == 12 -> "12P"
+        else -> (h % 12).toString()
     }
 
     /** "3 PM · 54° · 40% rain" for a previewed time. */

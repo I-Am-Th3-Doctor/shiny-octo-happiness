@@ -480,4 +480,28 @@
     <string name="weather_sound_silenced">Your phone is silenced, so the weather stays quiet</string>
     <string name="weather_wind_arrow_desc">Wind %1$d mph, blowing %2$s</string>
     <string name="weather_detail_lit">%1$d%% lit</string>
+    <!-- Weather: precip card -->
+    <string name="weather_precip">Precip</string>
+    <string name="weather_precip_rate">RATE</string>
+    <string name="weather_precip_total">TOTAL</string>
+    <string name="weather_precip_chance">CHANCE</string>
+    <string name="weather_precip_type">TYPE</string>
+    <string name="weather_precip_day">DAY</string>
+    <string name="weather_precip_week">WEEK</string>
+    <string name="weather_precip_rain">RAIN</string>
+    <string name="weather_precip_snow">SNOW</string>
+    <string name="weather_precip_none">NONE</string>
+    <string name="weather_precip_dry">No rain expected in the next day</string>
+    <string name="weather_precip_rain_now">Raining this hour</string>
+    <string name="weather_precip_snow_now">Snowing this hour</string>
+    <string name="weather_precip_rain_around">Rain expected around %1$s</string>
+    <string name="weather_precip_snow_around">Snow expected around %1$s</string>
+    <string name="weather_precip_graph_desc">Precipitation over time. Drag to scrub through the hours.</string>
+    <string name="weather_island_desc">Precipitation: %1$s</string>
+    <!-- Weather: severe alerts (National Weather Service) -->
+    <string name="weather_alert_pill_desc">Weather alert: %1$s. Tap for details.</string>
+    <string name="weather_alert_effective">Effective %1$s</string>
+    <string name="weather_alert_expires">Expires %1$s</string>
+    <string name="weather_alert_what_to_do">What to do</string>
+    <string name="weather_alert_glyph_desc">Severe weather alert. Tap for details.</string>
 </resources>
