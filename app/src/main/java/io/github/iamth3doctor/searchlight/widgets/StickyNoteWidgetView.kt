@@ -195,6 +195,16 @@ class StickyNoteWidgetView(
         return p[0] to p[1]
     }
 
+    /** The point a share ([nx], [ny]) of the way across and down the paper lands on, in this view (as last drawn). */
+    fun pagePoint(nx: Float, ny: Float): Pair<Float, Float> {
+        val p = floatArrayOf(sheet.width() * nx, sheet.height() * ny)
+        toPage.mapPoints(p)
+        return p[0] to p[1]
+    }
+
+    /** How far the note leans, in degrees. */
+    val tilt: Float get() = tiltDeg
+
     /** Each written event line's box on the note (unrotated note coordinates), with its event. */
     private val lineHits = ArrayList<Pair<RectF, DayEvent>>()
 
