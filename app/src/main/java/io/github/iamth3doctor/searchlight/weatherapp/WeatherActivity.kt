@@ -68,7 +68,8 @@ class WeatherActivity : Activity() {
         private set
     lateinit var offlineGlyph: ImageView
         private set
-    lateinit var windArrow: WindArrowView
+    /** The top-left button: a small cloud; a tap opens the quick numbers. */
+    lateinit var menuButton: ImageView
         private set
     lateinit var hero: HeroTempView
         private set
@@ -244,8 +245,16 @@ class WeatherActivity : Activity() {
 
         val top = FrameLayout(this)
         val topLeft = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        windArrow = WindArrowView(this).apply { background = chip() }
-        topLeft.addView(windArrow, LinearLayout.LayoutParams(button, button))
+        menuButton = ImageView(this).apply {
+            background = chip()
+            setImageResource(R.drawable.ic_cloud)
+            val p = px(R.dimen.space_s) + px(R.dimen.space_xs) / 2
+            setPadding(p, p, p, p)
+            contentDescription = getString(R.string.weather_more_desc)
+            tag = "weather_menu_button"
+            setOnClickListener { toggleQuick() }
+        }
+        topLeft.addView(menuButton, LinearLayout.LayoutParams(button, button))
         offlineGlyph = ImageView(this).apply {
             setImageResource(R.drawable.ic_cloud_off)
             alpha = 0.8f
@@ -572,8 +581,7 @@ class WeatherActivity : Activity() {
         bar.update(state.data, now, bar.scrubTime)
         val c = conditions()
         scene.conditions = c
-        windArrow.color = fg
-        windArrow.set(c.windTowardDeg, c.windMph)
+        menuButton.setColorFilter(fg)
         offlineGlyph.visibility = if (state.data != null && state.problem == WeatherRepository.Problem.NETWORK) View.VISIBLE else View.GONE
         offlineGlyph.setColorFilter(fg)
 

@@ -478,6 +478,7 @@
     <string name="weather_sound_on">Sound on</string>
     <string name="weather_sound_off">Sound off</string>
     <string name="weather_sound_silenced">Your phone is silenced, so the weather stays quiet</string>
+    <string name="weather_more_desc">More weather</string>
     <string name="weather_wind_arrow_desc">Wind %1$d mph, blowing %2$s</string>
     <string name="weather_detail_lit">%1$d%% lit</string>
     <!-- Weather: precip card -->

@@ -300,13 +300,25 @@ class WeatherSceneDeviceTest {
         waitFor("shower falling") { look(h).drops > 20 }
         val mixed = look(h)
         assertTrue("partly cloudy, not overcast: $mixed vs $cloudy", mixed.clouds in 1 until cloudy.clouds + 1)
-        assertEquals("the arrow points the way it blows (east)", 90.0, on(h) { it.windArrow.screenAngle }, 1.0)
+        h.onActivity { it.setQuick(true) }
+        assertEquals("the arrow points the way it blows (east)", 90.0, on(h) { it.quick.windArrow.screenAngle }, 1.0)
+        h.onActivity { it.setQuick(false) }
         val c = on(h) { it.scene.conditions!! }
         assertTrue(c.rain > 0 && c.windEastMph > 20)
 
         // Wind from the north-east: the arrow points down and to the left.
         force(h, reading(0, 2, 0.0, windFrom = 45.0, wind = 12.0))
-        assertEquals(-135.0, on(h) { it.windArrow.screenAngle }, 1.0)
+        h.onActivity { it.setQuick(true) }
+        assertEquals(-135.0, on(h) { it.quick.windArrow.screenAngle }, 1.0)
+        h.onActivity { it.setQuick(false) }
+
+        // The top-left button: a cloud in its circle; one tap opens the quick numbers.
+        val menu = on(h) { it.menuButton }
+        assertTrue(on(h) { menu.isShown && menu.width == menu.height && menu.drawable != null })
+        touch(menu, on(h) { menu.width / 2f }, on(h) { menu.height / 2f })
+        assertTrue("one tap opens the quick numbers", on(h) { it.quickShown })
+        shot("115-menu-cloud-open")
+        h.onActivity { it.setQuick(false) }
     }
 
     @Test fun scrubbingPlaysTheDay() = screen { h ->
