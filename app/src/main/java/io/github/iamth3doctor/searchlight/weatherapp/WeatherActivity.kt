@@ -69,7 +69,7 @@ class WeatherActivity : Activity() {
         private set
     lateinit var offlineGlyph: ImageView
         private set
-    /** The top-left button: a small cloud; a tap opens the quick numbers. */
+    /** The top-left button: a small cloud; one tap opens the full numbers over the scene ([openQuick]). */
     lateinit var menuButton: ImageView
         private set
     lateinit var hero: HeroTempView
@@ -110,16 +110,21 @@ class WeatherActivity : Activity() {
         private set
 
     /**
-     * The details screen's living scene, behind its numbers (dimmed by [dataScrim]): the weather now,
-     * or a held 7 DAYS row's day playing full-screen, its readout and bar over the bottom.
+     * The data screen's living scene, behind its numbers (dimmed by [dataScrim]): the weather now, an
+     * hour dragged to across the screen, or a held 7 DAYS row's day playing full-screen. No bar or
+     * readout over it: the scene and the big number show the hour.
      */
     lateinit var detailLapse: DayLapseWindow
         private set
     lateinit var dataScrim: View
         private set
-    /** The played day's readout and bar, over the bottom of the details (shown only while one plays). */
-    lateinit var dataFoot: View
+    /** The hour dragged to on the data screen's scene; null: now. */
+    var detailScrubTime: Long? = null
         private set
+    /** Whether a finger is dragging the data screen's scene through the hours. */
+    val detailScrubbing: Boolean get() = ::dataScreen.isInitialized && dataScreen.draggingX
+    private var detailScrubBase = DayBar.BEFORE_HOURS
+    private val HOUR_MS = 3_600_000L
     lateinit var dataScroll: ScrollView
         private set
     /** Where the details were scrolled to when a day was held: let go, they go back there. */
@@ -182,6 +187,14 @@ class WeatherActivity : Activity() {
         dataTitle = title("").apply { setTextColor(0xFFFFFFFF.toInt()) }
         dataScreen = screen(dataTitle, null, panel.body, "weather_screen_data", backdrop = detailLapse)
         dataScroll = lastScroll!!
+        // Drag sideways across the data screen: the scene behind goes through the hours (the hourly
+        // strip and the precip card keep their own sideways drags).
+        dataScreen.canDragXAt = { x, y ->
+            detailScrubBase = detailScrubHour()
+            detailLapse.day == null && !overOwnDrag(dataScreen, x, y)
+        }
+        dataScreen.onDragX = { dx -> scrubDetails(dx) }
+        dataScreen.onDragXEnd = { armIdle() }
 
         week = WeekView(this, light).apply {
             clock = { this@WeatherActivity.clock() }
@@ -253,7 +266,7 @@ class WeatherActivity : Activity() {
             setPadding(p, p, p, p)
             contentDescription = getString(R.string.weather_more_desc)
             tag = "weather_menu_button"
-            setOnClickListener { toggleQuick() }
+            setOnClickListener { openQuick() }
         }
         topLeft.addView(menuButton, LinearLayout.LayoutParams(button, button))
         offlineGlyph = ImageView(this).apply {
@@ -419,8 +432,7 @@ class WeatherActivity : Activity() {
 
     /**
      * A screen of its own: opaque, a header (back, [titleView], [action]), then [content] scrolling under it.
-     * With a [backdrop], the content scrolls over its living scene (dimmed), light-on-dark, with the
-     * backdrop's time-lapse readout over the bottom.
+     * With a [backdrop], the content scrolls over its living scene (dimmed), light-on-dark.
      */
     private fun screen(titleView: TextView, action: View?, content: View, tag: String, backdrop: DayLapseWindow? = null): SwipeFrame {
         val frame = SwipeFrame(this).apply {
@@ -469,25 +481,6 @@ class WeatherActivity : Activity() {
         lastScroll = scroll
         frame.addView(col, match())
         col.padForSystemBars()
-        if (backdrop != null) {
-            // The played day's hour and bar, over the bottom of the screen, on a shade of their own.
-            val foot = FrameLayout(this).apply {
-                background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xB3000000.toInt(), 0x00000000))
-                setPadding(m - px(R.dimen.space_s), m * 2, m - px(R.dimen.space_s), 0)
-                visibility = View.GONE
-                this.tag = "weather_data_lapse_foot"
-            }
-            foot.addView(backdrop.overlay, match())
-            dataFoot = foot
-            frame.addView(foot, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
-            // Clear of the navigation bar (only the bottom and sides: it sits at the bottom).
-            val (fl, fr) = foot.paddingLeft to foot.paddingRight
-            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(foot) { v, insets ->
-                val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout())
-                v.setPadding(fl + bars.left, v.paddingTop, fr + bars.right, bars.bottom + m / 2)
-                insets
-            }
-        }
         // Swipe down (from the top of the list) to go back.
         frame.onSwipeDown = { back() }
         frame.canSwipeDown = { !scroll.canScrollVertically(-1) }
@@ -503,7 +496,7 @@ class WeatherActivity : Activity() {
             isAppearanceLightNavigationBars = !dark && light
         }
         if (v !== weekScreen) week.stopPreview()
-        if (v !== dataScreen) stopDetailLapse(animate = false)
+        if (v !== dataScreen) { stopDetailLapse(animate = false); endDetailScrub() }
         armIdle()
     }
 
@@ -521,6 +514,7 @@ class WeatherActivity : Activity() {
         panelState = repo.state
         panel.precip.update(repo.state.data, clock(), bar.scrubTime)
         dataTitle.text = repo.state.data?.locationName ?: getString(R.string.weather_details_title)
+        detailScrubTime = null
         detailLapse.showLive(repo.state.data, clock())
         screens.push(dataScreen)
     }
@@ -658,13 +652,22 @@ class WeatherActivity : Activity() {
         }
         // The 7 days' window and the details' scene show the weather now (unless a day is playing).
         if (weekShown) week.live()
-        if (dataShown) detailLapse.showLive(data, now)
+        if (dataShown && detailScrubTime == null) detailLapse.showLive(data, now)
         panel.precip.update(data, now, bar.scrubTime)
         scene.contentDescription = getString(R.string.weather_scene_desc, "${WeatherText.f(c.tempC)}°F", WeatherCodes.describe(c.code))
     }
 
     /** Tap on the scene: the quick numbers over the dimmed scene, or back to the scene alone. */
     fun toggleQuick() = setQuick(!quickShown)
+
+    /**
+     * The cloud button: straight to the full numbers over the scene (temperature, feels like, cloud,
+     * rain chance, wind, humidity, dew point, UV, visibility, sun, moon), from wherever it's tapped.
+     */
+    fun openQuick() {
+        if (screens.depth > 0) screens.clear()
+        setQuick(true)
+    }
 
     fun setQuick(show: Boolean) {
         if (show == quickShown) return
@@ -732,7 +735,7 @@ class WeatherActivity : Activity() {
     /**
      * Holding day [i] in the details' 7 DAYS: up to the top of the details (the big number, the day,
      * the precip card), and the day plays full-screen in the scene behind them, the number and
-     * condition following it, its hour and bar over the bottom.
+     * condition following it.
      */
     fun startDetailLapse(i: Int) {
         val data = repo.state.data ?: return
@@ -741,8 +744,8 @@ class WeatherActivity : Activity() {
         panel.highlightDay(i, true)
         if (soundOn()) panel.dayRows.getOrNull(i)?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         disarmIdle()
+        detailScrubTime = null
         if (lapseReturnY == null) lapseReturnY = dataScroll.scrollY
-        dataFoot.visibility = View.VISIBLE
         dataScrim.animate().alpha(LAPSE_SCRIM).setDuration(LAPSE_SCROLL_MS).start()
         scrollDetails(0, animate = true)
     }
@@ -755,11 +758,55 @@ class WeatherActivity : Activity() {
         detailLapse.stop(repo.state.data, clock())
         i?.let { panel.highlightDay(it, false) }
         panel.showMoment(null, null)
-        dataFoot.visibility = View.GONE
         dataScrim.animate().cancel()
         if (animate) dataScrim.animate().alpha(1f).setDuration(LAPSE_SCROLL_MS).start() else dataScrim.alpha = 1f
         lapseReturnY = null
         if (y != null) scrollDetails(y, animate)
+    }
+
+    /** A sideways drag [dx] on the data screen: the scene behind goes to that hour, the big number with it. */
+    private fun scrubDetails(dx: Float) {
+        val data = repo.state.data ?: return
+        val now = clock()
+        val start = DayBar.start(now)
+        val step = (dataScreen.width / DayBar.HOURS.toFloat()).coerceAtLeast(18 * resources.displayMetrics.density)
+        val hour = (detailScrubBase + (dx / step).roundToInt()).coerceIn(0, DayBar.HOURS)
+        val t = start + hour * HOUR_MS
+        if (t == detailScrubTime) return
+        disarmIdle()
+        detailScrubTime = t
+        detailLapse.showAt(data, t)
+        if (soundOn()) dataScreen.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    /** Where a drag starts on the data screen: from the hour it's on. */
+    private fun detailScrubHour(): Int =
+        detailScrubTime?.let { ((it - DayBar.start(clock())) / HOUR_MS).toInt().coerceIn(0, DayBar.HOURS) } ?: DayBar.BEFORE_HOURS
+
+    /** The data screen's scene back to now, easing there, and its big number with it. */
+    private fun endDetailScrub() {
+        if (detailScrubTime == null) return
+        detailScrubTime = null
+        detailLapse.showLive(repo.state.data, clock())
+        panel.showMoment(null, null)
+    }
+
+    /** Whether ([x], [y] in [frame]) is over something with a sideways drag of its own (the hourly strip, the precip card). */
+    private fun overOwnDrag(frame: View, x: Float, y: Float): Boolean {
+        val o = IntArray(2).also { frame.getLocationOnScreen(it) }
+        val sx = o[0] + x.roundToInt()
+        val sy = o[1] + y.roundToInt()
+        fun hit(v: View): Boolean {
+            if (!v.isShown) return false
+            val p = IntArray(2).also { v.getLocationOnScreen(it) }
+            return sx >= p[0] && sx < p[0] + v.width && sy >= p[1] && sy < p[1] + v.height
+        }
+        fun walk(v: View): Boolean {
+            if (!hit(v)) return false
+            if (v === panel.precip.root || v is android.widget.HorizontalScrollView) return true
+            return v is ViewGroup && (0 until v.childCount).any { walk(v.getChildAt(it)) }
+        }
+        return walk(panel.body)
     }
 
     /** Whether the details are scrolling (into a held day, or back from one). */
@@ -796,11 +843,13 @@ class WeatherActivity : Activity() {
 
     /** Showing anything but now: a scrubbed hour (the bar, the number, the precip graph), another day. */
     val awayFromNow: Boolean
-        get() = bar.scrubTime != null || week.awayFromNow || panel.precip.awayFromToday || detailLapse.day != null
+        get() = bar.scrubTime != null || week.awayFromNow || panel.precip.awayFromToday || detailLapse.day != null ||
+            detailScrubTime != null
 
     /** A finger is down, holding or dragging: the idle count waits for it to lift. */
     private val idleBusy: Boolean
-        get() = touching || bar.isDragging || hero.scrubbing || week.previewDay != null || detailLapse.day != null || bar.returning
+        get() = touching || bar.isDragging || hero.scrubbing || week.previewDay != null || detailLapse.day != null || bar.returning ||
+            detailScrubbing
 
     private val idleReturn = Runnable {
         idleReturnAt = null
@@ -841,6 +890,7 @@ class WeatherActivity : Activity() {
         if (!awayFromNow || idleBusy) return
         if (panel.precip.awayFromToday) panel.precip.backToToday()
         if (bar.scrubTime != null) bar.slideToNow { render() }
+        endDetailScrub()
     }
 
     // ------------------------------------------------------------------ sound and haptics

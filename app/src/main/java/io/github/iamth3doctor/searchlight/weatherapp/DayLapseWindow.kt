@@ -36,9 +36,9 @@ import kotlin.math.abs
  * 10% rain") ride along over a thin bar showing where in the day it is (and, in blue, when rain is
  * due). At rest it shows the weather now, alive.
  *
- * As a [card] (the 7-day view) it's a rounded window with the numbers over it; otherwise (the details
- * screen) the caller lays out [preview] behind its content and [overlay] over it, and follows the
- * played moment with [onFrame].
+ * As a [card] (the 7-day view) it's a rounded window with the numbers over it; otherwise (the data
+ * screen) the caller lays out [preview] behind its content, with no bar or readout over it, and
+ * follows the played (or scrubbed, [showAt]) moment with [onFrame].
  */
 class DayLapseWindow(private val context: Context, private val card: Boolean = true) {
 
@@ -160,9 +160,21 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
      */
     fun showLive(data: WeatherData?, now: Long) {
         if (day != null) return
+        previewTime = null
         preview.renderer.easeSec = 0.7
         preview.paused = false
         if (data != null) preview.conditions = SceneModel.at(data, now, live = true)
+    }
+
+    /** Shows the hour [t] (dragged to on the scene), easing there; [showLive] goes back to now. Not while a day plays. */
+    fun showAt(data: WeatherData, t: Long) {
+        if (day != null) return
+        previewTime = t
+        preview.renderer.easeSec = 0.25
+        preview.paused = false
+        val c = SceneModel.at(data, t, live = false)
+        preview.conditions = c
+        onFrame?.invoke(c, DayLapse.readout(data, t))
     }
 
     /** Shows the moment [f] of the way through the playing day: scene, numbers, readout and bar. */

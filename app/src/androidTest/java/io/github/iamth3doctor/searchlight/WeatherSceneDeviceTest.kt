@@ -312,12 +312,19 @@ class WeatherSceneDeviceTest {
         assertEquals(-135.0, on(h) { it.quick.windArrow.screenAngle }, 1.0)
         h.onActivity { it.setQuick(false) }
 
-        // The top-left button: a cloud in its circle; one tap opens the quick numbers.
+        // The top-left button: a cloud in its circle; one tap opens the full numbers (all eleven).
         val menu = on(h) { it.menuButton }
         assertTrue(on(h) { menu.isShown && menu.width == menu.height && menu.drawable != null })
         touch(menu, on(h) { menu.width / 2f }, on(h) { menu.height / 2f })
-        assertTrue("one tap opens the quick numbers", on(h) { it.quickShown })
+        assertTrue("one tap opens the numbers", on(h) { it.quickShown })
+        assertEquals(0, on(h) { it.screens.depth })
+        val all = listOf("temp", "feels", "cloud", "precip", "wind", "humidity", "dew", "uv", "visibility", "sun", "moon")
+        assertEquals(all, on(h) { it.quick.values.keys.toList() })
+        for (k in all) assertTrue(k, on(h) { it.quick.values[k]!!.isShown && it.quick.values[k]!!.text.isNotBlank() })
         shot("115-menu-cloud-open")
+        // Another tap on the cloud keeps them open (it opens; a tap on the numbers or the scene puts them away).
+        touch(menu, on(h) { menu.width / 2f }, on(h) { menu.height / 2f })
+        assertTrue(on(h) { it.quickShown })
         h.onActivity { it.setQuick(false) }
     }
 
@@ -514,7 +521,6 @@ class WeatherSceneDeviceTest {
         val scroll = on(h) { it.dataScroll }
         val lapse = on(h) { it.detailLapse }
         val screen = on(h) { it.dataScreen }
-        val foot = on(h) { it.dataFoot }
         // No preview card at the top any more: the details' own scene is behind everything, full-screen.
         assertNull(on(h) { screen.findViewWithTag<View>("weather_detail_lapse") })
         assertEquals(on(h) { screen.width to screen.height }, on(h) { lapse.preview.width to lapse.preview.height })
@@ -525,7 +531,7 @@ class WeatherSceneDeviceTest {
         val f0 = on(h) { lapse.preview.renderer.frames }
         waitFor("alive, not a still picture") { on(h) { lapse.preview.animating && lapse.preview.renderer.frames > f0 + 15 } }
         assertEquals(0xFFFFFFFF.toInt(), on(h) { panel.nowTemp!!.currentTextColor })
-        assertEquals(View.GONE, on(h) { foot.visibility })
+        assertNoBarOnTheData(h)
         val liveTemp = on(h) { panel.nowTemp!!.text.toString() }
         val liveCondition = on(h) { panel.nowCondition!!.text.toString() }
         assertTrue(liveTemp, liveTemp.endsWith("°F"))
@@ -550,8 +556,7 @@ class WeatherSceneDeviceTest {
         waitFor("up to the data") { on(h) { scroll.scrollY == 0 && !it.detailsScrolling } }
         idle()
         assertEquals("from midnight", 0.0, on(h) { lapse.progress }, 0.001)
-        assertTrue("its hour and bar over the bottom", on(h) { foot.isShown && lapse.overlay.isShown && lapse.readout.isShown })
-        assertEquals("at the bottom", screenTop(screen) + on(h) { screen.height }, screenTop(foot) + on(h) { foot.height })
+        assertNoBarOnTheData(h)
         assertTrue("the scene a little clearer", on(h) { it.dataScrim.alpha } < 1f)
         assertTrue(on(h) { panel.sections["now"]!!.isShown && panel.sections["precip"]!!.isShown })
         assertNull("holding: no count", on(h) { it.idleReturnAt })
@@ -584,7 +589,7 @@ class WeatherSceneDeviceTest {
         instrumentation.sendPointerSync(MotionEvent.obtain(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, rx, ry, 0))
         assertNull(on(h) { lapse.day })
         assertTrue("back on now", on(h) { lapse.preview.conditions!!.live })
-        assertEquals(View.GONE, on(h) { foot.visibility })
+        assertNoBarOnTheData(h)
         assertEquals(liveTemp, on(h) { panel.nowTemp!!.text.toString() })
         assertEquals(liveCondition, on(h) { panel.nowCondition!!.text.toString() })
         waitFor("back where they were") { on(h) { scroll.scrollY == beforeScroll && !it.detailsScrolling } }
@@ -607,7 +612,78 @@ class WeatherSceneDeviceTest {
         assertTrue("about 9 s: $took", took in 7_500L..11_500L)
         instrumentation.sendPointerSync(MotionEvent.obtain(d2, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, rx, ry, 0))
         waitFor("back") { on(h) { lapse.day == null && scroll.scrollY == beforeScroll && !it.detailsScrolling } }
-        assertEquals(View.GONE, on(h) { foot.visibility })
+        assertNoBarOnTheData(h)
+    }
+
+    /** No scrub bar or hour readout anywhere on the data screen: the scene alone shows the hour. */
+    private fun assertNoBarOnTheData(h: ActivityScenario<WeatherActivity>) {
+        val screen = on(h) { it.dataScreen }
+        val lapse = on(h) { it.detailLapse }
+        assertNull(on(h) { screen.findViewWithTag<View>("weather_data_lapse_foot") })
+        assertNull(on(h) { screen.findViewWithTag<View>("weather_lapse_readout") })
+        assertNull(on(h) { screen.findViewWithTag<View>("weather_lapse_bar") })
+        assertNull("the time-lapse numbers aren't on the screen at all", on(h) { lapse.overlay.parent })
+        assertTrue(on(h) { texts(screen).none { it.isShown && it.text.contains(" · ") && it.text.contains("% rain") } })
+    }
+
+    @Test fun dragTheDataScreensSceneThroughTheHours() = screen { h ->
+        force(h, lapseReading())
+        h.onActivity { it.openDetails() }
+        settle(h)
+        val panel = on(h) { it.panel }
+        val lapse = on(h) { it.detailLapse }
+        val screen = on(h) { it.dataScreen }
+        assertNoBarOnTheData(h)
+        val liveTemp = on(h) { panel.nowTemp!!.text.toString() }
+        // Start the drag on the big number (not the hourly strip or the precip card, which drag on their own).
+        val (sx, sy) = screenAt(on(h) { panel.nowTemp!! }, 10f, 10f)
+        val o = IntArray(2).also { a -> main { screen.getLocationOnScreen(a) } }
+        val x0 = sx - o[0]
+        val y = sy - o[1]
+        val step = on(h) { (screen.width / DayBar.HOURS.toFloat()).coerceAtLeast(18 * app.resources.displayMetrics.density) }
+        val d = SystemClock.uptimeMillis()
+        main {
+            screen.dispatchTouchEvent(MotionEvent.obtain(d, d, MotionEvent.ACTION_DOWN, x0, y, 0))
+            for (k in 1..12) screen.dispatchTouchEvent(MotionEvent.obtain(d, d + k * 16, MotionEvent.ACTION_MOVE, x0 + step * 6 * k / 12, y, 0))
+        }
+        assertTrue("dragging", on(h) { it.detailScrubbing })
+        val start = DayBar.start(System.currentTimeMillis())
+        assertEquals("six hours on", start + (DayBar.BEFORE_HOURS + 6) * hour, on(h) { it.detailScrubTime })
+        assertEquals(on(h) { it.detailScrubTime }, on(h) { lapse.previewTime })
+        assertFalse("the scene shows that hour, not now", on(h) { lapse.preview.conditions!!.live })
+        assertEquals("the big number follows", "${WeatherText.f(on(h) { lapse.preview.conditions!!.tempC })}°F", on(h) { panel.nowTemp!!.text.toString() })
+        assertNull("dragging: no count", on(h) { it.idleReturnAt })
+        assertNoBarOnTheData(h)
+        shot("117-data-scene-scrub")
+        main { screen.dispatchTouchEvent(MotionEvent.obtain(d, d + 400, MotionEvent.ACTION_UP, x0 + step * 6, y, 0)) }
+        assertFalse(on(h) { it.detailScrubbing })
+        assertEquals("it stays on that hour", start + (DayBar.BEFORE_HOURS + 6) * hour, on(h) { it.detailScrubTime })
+        assertTrue("let go away from now: the count starts", on(h) { it.idleReturnAt } != null)
+        // Left alone, back to now: the scene and the big number.
+        h.onActivity { it.returnToNow() }
+        waitFor("back to now") { on(h) { it.detailScrubTime == null && lapse.preview.conditions!!.live } }
+        assertEquals(liveTemp, on(h) { panel.nowTemp!!.text.toString() })
+        assertNull(on(h) { it.idleReturnAt })
+        assertTrue(on(h) { it.dataShown })
+
+        // A drag on the hourly strip is the strip's own: the scene stays on now.
+        val strip = on(h) { firstOf<android.widget.HorizontalScrollView>(panel.sections["hourly"]!!) }
+        if (strip != null) {
+            val (hx, hy) = screenAt(strip, 40f, 20f)
+            val d2 = SystemClock.uptimeMillis()
+            main {
+                screen.dispatchTouchEvent(MotionEvent.obtain(d2, d2, MotionEvent.ACTION_DOWN, hx - o[0], hy - o[1], 0))
+                for (k in 1..12) screen.dispatchTouchEvent(MotionEvent.obtain(d2, d2 + k * 16, MotionEvent.ACTION_MOVE, hx - o[0] - step * 6 * k / 12, hy - o[1], 0))
+                screen.dispatchTouchEvent(MotionEvent.obtain(d2, d2 + 300, MotionEvent.ACTION_UP, hx - o[0] - step * 6, hy - o[1], 0))
+            }
+            assertNull("the strip scrolled; the scene didn't move", on(h) { it.detailScrubTime })
+        }
+    }
+
+    private inline fun <reified V : View> firstOf(root: View): V? {
+        if (root is V) return root
+        if (root is android.view.ViewGroup) for (i in 0 until root.childCount) firstOf<V>(root.getChildAt(i))?.let { return it }
+        return null
     }
 
     @Test fun tapTheSceneForTheQuickNumbersTapAgainForTheScene() = screen { h ->
