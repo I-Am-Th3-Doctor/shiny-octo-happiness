@@ -59,6 +59,25 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     /** The 7 DAYS rows (tests). */
     val dayRows = ArrayList<View>()
 
+    /** The big number and condition at the top (tests read them; a played day takes them over). */
+    var nowTemp: TextView? = null
+        private set
+    var nowCondition: TextView? = null
+        private set
+    private var liveTemp: CharSequence = ""
+    private var liveCondition: CharSequence = ""
+
+    /** A played moment's temperature and condition in the big number's place; null: now's again. */
+    fun showMoment(tempC: Double?, condition: String?) {
+        if (tempC == null) {
+            nowTemp?.text = liveTemp
+            nowCondition?.text = liveCondition
+        } else {
+            nowTemp?.text = "${WeatherText.f(tempC)}°F"
+            nowCondition?.text = condition
+        }
+    }
+
     /** The precip card (kept across renders, so its graph and island keep their state). */
     val precip = PrecipCard(context, light)
 
@@ -107,6 +126,8 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     fun render(state: WeatherRepository.State) {
         body.removeAllViews()
         sections.clear()
+        nowTemp = null
+        nowCondition = null
         val data = state.data
         if (data == null) {
             section("now", text(Type.BODY, dimmed = true).apply {
@@ -138,12 +159,19 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         val box = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         box.addView(text(Type.TILE_TITLE, bold = true).apply { text = data.locationName })
         val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        row.addView(text(Type.GLANCE, bold = true).apply {
+        val temp = text(Type.GLANCE, bold = true).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(R.dimen.text_weather_detail_temp))
             text = "${WeatherText.f(data.temperatureC)}°F"
-        })
+            tag = "weather_now_temp"
+        }
+        row.addView(temp)
         val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(text(Type.BODY, bold = true).apply { text = data.condition })
+        val cond = text(Type.BODY, bold = true).apply { text = data.condition; tag = "weather_now_condition" }
+        col.addView(cond)
+        nowTemp = temp
+        nowCondition = cond
+        liveTemp = temp.text
+        liveCondition = cond.text
         d?.feelsLikeC?.let { f -> col.addView(text(Type.BODY, dimmed = true).apply { text = context.getString(R.string.weather_widget_feels, deg(f)) }) }
         col.addView(text(Type.BODY, dimmed = true).apply { text = context.getString(R.string.weather_widget_hi_lo, deg(data.highC), deg(data.lowC)) })
         row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(R.dimen.space_m) })

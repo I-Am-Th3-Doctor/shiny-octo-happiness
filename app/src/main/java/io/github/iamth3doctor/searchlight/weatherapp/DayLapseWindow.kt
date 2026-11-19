@@ -20,6 +20,7 @@ import io.github.iamth3doctor.searchlight.ui.px
 import io.github.iamth3doctor.searchlight.ui.pxF
 import io.github.iamth3doctor.searchlight.ui.type
 import io.github.iamth3doctor.searchlight.weather.DayLapse
+import io.github.iamth3doctor.searchlight.weather.SceneConditions
 import io.github.iamth3doctor.searchlight.weather.SceneModel
 import io.github.iamth3doctor.searchlight.weather.WeatherCodes
 import io.github.iamth3doctor.searchlight.weather.WeatherData
@@ -33,16 +34,22 @@ import kotlin.math.abs
  * [DayLapse.PLAY_MS]: the sun rises, arcs and sets, the moon takes the night, clouds, rain and wind
  * come and go at their hours, and the temperature, condition and an hour readout ("2 PM · 44° ·
  * 10% rain") ride along over a thin bar showing where in the day it is (and, in blue, when rain is
- * due). The 7-day view and the details screen both play their held day in one of these.
+ * due). At rest it shows the weather now, alive.
+ *
+ * As a [card] (the 7-day view) it's a rounded window with the numbers over it; otherwise (the details
+ * screen) the caller lays out [preview] behind its content and [overlay] over it, and follows the
+ * played moment with [onFrame].
  */
-class DayLapseWindow(private val context: Context) {
+class DayLapseWindow(private val context: Context, private val card: Boolean = true) {
 
-    /** The card: the scene, and over it while playing, the numbers. */
+    /** The card: the scene, and over it while playing, the numbers. (Not a card: unused.) */
     val root = FrameLayout(context).apply {
-        background = GradientDrawable().apply { cornerRadius = context.pxF(R.dimen.radius_card); setColor(0xFF000000.toInt()) }
-        clipToOutline = true
+        if (card) {
+            background = GradientDrawable().apply { cornerRadius = context.pxF(R.dimen.radius_card); setColor(0xFF000000.toInt()) }
+            clipToOutline = true
+        }
     }
-    val preview = WeatherSceneView(context, mini = false).apply { paused = true }
+    val preview = WeatherSceneView(context, mini = false)
     val overlay = FrameLayout(context).apply { visibility = View.GONE }
     val lapseTemp = TextView(context)
     val lapseCondition = TextView(context)
@@ -64,14 +71,19 @@ class DayLapseWindow(private val context: Context) {
     var previewTime: Long? = null
         private set
 
+    /** Each played moment: the scene's conditions and the hour's readout (the details' own numbers follow it). */
+    var onFrame: ((SceneConditions, DayLapse.Readout) -> Unit)? = null
+
     private var data: WeatherData? = null
     private val main = Handler(Looper.getMainLooper())
     private var playStart = 0L
 
     init {
-        root.addView(preview, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         buildOverlay()
-        root.addView(overlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        if (card) {
+            root.addView(preview, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            root.addView(overlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        }
     }
 
     private fun px(t: Int) = context.px(t)
@@ -93,7 +105,8 @@ class DayLapseWindow(private val context: Context) {
         lapseCondition.glass(Type.BODY, bold = true)
         top.addView(lapseTemp)
         top.addView(lapseCondition)
-        overlay.addView(top, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START)
+        // Full screen, the details' own big number and condition play along instead.
+        if (card) overlay.addView(top, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START)
             .apply { setMargins(m, m, m, m) })
         val bottom = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         readout.glass(Type.BODY, bold = true)
@@ -132,14 +145,24 @@ class DayLapseWindow(private val context: Context) {
         return true
     }
 
-    /** Stops playing: the numbers go; the scene holds still where it was (the caller shows what it wants). */
-    fun stop() {
+    /** Stops playing: the numbers go, and the scene eases back to the weather now ([data] at [now]). */
+    fun stop(data: WeatherData?, now: Long) {
         day = null
         previewTime = null
         main.removeCallbacks(tick)
         overlay.visibility = View.GONE
+        showLive(data, now)
+    }
+
+    /**
+     * At rest: the weather now, alive (clouds drifting, rain if it's raining, the wind), easing there
+     * from wherever the scene was. Called again as time passes, it keeps up. Not while a day plays.
+     */
+    fun showLive(data: WeatherData?, now: Long) {
+        if (day != null) return
         preview.renderer.easeSec = 0.7
-        preview.paused = true
+        preview.paused = false
+        if (data != null) preview.conditions = SceneModel.at(data, now, live = true)
     }
 
     /** Shows the moment [f] of the way through the playing day: scene, numbers, readout and bar. */
@@ -160,6 +183,7 @@ class DayLapseWindow(private val context: Context) {
         lapseCondition.text = WeatherCodes.describe(r.code)
         readout.text = context.getString(R.string.weather_week_readout, hour, deg(r.tempC), r.precipProb ?: 0)
         lapseBar.progress = f.toFloat()
+        onFrame?.invoke(c, r)
     }
 
     private val tick = object : Runnable {

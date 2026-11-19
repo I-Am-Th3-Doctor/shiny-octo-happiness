@@ -42,6 +42,7 @@ import io.github.iamth3doctor.searchlight.weather.WeatherCodes
 import io.github.iamth3doctor.searchlight.weather.WeatherData
 import io.github.iamth3doctor.searchlight.weather.WeatherRepository
 import io.github.iamth3doctor.searchlight.weather.WeatherText
+import kotlin.math.roundToInt
 
 /**
  * The weather, as a place: a full-screen living scene of the conditions (sky, sun or moon, clouds,
@@ -108,13 +109,21 @@ class WeatherActivity : Activity() {
     lateinit var screens: ScreenStack
         private set
 
-    /** The details screen's time-lapse: a held 7 DAYS row plays in it, at the top of the screen. */
+    /**
+     * The details screen's living scene, behind its numbers (dimmed by [dataScrim]): the weather now,
+     * or a held 7 DAYS row's day playing full-screen, its readout and bar over the bottom.
+     */
     lateinit var detailLapse: DayLapseWindow
         private set
-    lateinit var detailLapseBox: Expander
+    lateinit var dataScrim: View
+        private set
+    /** The played day's readout and bar, over the bottom of the details (shown only while one plays). */
+    lateinit var dataFoot: View
         private set
     lateinit var dataScroll: ScrollView
         private set
+    /** Where the details were scrolled to when a day was held: let go, they go back there. */
+    private var lapseReturnY: Int? = null
     private var lastScroll: ScrollView? = null
 
     private lateinit var quickScroll: ScrollView
@@ -158,29 +167,21 @@ class WeatherActivity : Activity() {
         heroScreen = buildHero()
         root.addView(heroScreen, match())
 
-        // The other screens: each opaque, each on its own.
-        panel = WeatherDataPanel(this, light).apply { clock = { this@WeatherActivity.clock() } }
+        // The other screens: each opaque, each on its own. The details sit over a living scene, so they're always light-on-dark.
+        panel = WeatherDataPanel(this, light = false).apply { clock = { this@WeatherActivity.clock() } }
         panel.precip.onScrub = { t -> if (t == null) bar.goLive() else bar.scrubTo(t) }
         panel.precip.onPicked = { armIdle() }
         panel.onHoldDay = { i -> startDetailLapse(i) }
         panel.onReleaseDay = { stopDetailLapse() }
         panel.heldDay = { detailLapse.day }
-        detailLapse = DayLapseWindow(this)
-        detailLapseBox = Expander(this).apply { tag = "weather_detail_lapse" }
-        detailLapseBox.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 0, 0, px(R.dimen.space_s))
-            addView(detailLapse.root, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(R.dimen.size_weather_week_preview)))
-        })
-        dataTitle = title("")
-        dataScreen = screen(dataTitle, null, panel.body, "weather_screen_data", top = detailLapseBox)
-        dataScroll = lastScroll!!
-        // While the time-lapse panel opens or closes, the details stay put on screen under it.
-        dataScroll.addOnLayoutChangeListener { _, _, top, _, _, _, _, _, _ ->
-            val base = lapseBase ?: return@addOnLayoutChangeListener
-            dataScroll.scrollTo(0, base.first + (top - base.second))
-            if (detailLapseBox.open == 0f && detailLapse.day == null && lapseSlide == null) lapseBase = null
+        detailLapse = DayLapseWindow(this, card = false).apply {
+            preview.tag = "weather_data_scene"
+            // The details' own big number and condition play along with the day.
+            onFrame = { c, r -> panel.showMoment(c.tempC, WeatherCodes.describe(r.code)) }
         }
+        dataTitle = title("").apply { setTextColor(0xFFFFFFFF.toInt()) }
+        dataScreen = screen(dataTitle, null, panel.body, "weather_screen_data", backdrop = detailLapse)
+        dataScroll = lastScroll!!
 
         week = WeekView(this, light).apply {
             clock = { this@WeatherActivity.clock() }
@@ -416,15 +417,27 @@ class WeatherActivity : Activity() {
         this.text = text
     }
 
-    /** A screen of its own: opaque, a header (back, [titleView], [action]), then [content] scrolling under it. */
-    private fun screen(titleView: TextView, action: View?, content: View, tag: String, top: View? = null): SwipeFrame {
+    /**
+     * A screen of its own: opaque, a header (back, [titleView], [action]), then [content] scrolling under it.
+     * With a [backdrop], the content scrolls over its living scene (dimmed), light-on-dark, with the
+     * backdrop's time-lapse readout over the bottom.
+     */
+    private fun screen(titleView: TextView, action: View?, content: View, tag: String, backdrop: DayLapseWindow? = null): SwipeFrame {
         val frame = SwipeFrame(this).apply {
             this.tag = tag
             isClickable = true
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(
+            background = if (backdrop != null) GradientDrawable().apply { setColor(0xFF000000.toInt()) }
+            else GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(
                 color(if (light) R.color.settings_page_light_top else R.color.settings_page_dark_top),
                 color(if (light) R.color.settings_page_light_bottom else R.color.settings_page_dark_bottom),
             ))
+        }
+        val ink = if (backdrop != null) 0xFFFFFFFF.toInt() else fg
+        if (backdrop != null) {
+            frame.addView(backdrop.preview, match())
+            // Dimmed like the hero's under its quick numbers, so the numbers read over any sky.
+            dataScrim = View(this).apply { setBackgroundColor(0x8C000000.toInt()); this.tag = "weather_data_scrim" }
+            frame.addView(dataScrim, match())
         }
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val m = px(R.dimen.space_m)
@@ -436,7 +449,7 @@ class WeatherActivity : Activity() {
         }
         header.addView(ImageView(this).apply {
             setImageResource(R.drawable.ic_arrow_down)
-            setColorFilter(fg)
+            setColorFilter(ink)
             val p = px(R.dimen.space_s)
             setPadding(p, p, p, p)
             contentDescription = getString(R.string.weather_back)
@@ -446,8 +459,6 @@ class WeatherActivity : Activity() {
         header.addView(titleView, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(R.dimen.space_s) })
         if (action != null) header.addView(action)
         col.addView(header)
-        if (top != null) col.addView(top, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { marginStart = m; marginEnd = m })
         val scroll = TopScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             clipToPadding = false
@@ -458,6 +469,25 @@ class WeatherActivity : Activity() {
         lastScroll = scroll
         frame.addView(col, match())
         col.padForSystemBars()
+        if (backdrop != null) {
+            // The played day's hour and bar, over the bottom of the screen, on a shade of their own.
+            val foot = FrameLayout(this).apply {
+                background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xB3000000.toInt(), 0x00000000))
+                setPadding(m - px(R.dimen.space_s), m * 2, m - px(R.dimen.space_s), 0)
+                visibility = View.GONE
+                this.tag = "weather_data_lapse_foot"
+            }
+            foot.addView(backdrop.overlay, match())
+            dataFoot = foot
+            frame.addView(foot, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            // Clear of the navigation bar (only the bottom and sides: it sits at the bottom).
+            val (fl, fr) = foot.paddingLeft to foot.paddingRight
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(foot) { v, insets ->
+                val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout())
+                v.setPadding(fl + bars.left, v.paddingTop, fr + bars.right, bars.bottom + m / 2)
+                insets
+            }
+        }
         // Swipe down (from the top of the list) to go back.
         frame.onSwipeDown = { back() }
         frame.canSwipeDown = { !scroll.canScrollVertically(-1) }
@@ -466,10 +496,11 @@ class WeatherActivity : Activity() {
 
     /** A screen came in: status bar icons to suit it; anything left playing on the way out stops. */
     private fun onScreen(v: View) {
-        val onHero = v === heroScreen
+        // The scene's screens (the hero, the details over their scene) are dark whatever the theme.
+        val dark = v === heroScreen || v === dataScreen
         androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = !onHero && light
-            isAppearanceLightNavigationBars = !onHero && light
+            isAppearanceLightStatusBars = !dark && light
+            isAppearanceLightNavigationBars = !dark && light
         }
         if (v !== weekScreen) week.stopPreview()
         if (v !== dataScreen) stopDetailLapse(animate = false)
@@ -490,6 +521,7 @@ class WeatherActivity : Activity() {
         panelState = repo.state
         panel.precip.update(repo.state.data, clock(), bar.scrubTime)
         dataTitle.text = repo.state.data?.locationName ?: getString(R.string.weather_details_title)
+        detailLapse.showLive(repo.state.data, clock())
         screens.push(dataScreen)
     }
 
@@ -624,6 +656,9 @@ class WeatherActivity : Activity() {
             week.render(data)
             weekRendered = state
         }
+        // The 7 days' window and the details' scene show the weather now (unless a day is playing).
+        if (weekShown) week.live()
+        if (dataShown) detailLapse.showLive(data, now)
         panel.precip.update(data, now, bar.scrubTime)
         scene.contentDescription = getString(R.string.weather_scene_desc, "${WeatherText.f(c.tempC)}°F", WeatherCodes.describe(c.code))
     }
@@ -691,12 +726,14 @@ class WeatherActivity : Activity() {
 
     // ------------------------------------------------------------------ the details' time-lapse
 
-    /** Where the details were scrolled, and where their scroll view sat, when the panel began to open. */
-    private var lapseBase: Pair<Int, Int>? = null
-    private var lapseSlide: Runnable? = null
+    private var lapseScroll: Runnable? = null
     private val lapseEase = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
 
-    /** Holding day [i] in the details' 7 DAYS: the panel opens at the top of the screen and plays it. */
+    /**
+     * Holding day [i] in the details' 7 DAYS: up to the top of the details (the big number, the day,
+     * the precip card), and the day plays full-screen in the scene behind them, the number and
+     * condition following it, its hour and bar over the bottom.
+     */
     fun startDetailLapse(i: Int) {
         val data = repo.state.data ?: return
         detailLapse.day?.let { panel.highlightDay(it, false) }
@@ -704,40 +741,48 @@ class WeatherActivity : Activity() {
         panel.highlightDay(i, true)
         if (soundOn()) panel.dayRows.getOrNull(i)?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         disarmIdle()
-        if (lapseBase == null) lapseBase = dataScroll.scrollY to dataScroll.top
-        slideLapse(open = true, animate = true)
+        if (lapseReturnY == null) lapseReturnY = dataScroll.scrollY
+        dataFoot.visibility = View.VISIBLE
+        dataScrim.animate().alpha(LAPSE_SCRIM).setDuration(LAPSE_SCROLL_MS).start()
+        scrollDetails(0, animate = true)
     }
 
-    /** Let go: the time-lapse stops and the panel folds away, leaving the details as they were. */
+    /** Let go: the day stops, the scene eases back to now, and the details go back exactly as they were. */
     fun stopDetailLapse(animate: Boolean = true) {
         val i = detailLapse.day
-        if (i == null && detailLapseBox.open == 0f) return
-        detailLapse.stop()
+        val y = lapseReturnY
+        if (i == null && y == null) return
+        detailLapse.stop(repo.state.data, clock())
         i?.let { panel.highlightDay(it, false) }
-        slideLapse(open = false, animate = animate)
+        panel.showMoment(null, null)
+        dataFoot.visibility = View.GONE
+        dataScrim.animate().cancel()
+        if (animate) dataScrim.animate().alpha(1f).setDuration(LAPSE_SCROLL_MS).start() else dataScrim.alpha = 1f
+        lapseReturnY = null
+        if (y != null) scrollDetails(y, animate)
     }
 
-    private fun slideLapse(open: Boolean, animate: Boolean) {
-        lapseSlide?.let { detailLapseBox.removeCallbacks(it) }
-        lapseSlide = null
-        val from = detailLapseBox.open
-        val to = if (open) 1f else 0f
-        if (!animate || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
-            detailLapseBox.open = to
-            if (!open) lapseBase?.let { dataScroll.post { if (detailLapseBox.open == 0f) { dataScroll.scrollTo(0, it.first); lapseBase = null } } }
+    /** Whether the details are scrolling (into a held day, or back from one). */
+    val detailsScrolling: Boolean get() = lapseScroll != null
+
+    private fun scrollDetails(to: Int, animate: Boolean) {
+        lapseScroll?.let { dataScroll.removeCallbacks(it) }
+        lapseScroll = null
+        val from = dataScroll.scrollY
+        if (!animate || from == to || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
+            dataScroll.scrollTo(0, to)
             return
         }
         val start = android.os.SystemClock.uptimeMillis()
-        val ms = (LAPSE_PANEL_MS * kotlin.math.abs(to - from)).toLong().coerceAtLeast(1)
         val step = object : Runnable {
             override fun run() {
-                val f = ((android.os.SystemClock.uptimeMillis() - start).toFloat() / ms).coerceIn(0f, 1f)
-                detailLapseBox.open = from + (to - from) * lapseEase.getInterpolation(f)
-                if (f < 1f) detailLapseBox.postOnAnimation(this) else lapseSlide = null
+                val f = ((android.os.SystemClock.uptimeMillis() - start).toFloat() / LAPSE_SCROLL_MS).coerceIn(0f, 1f)
+                dataScroll.scrollTo(0, from + ((to - from) * lapseEase.getInterpolation(f)).roundToInt())
+                if (f < 1f) dataScroll.postOnAnimation(this) else lapseScroll = null
             }
         }
-        lapseSlide = step
-        detailLapseBox.postOnAnimation(step)
+        lapseScroll = step
+        dataScroll.postOnAnimation(step)
     }
 
     // ------------------------------------------------------------------ back to now on its own
@@ -794,7 +839,6 @@ class WeatherActivity : Activity() {
     /** Back to now, smoothly: the scrubber slides back to NOW with the scene and number following it. */
     fun returnToNow() {
         if (!awayFromNow || idleBusy) return
-        if (week.awayFromNow) week.returnToNow()
         if (panel.precip.awayFromToday) panel.precip.backToToday()
         if (bar.scrubTime != null) bar.slideToNow { render() }
     }
@@ -848,8 +892,10 @@ class WeatherActivity : Activity() {
     companion object {
         private const val TICK_MS = 30_000L
         /** Left alone this long away from now, the screen goes back to now on its own. */
-        const val IDLE_MS = 15_000L
-        private const val LAPSE_PANEL_MS = 280L
+        const val IDLE_MS = 5_000L
+        private const val LAPSE_SCROLL_MS = 420L
+        /** How dim the scene is behind the details while a day plays (of the usual): a little clearer. */
+        private const val LAPSE_SCRIM = 0.7f
 
         /** Tests: how long before going back to now (null: [IDLE_MS]). */
         @Volatile var idleMsOverride: Long? = null

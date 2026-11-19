@@ -3,8 +3,6 @@ package io.github.iamth3doctor.searchlight.weatherapp
 import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.os.Handler
-import android.os.Looper
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -20,7 +18,6 @@ import io.github.iamth3doctor.searchlight.ui.type
 import io.github.iamth3doctor.searchlight.weather.ConditionVisual
 import io.github.iamth3doctor.searchlight.weather.DayLapse
 import io.github.iamth3doctor.searchlight.weather.DayPoint
-import io.github.iamth3doctor.searchlight.weather.SceneModel
 import io.github.iamth3doctor.searchlight.weather.WeatherCodes
 import io.github.iamth3doctor.searchlight.weather.WeatherData
 import io.github.iamth3doctor.searchlight.weather.WeatherText
@@ -35,7 +32,8 @@ import java.time.format.TextStyle
  * real hourly forecast, midnight to midnight in [DayLapse.PLAY_MS]: the sun rises, arcs and sets,
  * the moon takes the night, clouds, rain and wind come and go at their hours, and the temperature,
  * condition and an hour readout ("2 PM · 44° · 10% rain") ride along over a thin bar showing where
- * in the day it is (and, in blue, when rain is due). Let go and it stops on that day, still.
+ * in the day it is (and, in blue, when rain is due). Let go and it goes back to now. Otherwise the
+ * window shows the weather now, alive, like the scene on the hero.
  */
 class WeekView(private val context: Context, private val light: Boolean) {
 
@@ -57,10 +55,6 @@ class WeekView(private val context: Context, private val light: Boolean) {
     /** How far through the played day (0..1), while one plays (tests). */
     val progress get() = window.progress
 
-    /** The day the window shows still (after a hold), or null: today, now. */
-    var stillDay: Int? = null
-        private set
-
     /** The clock the time-lapse plays by (tests can drive it). */
     var playClock: () -> Long
         get() = window.playClock
@@ -77,11 +71,11 @@ class WeekView(private val context: Context, private val light: Boolean) {
 
     var clock: () -> Long = System::currentTimeMillis
 
-    /** The window settled on a day after a hold (or back on now): the screen's idle timer starts over. */
+    /** A hold ended (the window is back on now): the screen's idle timer starts over. */
     var onSettled: (() -> Unit)? = null
 
-    /** Showing another day than today, held or still: away from now. */
-    val awayFromNow: Boolean get() = previewDay != null || (stillDay ?: 0) != 0
+    /** Playing another day: away from now. */
+    val awayFromNow: Boolean get() = previewDay != null
 
     private var data: WeatherData? = null
 
@@ -117,7 +111,7 @@ class WeekView(private val context: Context, private val light: Boolean) {
     fun render(data: WeatherData?) {
         this.data = data
         list.removeAllViews()
-        if (previewDay == null) still(stillDay)
+        live()
         val d = data?.detail ?: return
         val zone = ZoneOffset.ofTotalSeconds(d.utcOffsetSec)
         val locale = context.resources.configuration.locales[0]
@@ -162,7 +156,6 @@ class WeekView(private val context: Context, private val light: Boolean) {
         val day = d.daily.getOrNull(i) ?: return
         previewDay?.let { highlight(it, false) }
         if (!window.play(all, i)) return
-        settling.let { main.removeCallbacks(it) }
         highlight(i, true)
         if (haptics) list.getChildAt(i)?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         val zone = ZoneOffset.ofTotalSeconds(d.utcOffsetSec)
@@ -179,56 +172,21 @@ class WeekView(private val context: Context, private val light: Boolean) {
         list.getChildAt(i)?.let { (it.background as? GradientDrawable)?.setColor(if (on) (if (light) 0x1A000000 else 0x26FFFFFF) else 0) }
     }
 
-    /** Stops the time-lapse: the window holds still on the day that was playing. */
+    /** Stops the time-lapse: the window eases back to the weather now, alive. */
     fun stopPreview() {
         val i = previewDay ?: return
-        window.stop()
+        window.stop(data, clock())
         highlight(i, false)
         caption.text = context.getString(R.string.weather_week_hint)
         caption.setTextColor(dim)
-        still(i)
         onSettled?.invoke()
     }
 
-    private val main = Handler(Looper.getMainLooper())
-    private val settling = Runnable { if (previewDay == null) preview.paused = true }
-
-    /**
-     * Back to now, smoothly: the window eases from the day it was showing to today's weather now
-     * (sky, sun, clouds and rain all moving there), then rests.
-     */
-    fun returnToNow() {
-        if (previewDay != null) return
-        val d = data ?: return
-        stillDay = null
-        preview.renderer.easeSec = 0.7
-        preview.paused = false
-        preview.conditions = SceneModel.at(d, clock(), live = true)
-        main.removeCallbacks(settling)
-        main.postDelayed(settling, RETURN_SETTLE_MS)
-    }
-
-    /** Still: day [i] (today: now; another day: its early afternoon), or today now. */
-    private fun still(i: Int? = null) {
-        stillDay = i
-        val d = data
-        preview.paused = true
-        val day = i?.let { d?.detail?.daily?.getOrNull(it) }
-        val t = if (day == null || i == 0) clock() else day.date + 13 * 3_600_000L
-        if (d != null) preview.jumpTo(SceneModel.at(d, t, live = day == null || i == 0))
-        preview.invalidate()
-    }
+    /** The weather now in the window (kept up as time passes); not while a day plays. */
+    fun live() = window.showLive(data, clock())
 
     /** Stops everything (the screen is closing). */
-    fun stop() {
-        stopPreview()
-        window.stop()
-        main.removeCallbacks(settling)
-    }
-
-    private companion object {
-        const val RETURN_SETTLE_MS = 2_500L
-    }
+    fun stop() = stopPreview()
 }
 
 /** The time-lapse's thin bar: the whole day, when rain is due (blue), and how far it has played. */
