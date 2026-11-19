@@ -1872,6 +1872,23 @@ class WeatherSceneDeviceTest {
                 val condBg = under(cond.left + (16 * d).toInt(), cond.centerY())
                 assertTrue("${sk.title}: the condition reads", WeatherSkin.contrast(sk.ink, condBg) >= 4.5)
                 px.recycle()
+                // Every label whole ("CLOUDS & RAIN", not "CLOUDS & RAI").
+                for (c in onMain { a.heroBox.callouts.values }) {
+                    val (need, has) = onMain { c.labelWidth to c.labelView.width - c.labelView.paddingLeft - c.labelView.paddingRight }
+                    assertTrue("${sk.title}: ${c.key}'s label fits ($need > $has)", need <= has + 1)
+                }
+                // The sky is opaque: the window's black never shows through and grays the skin.
+                val skyAlpha = onMain {
+                    val v = a.scene
+                    val bmp = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888)
+                    v.draw(Canvas(bmp))
+                    val alphas = listOf(bmp.getPixel(0, 0), bmp.getPixel(v.width / 2, v.height / 2), bmp.getPixel(v.width - 1, v.height / 3)).map { it ushr 24 }
+                    bmp.recycle()
+                    alphas
+                }
+                assertEquals("${sk.title}: the sky opaque", listOf(255, 255, 255), skyAlpha)
+                // The skin button inked like its neighbours (dark on Paper's pale pill).
+                assertNotNull("${sk.title}: the skin button inked", onMain { a.skinButton.colorFilter })
                 ids[sk]?.let { shot(it) }
                 // And the widgets changed with it.
                 // The grid's views as they are now (adding a widget may have rebuilt them).

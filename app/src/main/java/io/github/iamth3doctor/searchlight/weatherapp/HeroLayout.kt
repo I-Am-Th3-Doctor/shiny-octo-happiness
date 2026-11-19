@@ -60,6 +60,19 @@ class CalloutView(context: Context, val key: String) : LinearLayout(context) {
         }
     }
 
+    /** How wide the label is, letter spacing and all. */
+    val labelWidth: Int get() = kotlin.math.ceil(labelView.paint.measureText(labelView.text.toString())).toInt()
+
+    // At least as wide as the label: short lines ("Rain None") mustn't leave it cut off ("CLOUDS & RAI").
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        val need = labelWidth + labelView.paddingLeft + labelView.paddingRight + paddingLeft + paddingRight
+        if (need <= measuredWidth) return
+        val w = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) need
+            else minOf(need, MeasureSpec.getSize(widthMeasureSpec))
+        super.onMeasure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), heightMeasureSpec)
+    }
+
     fun show(c: HeroReadings.Callout) {
         labelView.text = c.label
         lines.forEachIndexed { i, t ->

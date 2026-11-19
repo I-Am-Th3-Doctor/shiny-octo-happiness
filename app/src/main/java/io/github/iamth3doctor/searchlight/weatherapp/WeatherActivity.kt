@@ -711,6 +711,7 @@ class WeatherActivity : Activity() {
         val c = conditions()
         scene.conditions = c
         menuButton.setColorFilter(fg)
+        if (::skinButton.isInitialized) skinButton.setColorFilter(fg) // dark on a light skin's pale pill
         offlineGlyph.visibility = if (state.data != null && state.problem == WeatherRepository.Problem.NETWORK) View.VISIBLE else View.GONE
         offlineGlyph.setColorFilter(fg)
 

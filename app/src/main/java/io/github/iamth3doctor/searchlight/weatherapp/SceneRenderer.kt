@@ -624,6 +624,9 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         }
         paint.shader = skyShader
         paint.colorFilter = null
+        // Opaque: the paint may still hold the alpha of whatever was drawn last (a see-through sky
+        // would let the window's black through, graying every skin).
+        paint.alpha = 255
         canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
         paint.shader = null
     }
@@ -799,6 +802,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
             overcastColor = c
         }
         paint.shader = overcastShader
+        paint.alpha = 255 // the deck's own colors carry its see-through
         canvas.drawRect(0f, 0f, w.toFloat(), h * 0.55f, paint)
         paint.shader = null
     }
@@ -844,6 +848,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
     private fun drawFog(canvas: Canvas) {
         if (fog < 0.02) return
         val c = mix(palette.fog.first, palette.fog.second, darkness)
+        paint.alpha = 255 // the bands' own colors carry their see-through
         for (b in 0 until 3) {
             val cy = h * (0.55f + b * 0.14f) + (sin(time * 0.15 + b * 2.1) * h * 0.02).toFloat()
             val half = h * 0.12f
