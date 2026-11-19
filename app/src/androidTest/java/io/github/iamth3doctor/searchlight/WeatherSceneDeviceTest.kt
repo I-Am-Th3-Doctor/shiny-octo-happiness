@@ -1787,20 +1787,50 @@ class WeatherSceneDeviceTest {
         assertTrue("no warning text", texts(onMain { a.window.decorView }).none { it.isShown && it.text.contains("offline", ignoreCase = true) })
     }
 
+    /**
+     * The weather screen opened the way a person opens it: a tap on the home screen's Weather widget,
+     * so the home (and its widgets) stay underneath. (ActivityScenario.launch starts a new task,
+     * which clears the home's.) Closed after [block].
+     */
+    private fun fromHome(home: ActivityScenario<MainActivity>, block: () -> Unit) {
+        on(home) { it.widgetController.exitEditMode(); it.widgetController.weatherViews().single().performClick() }
+        waitFor("the weather screen open") {
+            onMain { WeatherActivity.current?.let { !it.isFinishing && it.scene.width > 0 && it.scene.conditions != null } == true }
+        }
+        try {
+            block()
+        } finally {
+            runCatching { onMain { WeatherActivity.current?.finish() } }
+            runCatching { waitFor("home again") { onMain { WeatherActivity.current == null || WeatherActivity.current!!.isFinishing } } }
+        }
+    }
+
+    private fun forceNow(w: WeatherData) {
+        show(w)
+        onMain { val a = WeatherActivity.current!!; a.render(); a.scene.jumpTo(a.conditions()) }
+        val f = onMain { WeatherActivity.current!!.scene.renderer.frames }
+        waitFor("scene playing") { onMain { WeatherActivity.current!!.scene.renderer.frames } > f + 20 }
+    }
+
+    private fun settleNow() {
+        waitFor("screens settled") { onMain { !WeatherActivity.current!!.screens.moving } }
+        idle()
+    }
+
     @Test fun skinsChangeTheWholeAppInOneTap() = home { home ->
         show(reading(2, 40, 0.0))
         addWeather(home)
         addForecast(home, BuiltInWidget.WEATHER_DAY)
         val ids = mapOf(WeatherSkin.EMBER to "124-skin-ember", WeatherSkin.PAPER to "125-skin-paper", WeatherSkin.NEON to "126-skin-neon")
-        screen { h ->
-            force(h, reading(2, 40, 0.0))
+        fromHome(home) {
+            forceNow(reading(2, 40, 0.0))
             // The menu: top right, by the mute button; the skins, the one in use checked.
             val first = current()
             val button = onMain { first.skinButton }
             assertTrue("the skin button shows", onMain { button.isShown })
             assertTrue("by the mute button", screenBox(button).right <= screenBox(onMain { first.muteButton }).left)
             touch(button, 10f, 10f)
-            settle(h)
+            settleNow()
             assertTrue("the button opens the menu", onMain { first.menuShown })
             assertEquals(WeatherSkin.entries.toList(), onMain { first.skinRows.keys.toList() })
             assertTrue("the default in use", onMain { first.skinRows.getValue(WeatherSkin.GOLD).isSelected })
