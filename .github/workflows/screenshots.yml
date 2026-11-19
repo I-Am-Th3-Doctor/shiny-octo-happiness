@@ -103,7 +103,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete screenshots-latest --cleanup-tag --yes || true
+          # Deleting a release of ~300 files in one call can time out (HTTP 502) and leave it in
+          # place, so empty it a file at a time first, then delete it and its tag, retrying.
+          for try in 1 2 3; do
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/screenshots-latest" --jq .id 2>/dev/null) || break
+            for a in $(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets" --jq '.[].id'); do
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$a" || true
+            done
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id" || sleep 15
+          done
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/screenshots-latest" || true
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/screenshots-latest" --jq .id >/dev/null 2>&1; then
+            echo "::error::the old screenshots-latest release could not be removed"; exit 1
+          fi
           gh release create screenshots-latest shots/*.png shots/*.txt \
             --target "$GITHUB_SHA" \
             --prerelease \
