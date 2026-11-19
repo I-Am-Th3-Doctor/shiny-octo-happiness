@@ -36,7 +36,17 @@ class OpenMeteoLiveTest {
         assertTrue(city.any { it.countryCode == "US" })
 
         val place = city.first { it.countryCode == "US" }
-        val w = OpenMeteo.parseForecast(get(OpenMeteo.forecastUrl(place.latitude, place.longitude)), place.name, place.latitude, place.longitude, 0)
+        val raw = get(OpenMeteo.forecastUrl(place.latitude, place.longitude))
+        // Each model's share of the answer: HRRR for the next 48 hours, ECMWF IFS after, best_match to fill.
+        val hourly = org.json.JSONObject(raw).getJSONObject("hourly")
+        for (m in ModelBlend.MODELS) {
+            val a = hourly.optJSONArray("temperature_2m_$m")
+            val n = a?.let { x -> (0 until x.length()).count { !x.isNull(it) } }
+            println("Chicago model $m: ${n ?: "absent"} of ${hourly.getJSONArray("time").length()} hours; " +
+                "current ${org.json.JSONObject(raw).optJSONObject("current")?.keys()?.asSequence()?.filter { it.endsWith(m) }?.toList()}")
+            assertTrue("model $m missing", a != null && n!! > 0)
+        }
+        val w = OpenMeteo.parseForecast(raw, place.name, place.latitude, place.longitude, System.currentTimeMillis())
         println("Chicago now: ${Temperature.format(w.temperatureC, TempUnit.FAHRENHEIT)}F / ${Temperature.format(w.temperatureC, TempUnit.CELSIUS)}C, ${w.condition}")
         assertTrue(w.temperatureC in -60.0..60.0)
         assertTrue(w.lowC <= w.temperatureC && w.temperatureC <= w.highC)

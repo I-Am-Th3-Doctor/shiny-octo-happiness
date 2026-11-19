@@ -122,7 +122,15 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
                     State(previous, false, if (canUseDevice) Problem.LOCATION_UNAVAILABLE else Problem.NEEDS_LOCATION)
                 } else {
                     val (name, lat, lon) = target
-                    val json = httpGet(OpenMeteo.forecastUrl(lat, lon))
+                    // Each stretch from its best model (one request). Should Open-Meteo ever refuse a
+                    // model by name, best_match alone still gives a forecast.
+                    val json = try {
+                        httpGet(OpenMeteo.forecastUrl(lat, lon))
+                    } catch (e: HttpStatusException) {
+                        if (e.code != 400) throw e
+                        Log.w(TAG, "Forecast models refused; using best_match", e)
+                        httpGet(OpenMeteo.forecastUrl(lat, lon, models = false))
+                    }
                     var data = OpenMeteo.parseForecast(json, name, lat, lon, System.currentTimeMillis())
                     // Air quality is its own (free) call; without it the rest still shows.
                     val aqi = try {

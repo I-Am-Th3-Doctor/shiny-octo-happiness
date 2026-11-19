@@ -126,8 +126,12 @@ object OpenMeteo {
     /**
      * Coordinates are rounded to 2 decimals (~1 km) before they leave the phone: plenty for a
      * forecast, and Open-Meteo never sees your exact position. No API key, no account.
+     *
+     * With [models] (the default), one request asks for HRRR, ECMWF IFS and best_match together, and
+     * [parseForecast] takes each stretch of the forecast from the best of them ([ModelBlend]);
+     * without, it's Open-Meteo's best_match alone (the fallback if the models are refused).
      */
-    fun forecastUrl(latitude: Double, longitude: Double): String = String.format(
+    fun forecastUrl(latitude: Double, longitude: Double, models: Boolean = true): String = String.format(
         Locale.US,
         "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f" +
             "&current=temperature_2m,weather_code,is_day,apparent_temperature,relative_humidity_2m,dew_point_2m," +
@@ -135,7 +139,8 @@ object OpenMeteo {
             "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset,precipitation_sum,uv_index_max" +
             "&hourly=temperature_2m,weather_code,is_day,cloud_cover,precipitation,precipitation_probability," +
             "wind_speed_10m,wind_direction_10m,pressure_msl" +
-            "&temperature_unit=celsius&wind_speed_unit=mph&timezone=auto&timeformat=unixtime&forecast_days=7",
+            "&temperature_unit=celsius&wind_speed_unit=mph&timezone=auto&timeformat=unixtime&forecast_days=7" +
+            (if (models) "&models=" + ModelBlend.MODELS.joinToString(",") else ""),
         latitude, longitude,
     )
 
@@ -155,7 +160,7 @@ object OpenMeteo {
             URLEncoder.encode(query.trim(), "UTF-8") + "&count=8&language=en&format=json"
 
     fun parseForecast(json: String, locationName: String, latitude: Double, longitude: Double, now: Long): WeatherData {
-        val root = JSONObject(json)
+        val root = ModelBlend.blend(JSONObject(json), now)
         val current = root.getJSONObject("current")
         val daily = root.getJSONObject("daily")
         val t = current.getDouble("temperature_2m")
