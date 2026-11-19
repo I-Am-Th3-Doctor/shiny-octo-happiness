@@ -69,6 +69,14 @@ class WeatherSkinTest {
         }
     }
 
+    /** A callout can sit over the sun or a cloud's bright top, not just sky: its text still reads. */
+    @Test fun calloutTextReadsOverTheBrightestAndDarkestOfTheScene() {
+        for (s in WeatherSkin.entries) for (behind in listOf(0xFFFFFFFF.toInt(), 0xFF000000.toInt())) {
+            val ratio = WeatherSkin.contrast(s.ink, WeatherSkin.over(s.calloutBg, behind))
+            assertTrue("${s.title}: text over ${Integer.toHexString(behind)} is $ratio", ratio >= 4.5)
+        }
+    }
+
     @Test fun lightTextOnDarkSkinsDarkOnLight() {
         for (s in WeatherSkin.entries) {
             if (s.light) assertTrue(s.title, WeatherSkin.luminance(s.ink) < 0.05)

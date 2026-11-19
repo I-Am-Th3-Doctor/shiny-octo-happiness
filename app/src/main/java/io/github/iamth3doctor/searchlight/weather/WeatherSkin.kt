@@ -47,7 +47,7 @@ enum class WeatherSkin(
         ink = 0xFFFFFFFF.toInt(), inkDim = 0xCCFFFFFF.toInt(),
         accent = 0xFFFFC93C.toInt(), onAccent = 0xFF1A1408.toInt(), accentDeep = 0xFF9C4A2F.toInt(),
         numberTop = 0xFFFFE7A3.toInt(), numberBottom = 0xFFF0A23A.toInt(),
-        calloutBg = 0x80101016.toInt(), outline = 0xFF1A1408.toInt(), glass = 0x990B0B0D.toInt(),
+        calloutBg = 0xB3101016.toInt(), outline = 0xFF1A1408.toInt(), glass = 0x990B0B0D.toInt(),
         cardTop = 0xFF1C1C21.toInt(), cardBottom = 0xFF0E0E11.toInt(),
         daysCardTop = 0xFFFBF6EC.toInt(), daysCardBottom = 0xFFF1E7D6.toInt(),
         scene = ScenePalette.DEFAULT,
