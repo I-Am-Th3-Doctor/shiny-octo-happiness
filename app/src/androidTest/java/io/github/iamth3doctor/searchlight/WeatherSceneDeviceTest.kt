@@ -1880,8 +1880,8 @@ class WeatherSceneDeviceTest {
                 // The sky is opaque: the window's black never shows through and grays the skin.
                 val skyAlpha = onMain {
                     val v = a.scene
-                    val bmp = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888)
-                    v.draw(Canvas(bmp))
+                    val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
+                    v.draw(android.graphics.Canvas(bmp))
                     val alphas = listOf(bmp.getPixel(0, 0), bmp.getPixel(v.width / 2, v.height / 2), bmp.getPixel(v.width - 1, v.height / 3)).map { it ushr 24 }
                     bmp.recycle()
                     alphas
