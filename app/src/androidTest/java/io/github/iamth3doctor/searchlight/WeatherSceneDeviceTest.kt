@@ -310,8 +310,7 @@ class WeatherSceneDeviceTest {
     @Test fun eachWeatherIsItsOwnLivingScene() = screen { h ->
         assertTrue("animating", on(h) { it.scene.animating })
         val f0 = on(h) { it.scene.renderer.frames }
-        Thread.sleep(600)
-        assertTrue("frames advance: it's alive", on(h) { it.scene.renderer.frames } > f0 + 10)
+        waitFor("frames advance: it's alive", 3_000) { onMain { WeatherActivity.current!!.scene.renderer.frames } > f0 + 10 }
 
         force(h, reading(0, 2, 0.0))
         val clear = look(h)
@@ -521,10 +520,15 @@ class WeatherSceneDeviceTest {
         // ...then on its own: the scrubber slides back to NOW, the scene and number with it.
         val slid = ArrayList<Long>()
         var backAt = 0L
+        // What the bar says the moment it's back (the hour's readout shows only for a moment).
+        var readoutAtBack: String? = null
         val until = SystemClock.uptimeMillis() + 8_000
         while (SystemClock.uptimeMillis() < until) {
-            val s = onMain { WeatherActivity.current!!.scrubTime }
-            if (s == null) { backAt = SystemClock.uptimeMillis(); break }
+            val (s, readout) = onMain {
+                val a = WeatherActivity.current!!
+                a.scrubTime to a.bar.takeIf { it.nowReadoutShown }?.readout(System.currentTimeMillis())
+            }
+            if (s == null) { backAt = SystemClock.uptimeMillis(); readoutAtBack = readout; break }
             if (s != slid.lastOrNull()) slid += s
             Thread.sleep(16)
         }
@@ -534,15 +538,15 @@ class WeatherSceneDeviceTest {
         val between = slid.filter { it < t }
         assertTrue("it slid back, not a jump: $slid", between.isNotEmpty())
         for (i in 1 until slid.size) assertTrue("only ever toward now: $slid", slid[i] <= slid[i - 1])
-        assertFalse(on(h) { it.bar.returning })
-        assertTrue(on(h) { it.conditions().live })
+        assertFalse("done returning", on(h) { it.bar.returning })
+        assertTrue("the scene is now's", on(h) { it.conditions().live })
         assertEquals("the number is now's again", liveNumber, on(h) { it.hero.number })
         assertEquals(liveCondition, on(h) { it.heroCondition.text.toString() })
         // The readout says the hour it's back at, for a moment.
-        assertTrue(on(h) { it.bar.nowReadoutShown })
+        assertNotNull("the readout shows the hour it's back at", readoutAtBack)
         val nowHour = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.hour(app)
             .format(java.time.Instant.ofEpochMilli(System.currentTimeMillis()).atOffset(java.time.ZoneOffset.ofTotalSeconds(off)))
-        assertTrue(on(h) { it.bar.readout(System.currentTimeMillis()) }.startsWith("$nowHour · "))
+        assertTrue("the readout: $readoutAtBack", readoutAtBack!!.startsWith("$nowHour · "))
         shot("114-back-to-now")
         assertNull("back at now: nothing counting", on(h) { it.idleReturnAt })
         waitFor("the rain clears off the scene", 8_000) { look(h).drops == 0 }
@@ -560,7 +564,7 @@ class WeatherSceneDeviceTest {
         instrumentation.sendPointerSync(MotionEvent.obtain(qd, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, qx, qy, 0))
         val touchedAt = SystemClock.uptimeMillis()
         assertTrue("touched before the 5 s were up: ${touchedAt - second} ms", touchedAt - second < 4_800)
-        assertTrue(on(h) { it.quickShown })
+        assertTrue("the touch shows the quick numbers", on(h) { it.quickShown })
         Thread.sleep((touchedAt + 4_000 - SystemClock.uptimeMillis()).coerceAtLeast(0))
         assertTrue("4 s past the touch, 7 s past the scrub", SystemClock.uptimeMillis() - second >= 6_500)
         assertEquals("not back at 5 s from the scrub: the touch at 3 s reset it", t, on(h) { it.scrubTime })
@@ -575,8 +579,8 @@ class WeatherSceneDeviceTest {
         on(h) { week.startPreview(1) }
         assertNull("playing: paused", on(h) { it.idleReturnAt })
         on(h) { week.stopPreview() }
-        assertTrue(on(h) { week.preview.conditions!!.live && week.preview.animating })
-        assertFalse(on(h) { it.awayFromNow })
+        assertTrue("the week's window back on now", on(h) { week.preview.conditions!!.live && week.preview.animating })
+        assertFalse("not away from now", on(h) { it.awayFromNow })
         assertNull("back on now: nothing counting", on(h) { it.idleReturnAt })
     }
 
@@ -944,8 +948,10 @@ class WeatherSceneDeviceTest {
         // When the play began: now, less however far it has already got (seeing the hold can lag a slow frame).
         val began = on(h) { SystemClock.uptimeMillis() - (week.progress * DayLapse.PLAY_MS).toLong() }
         // (Exactly from the start is checked on the stepped clock below; here, a slow frame may have passed.)
-        val startP = on(h) { week.progress }
-        assertTrue("from the start of the day", startP < 0.15)
+        // From the start of the day: no further in than the time since the finger went down.
+        val (startP, sinceDown) = onMain { week.progress to SystemClock.uptimeMillis() - down }
+        assertTrue("from the start of the day: $startP after $sinceDown ms",
+            startP * DayLapse.PLAY_MS <= sinceDown + 250 && startP < 0.5)
         assertEquals(View.VISIBLE, on(h) { week.overlay.visibility })
         assertEquals(View.VISIBLE, on(h) { week.window.lapseTop.visibility })
         assertFalse("the pin travels the day", on(h) { week.lapseBar.atNow })
@@ -1783,8 +1789,8 @@ class WeatherSceneDeviceTest {
 
     @Test fun skinsChangeTheWholeAppInOneTap() = home { home ->
         show(reading(2, 40, 0.0))
-        val live = addWeather(home)
-        val wide = addForecast(home, BuiltInWidget.WEATHER_DAY)
+        addWeather(home)
+        addForecast(home, BuiltInWidget.WEATHER_DAY)
         val ids = mapOf(WeatherSkin.EMBER to "124-skin-ember", WeatherSkin.PAPER to "125-skin-paper", WeatherSkin.NEON to "126-skin-neon")
         screen { h ->
             force(h, reading(2, 40, 0.0))
@@ -1838,7 +1844,15 @@ class WeatherSceneDeviceTest {
                 px.recycle()
                 ids[sk]?.let { shot(it) }
                 // And the widgets changed with it.
-                waitFor("${sk.title}: the live widget's scene in its colors", 3_000) { onMain { live.scene.renderer.palette === sk.scene } }
+                // The grid's views as they are now (adding a widget may have rebuilt them).
+                val live = on(home) { it.widgetController.weatherViews().single() }
+                val wide = on(home) { it.widgetController.forecastViews().single() }
+                try {
+                    waitFor("${sk.title}: the live widget's scene in its colors", 3_000) { onMain { live.scene.renderer.palette === sk.scene } }
+                } catch (e: AssertionError) {
+                    val state = onMain { "attached=${live.isAttachedToWindow} sceneAttached=${live.scene.isAttachedToWindow} palette=${WeatherSkin.entries.firstOrNull { it.scene === live.scene.renderer.palette }?.title}" }
+                    throw AssertionError("${e.message} ($state)")
+                }
                 val liveInk = if (sk.light) sk.ink else if (sk == WeatherSkin.GOLD) 0xFFFFFFFF.toInt() else sk.ink
                 assertEquals(liveInk, onMain { live.tempView.currentTextColor })
                 assertEquals(sk, onMain { wide.skin })
