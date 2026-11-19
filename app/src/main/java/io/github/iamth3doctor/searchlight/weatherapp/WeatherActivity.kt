@@ -258,7 +258,10 @@ class WeatherActivity : Activity() {
         // Opened from the widget's alert glyph: straight to the alert.
         if (intent.getBooleanExtra(EXTRA_ALERT, false)) showAlerts()
         // Rebuilt in a new skin from the menu: back on the menu, the new skin checked.
-        if (savedInstanceState?.getBoolean(STATE_MENU) == true) screens.push(menuScreen)
+        if (savedInstanceState?.getBoolean(STATE_MENU) == true) {
+            screens.push(menuScreen)
+            screens.settle() // already there: no transition
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

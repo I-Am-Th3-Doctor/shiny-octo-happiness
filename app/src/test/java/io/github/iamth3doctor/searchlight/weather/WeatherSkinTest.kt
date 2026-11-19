@@ -39,7 +39,20 @@ class WeatherSkinTest {
         assertTrue("dark text", WeatherSkin.luminance(paper.ink) < 0.02)
         // Colorful: blue, purple and pink.
         val neon = WeatherSkin.NEON
-        fun hue(c: Int): Float = FloatArray(3).also { java.awt.Color.RGBtoHSB(c shr 16 and 0xFF, c shr 8 and 0xFF, c and 0xFF, it) }[0] * 360
+        fun hue(c: Int): Float {
+            val r = (c shr 16 and 0xFF) / 255f
+            val g = (c shr 8 and 0xFF) / 255f
+            val b = (c and 0xFF) / 255f
+            val max = maxOf(r, g, b)
+            val d = max - minOf(r, g, b)
+            if (d == 0f) return 0f
+            val h = when (max) {
+                r -> ((g - b) / d).mod(6f)
+                g -> (b - r) / d + 2
+                else -> (r - g) / d + 4
+            }
+            return h * 60
+        }
         val hues = (neon.scene.skyTop.toList() + neon.scene.skyBottom.toList() + neon.accent + neon.accentDeep).map(::hue)
         assertTrue("blue: $hues", hues.any { it in 215f..245f })
         assertTrue("purple: $hues", hues.any { it in 255f..290f })

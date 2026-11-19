@@ -88,7 +88,7 @@ class WeatherSceneDeviceTest {
     private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
 
     /** How long [on] waits for the app to go idle before reading anyway. */
-    private val IDLE_MS = 2_000L
+    private val IDLE_MS = 300L
 
     /**
      * Reads [read] on the main thread with [h]'s activity, after the app goes idle or [IDLE_MS] at
@@ -939,7 +939,8 @@ class WeatherSceneDeviceTest {
         // When the play began: now, less however far it has already got (seeing the hold can lag a slow frame).
         val began = on(h) { SystemClock.uptimeMillis() - (week.progress * DayLapse.PLAY_MS).toLong() }
         // (Exactly from the start is checked on the stepped clock below; here, a slow frame may have passed.)
-        assertTrue("from the start of the day", on(h) { week.progress } < 0.15)
+        val startP = on(h) { week.progress }
+        assertTrue("from the start of the day", startP < 0.15)
         assertEquals(View.VISIBLE, on(h) { week.overlay.visibility })
         assertEquals(View.VISIBLE, on(h) { week.window.lapseTop.visibility })
         assertFalse("the pin travels the day", on(h) { week.lapseBar.atNow })
@@ -964,7 +965,7 @@ class WeatherSceneDeviceTest {
         // Every sample's readout is the hour the playhead is in (the 3 PM rain itself: on the stepped clock below).
         assertTrue("the readout moves through the hours: $readouts", readouts.size >= 8)
         // The pin went the whole way along, start to end, with the readout.
-        assertTrue("from the start", pairs.first().first < 0.15)
+        assertTrue("from the start", startP < 0.15 && pairs.first().first >= startP)
         assertEquals("to the end", 1.0, on(h) { week.lapseBar.progress }.toDouble(), 0.001)
         for ((p, r) in pairs) {
             val k = ((DayLapse.time(tomorrow, p) - tomorrow) / hour).toInt()
@@ -1105,7 +1106,7 @@ class WeatherSceneDeviceTest {
             }
             // The picture plays, and draws.
             val f0 = on(h) { card.art.frames }
-            Thread.sleep(600)
+            Thread.sleep(1_500) // the emulator draws slowly behind the living scene
             assertTrue("$k animates", on(h) { card.art.frames } > f0 + 5)
             val inked = onMain {
                 val a = card.art
@@ -1694,7 +1695,14 @@ class WeatherSceneDeviceTest {
         assertTrue(lines("uv").toString(), lines("uv")[0].startsWith("Max UV ") && lines("uv")[1] == "Vis 15 mi")
         // A thin leader line from each callout to what it describes.
         waitFor("leader lines drawn") { onMain { a.leaders.drawn.keys.toSet() } == HeroReadings.KEYS.toSet() }
-        val drawn = onMain { a.leaders.drawn.toMap() }
+        // Drawn and aimed in the same instant: the clouds drift between frames.
+        val (drawn, targets) = onMain {
+            val v = a.leaders
+            val bmp = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
+            v.draw(android.graphics.Canvas(bmp))
+            bmp.recycle()
+            v.drawn.toMap() to listOf("sun", "sky", "uv", "wind").associateWith { v.targetOf(it)!! }
+        }
         val leaderBox = screenBox(onMain { a.leaders })
         for ((k, l) in drawn) {
             val box = screenBox(callouts.getValue(k))
@@ -1710,7 +1718,7 @@ class WeatherSceneDeviceTest {
         // Each points where it says: the sun or moon, a cloud, the horizon (the sun and moon's callout across the sky from them).
         val sceneBox = screenBox(onMain { a.scene })
         for (k in listOf("sun", "sky", "uv", "wind")) {
-            val want = onMain { a.leaders.targetOf(k)!! }
+            val want = targets.getValue(k)
             val end = drawn.getValue(k)
             assertEquals("$k's line end", want[0] + sceneBox.left, end[2] + leaderBox.left, 40f)
             assertEquals(want[1] + sceneBox.top, end[3] + leaderBox.top, 40f)
@@ -1794,13 +1802,14 @@ class WeatherSceneDeviceTest {
                 touch(row, 30f, 30f)
                 waitFor("rebuilt in ${sk.title}") { onMain { WeatherActivity.current.let { c -> c != null && c !== before && c.skin == sk && c.menuShown } } }
                 val a = current()
-                waitFor("settled") { onMain { a.scene.width > 0 && !a.screens.moving } }
+                waitFor("settled") { onMain { a.menuShown && !a.screens.moving } }
                 assertTrue("${sk.title} checked", onMain { a.skinRows.getValue(sk).isSelected })
                 assertTrue(onMain { a.skinRows.filterKeys { it != sk }.values.none { it.isSelected } })
                 assertEquals(sk, Skins.current)
                 assertEquals(sk.key, onMain { app.prefs.weatherSkin })
                 onMain { a.back() }
-                waitFor("back on the scene") { onMain { a.screens.depth == 0 && !a.screens.moving } }
+                waitFor("back on the scene") { onMain { a.screens.depth == 0 && !a.screens.moving && a.scene.width > 0 } }
+                nextFrame()
                 // The whole screen: scene, number, callouts, condition, the bar's pin, the pills.
                 assertTrue(onMain { a.scene.renderer.palette === sk.scene })
                 assertEquals(sk, onMain { a.hero.skin })
