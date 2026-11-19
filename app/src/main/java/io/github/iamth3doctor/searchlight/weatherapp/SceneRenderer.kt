@@ -362,10 +362,12 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         } else {
             nextFlock = 0.6
         }
+        // Caught out by the weather, birds hurry on off the sky rather than drift across it.
+        val hurry = if (birdWeather()) 1f else 3f
         val it = birds.iterator()
         while (it.hasNext()) {
             val b = it.next()
-            b.x += (b.vx * dt).toFloat()
+            b.x += (b.vx * hurry * dt).toFloat()
             b.y += (sin(time * 0.8 + b.phase) * 4 * density * dt).toFloat()
             b.flap = sin(time * 7.5 + b.phase).toFloat()
             if (b.x < -w * 0.3f || b.x > w * 1.3f) it.remove()
