@@ -548,13 +548,18 @@ class WeatherSceneDeviceTest {
         waitFor("the rain clears off the scene", 8_000) { look(h).drops == 0 }
 
         // Scrub, then touch again at 3 s: the count starts over, so it's still there at 6 s and back about 8 s.
+        // Where to touch (the quick numbers), worked out first: on a slow emulator the reading takes time.
+        val scene = on(h) { it.scene }
+        val (qx, qy) = screenAt(scene, on(h) { scene.width / 2f }, on(h) { scene.height * 0.45f })
         touch(bar, on(h) { bar.xOf(t + 10 * 60_000L) }, y)
         val second = SystemClock.uptimeMillis()
-        assertEquals(t, on(h) { it.scrubTime })
+        assertEquals(t, onMain { WeatherActivity.current!!.scrubTime })
         Thread.sleep((second + 3_000 - SystemClock.uptimeMillis()).coerceAtLeast(0))
-        val scene = on(h) { it.scene }
-        touch(scene, on(h) { scene.width / 2f }, on(h) { scene.height * 0.45f }) // the quick numbers
+        val qd = SystemClock.uptimeMillis()
+        instrumentation.sendPointerSync(MotionEvent.obtain(qd, qd, MotionEvent.ACTION_DOWN, qx, qy, 0))
+        instrumentation.sendPointerSync(MotionEvent.obtain(qd, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, qx, qy, 0))
         val touchedAt = SystemClock.uptimeMillis()
+        assertTrue("touched before the 5 s were up: ${touchedAt - second} ms", touchedAt - second < 4_800)
         assertTrue(on(h) { it.quickShown })
         Thread.sleep((touchedAt + 4_000 - SystemClock.uptimeMillis()).coerceAtLeast(0))
         assertTrue("4 s past the touch, 7 s past the scrub", SystemClock.uptimeMillis() - second >= 6_500)
@@ -1786,11 +1791,11 @@ class WeatherSceneDeviceTest {
             // The menu: top right, by the mute button; the skins, the one in use checked.
             val first = current()
             val button = onMain { first.skinButton }
-            assertTrue(onMain { button.isShown })
+            assertTrue("the skin button shows", onMain { button.isShown })
             assertTrue("by the mute button", screenBox(button).right <= screenBox(onMain { first.muteButton }).left)
             touch(button, 10f, 10f)
             settle(h)
-            assertTrue(onMain { first.menuShown })
+            assertTrue("the button opens the menu", onMain { first.menuShown })
             assertEquals(WeatherSkin.entries.toList(), onMain { first.skinRows.keys.toList() })
             assertTrue("the default in use", onMain { first.skinRows.getValue(WeatherSkin.GOLD).isSelected })
             shot("127-skin-menu")
@@ -1804,14 +1809,14 @@ class WeatherSceneDeviceTest {
                 val a = current()
                 waitFor("settled") { onMain { a.menuShown && !a.screens.moving } }
                 assertTrue("${sk.title} checked", onMain { a.skinRows.getValue(sk).isSelected })
-                assertTrue(onMain { a.skinRows.filterKeys { it != sk }.values.none { it.isSelected } })
+                assertTrue("${sk.title}: no other row checked", onMain { a.skinRows.filterKeys { it != sk }.values.none { it.isSelected } })
                 assertEquals(sk, Skins.current)
                 assertEquals(sk.key, onMain { app.prefs.weatherSkin })
                 onMain { a.back() }
                 waitFor("back on the scene") { onMain { a.screens.depth == 0 && !a.screens.moving && a.scene.width > 0 } }
                 nextFrame()
                 // The whole screen: scene, number, callouts, condition, the bar's pin, the pills.
-                assertTrue(onMain { a.scene.renderer.palette === sk.scene })
+                assertTrue("${sk.title}: the scene in its colors", onMain { a.scene.renderer.palette === sk.scene })
                 assertEquals(sk, onMain { a.hero.skin })
                 assertEquals(sk.ink, onMain { a.heroCondition.currentTextColor })
                 for (c in onMain { a.heroBox.callouts.values }) assertEquals(sk.ink, onMain { c.lines[0].currentTextColor })
@@ -1833,7 +1838,7 @@ class WeatherSceneDeviceTest {
                 px.recycle()
                 ids[sk]?.let { shot(it) }
                 // And the widgets changed with it.
-                assertTrue(onMain { live.scene.renderer.palette === sk.scene })
+                waitFor("${sk.title}: the live widget's scene in its colors", 3_000) { onMain { live.scene.renderer.palette === sk.scene } }
                 val liveInk = if (sk.light) sk.ink else if (sk == WeatherSkin.GOLD) 0xFFFFFFFF.toInt() else sk.ink
                 assertEquals(liveInk, onMain { live.tempView.currentTextColor })
                 assertEquals(sk, onMain { wide.skin })
