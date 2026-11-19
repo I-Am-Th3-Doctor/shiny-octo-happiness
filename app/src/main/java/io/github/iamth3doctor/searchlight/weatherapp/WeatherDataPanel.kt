@@ -50,6 +50,15 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     /** Now, in ms. */
     var clock: () -> Long = System::currentTimeMillis
 
+    /** Holding a day in the 7 DAYS list: play it ([onHoldDay] with its index) until let go ([onReleaseDay]). */
+    var onHoldDay: ((Int) -> Unit)? = null
+    var onReleaseDay: (() -> Unit)? = null
+    /** The day being held, or null. */
+    var heldDay: () -> Int? = { null }
+
+    /** The 7 DAYS rows (tests). */
+    val dayRows = ArrayList<View>()
+
     /** The precip card (kept across renders, so its graph and island keep their state). */
     val precip = PrecipCard(context, light)
 
@@ -89,6 +98,11 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     }
 
     private fun deg(c: Double) = "${WeatherText.f(c)}°"
+
+    /** Marks day [i]'s row as the one playing (or not). */
+    fun highlightDay(i: Int, on: Boolean) {
+        (dayRows.getOrNull(i)?.background as? GradientDrawable)?.setColor(if (on) (if (light) 0x1A000000 else 0x26FFFFFF) else 0)
+    }
 
     fun render(state: WeatherRepository.State) {
         body.removeAllViews()
@@ -201,6 +215,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         }
         val zone = ZoneOffset.ofTotalSeconds(d.utcOffsetSec)
         val locale = context.resources.configuration.locales[0]
+        dayRows.clear()
         val hv = px(R.dimen.size_weather_visual_hour)
         val col = px(R.dimen.size_cal_chevron)
         d.daily.take(7).forEachIndexed { i, day ->
@@ -224,7 +239,13 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
             row.addView(text(Type.BODY, bold = true).apply { text = deg(day.highC); gravity = Gravity.END },
                 LinearLayout.LayoutParams(col + px(R.dimen.space_s), ViewGroup.LayoutParams.WRAP_CONTENT))
             row.contentDescription = "$name, ${WeatherCodes.describe(day.code)}, high ${deg(day.highC)}, low ${deg(day.lowC)}" +
-                (day.precipPct?.let { ", $it% chance of precipitation" } ?: "")
+                (day.precipPct?.let { ", $it% chance of precipitation" } ?: "") + ". Hold to preview."
+            // Hold a day: it plays as a time-lapse at the top of the screen until let go.
+            row.background = GradientDrawable().apply { cornerRadius = pxF(R.dimen.radius_card) / 3; setColor(0) }
+            DayLapseWindow.holdToPlay(row, isHeld = { heldDay() == i },
+                onHold = { onHoldDay?.invoke(i) },
+                onRelease = { onReleaseDay?.invoke() })
+            dayRows += row
             list.addView(row, lp())
         }
         box.addView(list, lp(px(R.dimen.space_xs)))

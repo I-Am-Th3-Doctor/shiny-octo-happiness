@@ -1,6 +1,5 @@
 package io.github.iamth3doctor.searchlight.weatherapp
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -8,11 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.ViewGroup
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.iamth3doctor.searchlight.R
@@ -32,7 +28,6 @@ import io.github.iamth3doctor.searchlight.widgets.ConditionView
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.TextStyle
-import kotlin.math.abs
 
 /**
  * The 7-day view's content: a window on the scene, then a row per day (its condition, chance of
@@ -47,40 +42,48 @@ class WeekView(private val context: Context, private val light: Boolean) {
     val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
     /** The window the held day plays in. */
-    val preview = WeatherSceneView(context, mini = false).apply { paused = true }
+    val window = DayLapseWindow(context)
+    val preview get() = window.preview
     val caption = TextView(context)
     val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
     /** Over the window while a day plays: its temperature and condition, the hour, and where in the day. */
-    val overlay = FrameLayout(context).apply { visibility = View.GONE }
-    val lapseTemp = TextView(context)
-    val lapseCondition = TextView(context)
-    val readout = TextView(context)
-    val lapseBar = LapseBarView(context)
+    val overlay get() = window.overlay
+    val lapseTemp get() = window.lapseTemp
+    val lapseCondition get() = window.lapseCondition
+    val readout get() = window.readout
+    val lapseBar get() = window.lapseBar
 
     /** How far through the played day (0..1), while one plays (tests). */
-    var progress = 0.0
-        private set
+    val progress get() = window.progress
 
     /** The day the window shows still (after a hold), or null: today, now. */
     var stillDay: Int? = null
         private set
 
     /** The clock the time-lapse plays by (tests can drive it). */
-    var playClock: () -> Long = { android.os.SystemClock.uptimeMillis() }
+    var playClock: () -> Long
+        get() = window.playClock
+        set(value) { window.playClock = value }
 
     /** The day being played (index into the forecast), or null. */
-    var previewDay: Int? = null
-        private set
+    val previewDay: Int? get() = window.day
+
+    /** The time the preview shows while playing (tests). */
+    val previewTime: Long? get() = window.previewTime
 
     /** Light haptics on hold. */
     var haptics = true
 
     var clock: () -> Long = System::currentTimeMillis
 
+    /** The window settled on a day after a hold (or back on now): the screen's idle timer starts over. */
+    var onSettled: (() -> Unit)? = null
+
+    /** Showing another day than today, held or still: away from now. */
+    val awayFromNow: Boolean get() = previewDay != null || (stillDay ?: 0) != 0
+
     private var data: WeatherData? = null
-    private val main = Handler(Looper.getMainLooper())
-    private var playStart = 0L
 
     private fun px(t: Int) = context.px(t)
     private val fg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
@@ -88,14 +91,7 @@ class WeekView(private val context: Context, private val light: Boolean) {
     private val inset = if (light) 0x14000000 else context.color(R.color.surface_inset)
 
     init {
-        val card = FrameLayout(context).apply {
-            background = GradientDrawable().apply { cornerRadius = context.pxF(R.dimen.radius_card); setColor(0xFF000000.toInt()) }
-            clipToOutline = true
-        }
-        card.addView(preview, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        buildOverlay()
-        card.addView(overlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        root.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(R.dimen.size_weather_week_preview)))
+        root.addView(window.root, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(R.dimen.size_weather_week_preview)))
         caption.type(Type.BODY)
         caption.setTextColor(dim)
         caption.gravity = Gravity.CENTER
@@ -107,36 +103,6 @@ class WeekView(private val context: Context, private val light: Boolean) {
         list.setPadding(p, p / 2, p, p / 2)
         root.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { topMargin = px(R.dimen.space_m) })
-    }
-
-    private fun buildOverlay() {
-        val white = 0xFFFFFFFF.toInt()
-        val shadow = context.pxF(R.dimen.glass_text_shadow)
-        fun TextView.glass(style: Int, bold: Boolean) {
-            type(style)
-            if (bold) typeface = Typeface.create(typeface, 700, false)
-            setTextColor(white)
-            includeFontPadding = false
-            setShadowLayer(shadow, 0f, 1f, 0x99000000.toInt())
-        }
-        val m = px(R.dimen.space_s) + px(R.dimen.space_xs)
-        val top = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        lapseTemp.glass(Type.GLANCE, bold = true)
-        lapseTemp.tag = "weather_lapse_temp"
-        lapseCondition.glass(Type.BODY, bold = true)
-        top.addView(lapseTemp)
-        top.addView(lapseCondition)
-        overlay.addView(top, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START)
-            .apply { setMargins(m, m, m, m) })
-        val bottom = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        readout.glass(Type.BODY, bold = true)
-        readout.tag = "weather_lapse_readout"
-        bottom.addView(readout)
-        lapseBar.tag = "weather_lapse_bar"
-        bottom.addView(lapseBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(R.dimen.space_m))
-            .apply { topMargin = px(R.dimen.space_xs) })
-        overlay.addView(bottom, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
-            .apply { setMargins(m, m, m, m / 2) })
     }
 
     private fun text(style: Int, color: Int, bold: Boolean = false) = TextView(context).apply {
@@ -180,7 +146,7 @@ class WeekView(private val context: Context, private val light: Boolean) {
                 LinearLayout.LayoutParams(col + px(R.dimen.space_s), ViewGroup.LayoutParams.WRAP_CONTENT))
             row.contentDescription = "$name, ${WeatherCodes.describe(day.code)}, high ${deg(day.highC)}, low ${deg(day.lowC)}" +
                 (day.precipPct?.let { ", $it% chance of precipitation" } ?: "") + ". Hold to preview."
-            holdToPreview(row, i)
+            DayLapseWindow.holdToPlay(row, isHeld = { previewDay == i }, onHold = { startPreview(i) }, onRelease = { stopPreview() })
             list.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
     }
@@ -189,123 +155,62 @@ class WeekView(private val context: Context, private val light: Boolean) {
         if (i == 0) context.getString(R.string.weather_detail_today)
         else Instant.ofEpochMilli(day.date).atOffset(zone).dayOfWeek.getDisplayName(TextStyle.FULL, locale)
 
-    @SuppressLint("ClickableViewAccessibility")
-    private fun holdToPreview(row: View, i: Int) {
-        val slop = ViewConfiguration.get(context).scaledTouchSlop
-        var downX = 0f
-        var downY = 0f
-        val start = Runnable {
-            row.parent?.requestDisallowInterceptTouchEvent(true)
-            startPreview(i)
-        }
-        row.isLongClickable = true
-        row.setOnTouchListener { v, e ->
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = e.x; downY = e.y
-                    v.postDelayed(start, ViewConfiguration.getLongPressTimeout().toLong())
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    // Moved off before the hold took: it's a scroll or a swipe, not a hold.
-                    if (previewDay != i && (abs(e.x - downX) > slop || abs(e.y - downY) > slop)) {
-                        v.removeCallbacks(start)
-                        return@setOnTouchListener false
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    v.removeCallbacks(start)
-                    if (previewDay == i) stopPreview()
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
     /** Plays day [i] in the window, midnight to midnight, from the start, until [stopPreview]. */
     fun startPreview(i: Int) {
-        val d = data?.detail ?: return
+        val all = data ?: return
+        val d = all.detail ?: return
         val day = d.daily.getOrNull(i) ?: return
-        previewDay = i
-        list.getChildAt(i)?.let { (it.background as? GradientDrawable)?.setColor(if (light) 0x1A000000 else 0x26FFFFFF) }
+        previewDay?.let { highlight(it, false) }
+        if (!window.play(all, i)) return
+        settling.let { main.removeCallbacks(it) }
+        highlight(i, true)
         if (haptics) list.getChildAt(i)?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         val zone = ZoneOffset.ofTotalSeconds(d.utcOffsetSec)
-        val wet = DayLapse.wetWindows(data!!, day.date)
+        val wet = window.wetWindows(all, i)
         val hf = WeatherFormat.hour(context)
         fun hour(ms: Long) = hf.format(Instant.ofEpochMilli(ms).atOffset(zone))
         caption.text = "${dayName(i, day, zone, context.resources.configuration.locales[0])} · " +
             "${WeatherCodes.describe(day.code)} · ${deg(day.highC)} / ${deg(day.lowC)}" +
             (wet.firstOrNull()?.let { (a, b) -> " · " + context.getString(R.string.weather_week_wet, hour(a), hour(b)) } ?: "")
         caption.setTextColor(fg)
-        lapseBar.windows = wet.map { (a, b) -> ((a - day.date) / DAY_MS.toFloat()) to ((b - day.date) / DAY_MS.toFloat()) }
-        playStart = playClock()
-        progress = 0.0
-        // An hour passes in a third of a second here: the scene keeps up close behind.
-        preview.renderer.easeSec = 0.12
-        frame(0.0)
-        preview.jumpTo(SceneModel.at(data!!, playTime(day, 0.0), live = false))
-        overlay.visibility = View.VISIBLE
-        preview.paused = false
-        main.removeCallbacks(play)
-        main.postDelayed(play, STEP_MS)
+    }
+
+    private fun highlight(i: Int, on: Boolean) {
+        list.getChildAt(i)?.let { (it.background as? GradientDrawable)?.setColor(if (on) (if (light) 0x1A000000 else 0x26FFFFFF) else 0) }
     }
 
     /** Stops the time-lapse: the window holds still on the day that was playing. */
     fun stopPreview() {
         val i = previewDay ?: return
-        previewDay = null
-        main.removeCallbacks(play)
-        list.getChildAt(i)?.let { (it.background as? GradientDrawable)?.setColor(0) }
+        window.stop()
+        highlight(i, false)
         caption.text = context.getString(R.string.weather_week_hint)
         caption.setTextColor(dim)
         still(i)
+        onSettled?.invoke()
     }
 
-    /** The time [f] (0..1) through [day]: midnight to midnight there. */
-    private fun playTime(day: DayPoint, f: Double): Long = DayLapse.time(day.date, f)
+    private val main = Handler(Looper.getMainLooper())
+    private val settling = Runnable { if (previewDay == null) preview.paused = true }
 
-    /** The time the preview shows now (tests). */
-    var previewTime: Long? = null
-        private set
-
-    /** Shows the moment [f] of the way through the playing day: scene, numbers, readout and bar. */
-    private fun frame(f: Double) {
-        val i = previewDay ?: return
+    /**
+     * Back to now, smoothly: the window eases from the day it was showing to today's weather now
+     * (sky, sun, clouds and rain all moving there), then rests.
+     */
+    fun returnToNow() {
+        if (previewDay != null) return
         val d = data ?: return
-        val detail = d.detail ?: return
-        val day = detail.daily.getOrNull(i) ?: return
-        val t = playTime(day, f)
-        previewTime = t
-        progress = f
-        val c = SceneModel.at(d, t, live = false)
-        preview.conditions = c
-        val r = DayLapse.readout(d, t)
-        val zone = ZoneOffset.ofTotalSeconds(detail.utcOffsetSec)
-        val hour = WeatherFormat.hour(context).format(Instant.ofEpochMilli(r.hourMs).atOffset(zone))
-        lapseTemp.text = "${WeatherText.f(c.tempC)}°"
-        lapseCondition.text = WeatherCodes.describe(r.code)
-        readout.text = context.getString(R.string.weather_week_readout, hour, deg(r.tempC), r.precipProb ?: 0)
-        lapseBar.progress = f.toFloat()
-    }
-
-    private val play = object : Runnable {
-        override fun run() {
-            if (previewDay == null) return
-            val f = DayLapse.progress(playClock() - playStart)
-            frame(f)
-            // At the end of the day it rests there (the scene still lives) until it's let go.
-            if (f < 1.0) main.postDelayed(this, STEP_MS)
-        }
+        stillDay = null
+        preview.renderer.easeSec = 0.7
+        preview.paused = false
+        preview.conditions = SceneModel.at(d, clock(), live = true)
+        main.removeCallbacks(settling)
+        main.postDelayed(settling, RETURN_SETTLE_MS)
     }
 
     /** Still: day [i] (today: now; another day: its early afternoon), or today now. */
     private fun still(i: Int? = null) {
-        previewTime = null
         stillDay = i
-        overlay.visibility = View.GONE
-        preview.renderer.easeSec = 0.7
         val d = data
         preview.paused = true
         val day = i?.let { d?.detail?.daily?.getOrNull(it) }
@@ -317,12 +222,12 @@ class WeekView(private val context: Context, private val light: Boolean) {
     /** Stops everything (the screen is closing). */
     fun stop() {
         stopPreview()
-        main.removeCallbacks(play)
+        window.stop()
+        main.removeCallbacks(settling)
     }
 
     private companion object {
-        const val STEP_MS = 50L
-        const val DAY_MS = 24 * 3_600_000L
+        const val RETURN_SETTLE_MS = 2_500L
     }
 }
 

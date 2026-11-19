@@ -176,6 +176,17 @@ class DayBarView(context: Context) : View(context) {
         canvas.drawCircle(nx, chartTop - 2 * density, 3.5f * density, fill)
 
         bold.textSize = 12 * density * resources.configuration.fontScale.coerceAtMost(1.3f)
+        // Just back at now (on its own, after a while untouched): the readout says this hour, then fades.
+        val left2 = nowReadoutUntil - android.os.SystemClock.uptimeMillis()
+        if (scrubTime == null && left2 > 0 && data != null) {
+            val label = readout(nowMs)
+            val tw = bold.measureText(label)
+            bold.color = accent()
+            bold.alpha = (255 * (left2 / NOW_FADE_MS.toFloat()).coerceAtMost(1f)).toInt()
+            canvas.drawText(label, (nx - tw / 2).coerceIn(left, right - tw), readoutH - 4 * density, bold)
+            bold.alpha = 255
+            postInvalidateOnAnimation()
+        }
         val s = scrubTime
         if (s != null) {
             val sx = xOf(s)
@@ -213,6 +224,9 @@ class DayBarView(context: Context) : View(context) {
 
     private var downX = 0f
     private var dragging = false
+
+    /** A finger is dragging along the bar. */
+    val isDragging: Boolean get() = dragging
     private var lastHour = Long.MIN_VALUE
     /** The bar hour (0..24) the drag sits on, or null. */
     private var dragHour: Int? = null
@@ -231,6 +245,7 @@ class DayBarView(context: Context) : View(context) {
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                cancelSlide()
                 downX = e.x
                 dragging = false
                 dragHour = scrubHour
@@ -293,6 +308,69 @@ class DayBarView(context: Context) : View(context) {
     }
 
     override fun performClick(): Boolean = super.performClick()
+
+    // ------------------------------------------------------------------ back to now on its own
+
+    /** Sliding back to now (after the screen sat untouched). */
+    var returning = false
+        private set
+
+    /** Until when (uptime) the bar reads out the hour at now, after sliding back to it. */
+    private var nowReadoutUntil = 0L
+
+    /** Whether the readout at now is showing (tests). */
+    val nowReadoutShown: Boolean get() = scrubTime == null && android.os.SystemClock.uptimeMillis() < nowReadoutUntil
+
+    /** The clock the slide runs on (tests can step it). */
+    var slideClock: () -> Long = { android.os.SystemClock.uptimeMillis() }
+
+    private val ease = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+    private var slide: Runnable? = null
+
+    /**
+     * Slides the scrubber from the previewed time back to now over [RETURN_MS], the scene and number
+     * following it ([onScrub] each frame), then goes live with the hour at now read out for a moment.
+     */
+    fun slideToNow(onDone: () -> Unit = {}) {
+        val from = scrubTime ?: return
+        cancelSlide()
+        returning = true
+        val start = slideClock()
+        val step = object : Runnable {
+            override fun run() {
+                val f = ((slideClock() - start).toFloat() / RETURN_MS).coerceIn(0f, 1f)
+                if (f < 1f) {
+                    val t = from + ((nowMs - from) * ease.getInterpolation(f).toDouble()).toLong()
+                    scrubTime = t
+                    lastHour = Math.floorDiv(t, 3_600_000L)
+                    onScrub?.invoke(t)
+                    invalidate()
+                    postOnAnimation(this)
+                } else {
+                    slide = null
+                    returning = false
+                    nowReadoutUntil = android.os.SystemClock.uptimeMillis() + NOW_READOUT_MS
+                    goLive()
+                    onDone()
+                }
+            }
+        }
+        slide = step
+        postOnAnimation(step)
+    }
+
+    /** Stops a slide back to now where it is (a finger came down). */
+    fun cancelSlide() {
+        slide?.let { removeCallbacks(it) }
+        slide = null
+        returning = false
+    }
+
+    companion object {
+        const val RETURN_MS = 1_100L
+        const val NOW_READOUT_MS = 4_000L
+        const val NOW_FADE_MS = 600L
+    }
 }
 
 /** Time formats for the weather screen, at the place's own time. */

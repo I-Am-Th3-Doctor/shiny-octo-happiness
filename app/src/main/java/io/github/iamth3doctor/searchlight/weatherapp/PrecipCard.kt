@@ -135,8 +135,20 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
             .apply { topMargin = px(R.dimen.space_xs) })
 
         graph.onScrub = { t -> onScrub?.invoke(t) }
-        graph.onPickDay = { refreshRows() }
+        graph.onPickDay = { refreshRows(); onPicked?.invoke() }
         styleChips()
+    }
+
+    /** WEEK: a day was picked (the screen's idle timer starts over). */
+    var onPicked: (() -> Unit)? = null
+
+    /** WEEK, on a day after today: away from now. */
+    val awayFromToday: Boolean get() = graph.mode == PrecipGraphView.Mode.WEEK && graph.weekIndex != 0
+
+    /** WEEK: back to today. */
+    fun backToToday() {
+        graph.pickDay(0)
+        refreshRows()
     }
 
     fun setMode(mode: PrecipGraphView.Mode) {
@@ -404,6 +416,11 @@ class PrecipGraphView(context: Context, private val light: Boolean) : View(conte
     }
 
     private fun days() = data?.detail?.daily.orEmpty().take(7)
+
+    fun pickDay(i: Int) {
+        weekIndex = i
+        invalidate()
+    }
 
     /** WEEK: the picked day's time (noon-ish), for its numbers. */
     fun weekDayTime(): Long? = days().getOrNull(weekIndex)?.let { it.date + 12 * 3_600_000L }

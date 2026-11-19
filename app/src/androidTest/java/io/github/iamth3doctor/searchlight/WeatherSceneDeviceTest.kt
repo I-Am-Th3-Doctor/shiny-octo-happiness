@@ -125,6 +125,8 @@ class WeatherSceneDeviceTest {
         repo.holdForTest = true
         WeatherActivity.quietOverride = false
         WeatherSceneView.powerSaveOverride = false
+        // Going back to now on its own is tested on its own; elsewhere it would cut a test's scrub short.
+        WeatherActivity.idleMsOverride = 3_600_000L
         main {
             savedFolded = app.prefs.widgetGrid
             savedUnfolded = app.prefs.widgetGridUnfolded
@@ -158,6 +160,7 @@ class WeatherSceneDeviceTest {
         repo.holdForTest = false
         WeatherActivity.quietOverride = null
         WeatherSceneView.powerSaveOverride = null
+        WeatherActivity.idleMsOverride = null
         repo.searchForTest = null
         main {
             app.prefs.weatherCity = savedCity
@@ -378,10 +381,198 @@ class WeatherSceneDeviceTest {
         idle()
     }
 
+    /** A real touch on [view] at ([x], [y]) in its own coordinates, through the window: down, then up after [holdMs]. */
+    private fun touch(view: View, x: Float, y: Float, holdMs: Long = 0) {
+        val (sx, sy) = screenAt(view, x, y)
+        val d = SystemClock.uptimeMillis()
+        instrumentation.sendPointerSync(MotionEvent.obtain(d, d, MotionEvent.ACTION_DOWN, sx, sy, 0))
+        if (holdMs > 0) Thread.sleep(holdMs)
+        instrumentation.sendPointerSync(MotionEvent.obtain(d, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, sx, sy, 0))
+    }
+
+    private fun screenAt(view: View, x: Float, y: Float): Pair<Float, Float> {
+        val loc = IntArray(2)
+        main { view.getLocationOnScreen(loc) }
+        return (loc[0] + x) to (loc[1] + y)
+    }
+
+    private fun screenTop(v: View): Int = onMain { IntArray(2).also { v.getLocationOnScreen(it) }[1] }
+
     private fun rect(v: View): android.graphics.Rect = onMain {
         val r = android.graphics.Rect()
         if (v.isShown) v.getGlobalVisibleRect(r)
         r
+    }
+
+    @Test fun leftAloneItGoesBackToNow() = screen { h ->
+        main { WeatherActivity.idleMsOverride = null } // the real 15 s
+        force(h, reading(0, 2, 0.0))
+        val liveNumber = on(h) { it.hero.number }
+        val liveCondition = on(h) { it.heroCondition.text.toString() }
+        val bar = on(h) { it.bar }
+        val y = on(h) { bar.height / 2f }
+        assertNull("live: nothing counting", on(h) { it.idleReturnAt })
+
+        // Scrub the bar four hours on (rain there), then put the phone down.
+        val t = h0 + 4 * hour
+        touch(bar, on(h) { bar.xOf(t + 10 * 60_000L) }, y)
+        val scrubbedAt = SystemClock.uptimeMillis()
+        assertEquals(t, on(h) { it.scrubTime })
+        assertEquals("Rain", on(h) { it.heroCondition.text.toString() })
+        val armed = on(h) { it.idleReturnAt }
+        assertNotNull("away from now: counting", armed)
+        assertEquals("15 s from the scrub", 15_000.0, (armed!! - scrubbedAt).toDouble(), 1_500.0)
+        // A finger down pauses the count; lifting it starts it over.
+        val (bx, by) = screenAt(bar, on(h) { bar.xOf(t) }, y)
+        val d = SystemClock.uptimeMillis()
+        instrumentation.sendPointerSync(MotionEvent.obtain(d, d, MotionEvent.ACTION_DOWN, bx, by, 0))
+        assertNull("held: paused", on(h) { it.idleReturnAt })
+        instrumentation.sendPointerSync(MotionEvent.obtain(d, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, bx, by, 0))
+        val restarted = SystemClock.uptimeMillis()
+        assertEquals(t, on(h) { it.scrubTime })
+        assertEquals(15_000.0, (on(h) { it.idleReturnAt }!! - restarted).toDouble(), 1_500.0)
+
+        // Not before 15 s...
+        Thread.sleep((restarted + 13_500 - SystemClock.uptimeMillis()).coerceAtLeast(0))
+        assertEquals("still on the scrubbed hour at 13.5 s", t, on(h) { it.scrubTime })
+        // ...then on its own: the scrubber slides back to NOW, the scene and number with it.
+        val slid = ArrayList<Long>()
+        var backAt = 0L
+        val until = SystemClock.uptimeMillis() + 8_000
+        while (SystemClock.uptimeMillis() < until) {
+            val s = onMain { WeatherActivity.current!!.scrubTime }
+            if (s == null) { backAt = SystemClock.uptimeMillis(); break }
+            if (s != slid.lastOrNull()) slid += s
+            Thread.sleep(16)
+        }
+        assertTrue("went back to now", backAt > 0)
+        val after = backAt - restarted
+        assertTrue("about 15 s after the last touch: $after ms", after in 14_500L..18_500L)
+        val between = slid.filter { it < t }
+        assertTrue("it slid back, not a jump: $slid", between.isNotEmpty())
+        for (i in 1 until slid.size) assertTrue("only ever toward now: $slid", slid[i] <= slid[i - 1])
+        assertFalse(on(h) { it.bar.returning })
+        assertTrue(on(h) { it.conditions().live })
+        assertEquals("the number is now's again", liveNumber, on(h) { it.hero.number })
+        assertEquals(liveCondition, on(h) { it.heroCondition.text.toString() })
+        // The readout says the hour it's back at, for a moment.
+        assertTrue(on(h) { it.bar.nowReadoutShown })
+        val nowHour = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.hour(app)
+            .format(java.time.Instant.ofEpochMilli(System.currentTimeMillis()).atOffset(java.time.ZoneOffset.ofTotalSeconds(off)))
+        assertTrue(on(h) { it.bar.readout(System.currentTimeMillis()) }.startsWith("$nowHour · "))
+        shot("114-back-to-now")
+        assertNull("back at now: nothing counting", on(h) { it.idleReturnAt })
+        waitFor("the rain clears off the scene", 8_000) { look(h).drops == 0 }
+
+        // Scrub, then touch again at 10 s: the count starts over, so it's still there at 15 s and back by 25 s.
+        touch(bar, on(h) { bar.xOf(t + 10 * 60_000L) }, y)
+        val second = SystemClock.uptimeMillis()
+        assertEquals(t, on(h) { it.scrubTime })
+        Thread.sleep((second + 10_000 - SystemClock.uptimeMillis()).coerceAtLeast(0))
+        val scene = on(h) { it.scene }
+        touch(scene, on(h) { scene.width / 2f }, on(h) { scene.height * 0.45f }) // the quick numbers
+        val touchedAt = SystemClock.uptimeMillis()
+        assertTrue(on(h) { it.quickShown })
+        Thread.sleep((second + 16_500 - SystemClock.uptimeMillis()).coerceAtLeast(0))
+        assertEquals("not back at 15 s from the scrub: the touch at 10 s reset it", t, on(h) { it.scrubTime })
+        waitFor("back 15 s after the touch", 8_000) { on(h) { it.scrubTime == null } }
+        val second2 = SystemClock.uptimeMillis() - touchedAt
+        assertTrue("$second2 ms", second2 in 14_500L..18_500L)
+
+        // The 7 days: a day left still after a hold goes back to today, now (a short wait here).
+        main { WeatherActivity.idleMsOverride = 2_000L }
+        h.onActivity { it.setQuick(false); it.openWeek() }
+        settle(h)
+        val week = on(h) { it.week }
+        h.onActivity { week.startPreview(1) }
+        assertNull("playing: paused", on(h) { it.idleReturnAt })
+        h.onActivity { week.stopPreview() }
+        assertEquals(1, on(h) { week.stillDay })
+        assertNotNull(on(h) { it.idleReturnAt })
+        waitFor("the window goes back to now", 6_000) { on(h) { week.stillDay == null && week.preview.conditions!!.live } }
+        assertFalse(on(h) { it.awayFromNow })
+    }
+
+    @Test fun holdingADayOnTheDetailsPlaysItAtTheTop() = screen { h ->
+        force(h, lapseReading())
+        h.onActivity { it.openDetails() }
+        settle(h)
+        val panel = on(h) { it.panel }
+        val rows = on(h) { panel.dayRows.toList() }
+        assertEquals(7, rows.size)
+        val scroll = on(h) { it.dataScroll }
+        val box = on(h) { it.detailLapseBox }
+        val lapse = on(h) { it.detailLapse }
+        assertEquals("shut: no panel", 0, on(h) { box.height })
+        // Scroll the 7 DAYS into view, as a person would.
+        main { scroll.scrollTo(0, (panel.sections["daily"]!!.top - 24 * app.resources.displayMetrics.density).toInt()) }
+        idle()
+        val beforeScroll = on(h) { scroll.scrollY }
+        val beforeTops = panel.sections.mapValues { screenTop(it.value) }
+        val beforeText = texts(on(h) { panel.sections["daily"]!! }).map { it.text.toString() }
+        val rowTop = screenTop(rows[1])
+
+        // Hold tomorrow (on a clock the test drives).
+        val clock = java.util.concurrent.atomic.AtomicLong(1_000_000L)
+        main { lapse.playClock = { clock.get() } }
+        val (rx, ry) = screenAt(rows[1], 40f, 20f)
+        val down = SystemClock.uptimeMillis()
+        instrumentation.sendPointerSync(MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, rx, ry, 0))
+        waitFor("holding plays the day") { on(h) { lapse.day == 1 && lapse.preview.animating } }
+        waitFor("the panel opens") { on(h) { box.open == 1f && box.height > 0 } }
+        idle()
+        assertEquals("from midnight", 0.0, on(h) { lapse.progress }, 0.001)
+        assertEquals(View.VISIBLE, on(h) { lapse.overlay.visibility })
+        // At the top of the screen, above everything in the details (the precip card included).
+        assertTrue("above the details", screenTop(box) + on(h) { box.height } <= screenTop(scroll) + 1)
+        assertEquals("the held row stays under the finger", rowTop.toDouble(), screenTop(rows[1]).toDouble(), 3.0)
+        assertNull("holding: no count", on(h) { it.idleReturnAt })
+        val hf = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.hour(app)
+        val tomorrow = Moon.dayStart(System.currentTimeMillis(), off) + 24 * hour
+        fun hourText(k: Int) = hf.format(java.time.Instant.ofEpochMilli(tomorrow + k * hour).atOffset(java.time.ZoneOffset.ofTotalSeconds(off)))
+        assertEquals(listOf(15 / 24f to 18 / 24f), on(h) { lapse.lapseBar.windows })
+        fun at(hours: Double) {
+            clock.set(1_000_000L + (DayLapse.PLAY_MS * hours / 24).toLong())
+            waitFor("the playhead at $hours h") { abs(on(h) { lapse.progress } - hours / 24) < 0.002 }
+        }
+        at(14.95)
+        assertEquals("${hourText(14)} · ${WeatherText.f(4.0 + 14 * 0.45)}° · 10% rain", on(h) { lapse.readout.text.toString() })
+        assertEquals("dry until 3", 0.0, on(h) { lapse.preview.conditions!!.rain }, 0.0)
+        at(15.1)
+        assertEquals("${hourText(15)} · ${WeatherText.f(4.0 + 15 * 0.45)}° · 80% rain", on(h) { lapse.readout.text.toString() })
+        assertTrue("raining from 3", on(h) { lapse.preview.conditions!!.rain } > 0.4)
+        assertEquals("Rain", on(h) { lapse.lapseCondition.text.toString() })
+        assertEquals(on(h) { lapse.progress }.toFloat(), on(h) { lapse.lapseBar.progress }, 0.001f)
+        at(16.5)
+        waitFor("rain falls in the panel", 6_000) { on(h) { lapse.preview.renderer.dropCount } > 20 }
+        assertTrue(on(h) { lapse.lapseTemp.text.toString() }.endsWith("°"))
+        shot("113-details-hold")
+        at(18.2)
+        assertEquals("dry after 6", 0.0, on(h) { lapse.preview.conditions!!.rain }, 0.0)
+
+        // Let go: it stops, the panel folds away, and the details are exactly as they were.
+        instrumentation.sendPointerSync(MotionEvent.obtain(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, rx, ry, 0))
+        assertNull(on(h) { lapse.day })
+        assertFalse("stopped", on(h) { lapse.preview.animating })
+        waitFor("the panel folds away") { on(h) { box.open == 0f && box.height == 0 } }
+        idle()
+        assertEquals(beforeScroll, on(h) { scroll.scrollY })
+        assertEquals(beforeTops, panel.sections.mapValues { screenTop(it.value) })
+        assertEquals(beforeText, texts(on(h) { panel.sections["daily"]!! }).map { it.text.toString() })
+        assertNull("nothing away from now", on(h) { it.idleReturnAt })
+        assertTrue(on(h) { it.dataShown })
+
+        // A real hold, on the real clock: the whole day in about 9 s, and letting go stops it part way.
+        main { lapse.playClock = { SystemClock.uptimeMillis() } }
+        val d2 = SystemClock.uptimeMillis()
+        instrumentation.sendPointerSync(MotionEvent.obtain(d2, d2, MotionEvent.ACTION_DOWN, rx, ry, 0))
+        waitFor("playing again") { on(h) { lapse.day == 1 } }
+        val began = SystemClock.uptimeMillis()
+        waitFor("to the end of the day", 14_000) { on(h) { lapse.progress } >= 1.0 }
+        val took = SystemClock.uptimeMillis() - began
+        assertTrue("about 9 s: $took", took in 7_500L..11_500L)
+        instrumentation.sendPointerSync(MotionEvent.obtain(d2, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, rx, ry, 0))
+        waitFor("folded") { on(h) { box.height == 0 } }
     }
 
     @Test fun tapTheSceneForTheQuickNumbersTapAgainForTheScene() = screen { h ->
