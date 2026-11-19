@@ -680,9 +680,11 @@ class WeatherSceneDeviceTest {
         }
     }
 
-    private inline fun <reified V : View> firstOf(root: View): V? {
-        if (root is V) return root
-        if (root is android.view.ViewGroup) for (i in 0 until root.childCount) firstOf<V>(root.getChildAt(i))?.let { return it }
+    private inline fun <reified V : View> firstOf(root: View): V? = firstWhere(root) { it is V } as V?
+
+    private fun firstWhere(root: View, match: (View) -> Boolean): View? {
+        if (match(root)) return root
+        if (root is android.view.ViewGroup) for (i in 0 until root.childCount) firstWhere(root.getChildAt(i), match)?.let { return it }
         return null
     }
 

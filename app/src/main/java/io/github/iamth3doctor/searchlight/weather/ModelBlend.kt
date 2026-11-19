@@ -67,7 +67,7 @@ object ModelBlend {
         val daily = root.optJSONObject("daily")
         if (!hasModelKeys(current) && !hasModelKeys(hourly) && !hasModelKeys(daily)) return root
         val out = JSONObject(root.toString())
-        current?.let { out.put("current", blendCurrent(it)) }
+        current?.let { out.put("current", blendCurrent(it, hourly, nowMs)) }
         val hours = hourly?.let { blendHourly(it, nowMs) }
         hours?.let { out.put("hourly", it) }
         daily?.let { out.put("daily", blendDaily(it, hours, nowMs)) }
@@ -129,13 +129,43 @@ object ModelBlend {
 
     // ------------------------------------------------------------------ sections
 
-    /** Now: HRRR's reading (best_match where it has none). */
-    private fun blendCurrent(c: JSONObject): JSONObject {
+    /**
+     * Now: HRRR's reading (best_match where it has none). Open-Meteo answers `current` once, not per
+     * model (it's best_match's); then each value HRRR gives hour by hour is HRRR's, read between the
+     * hours either side of now, and the rest stay best_match's.
+     */
+    private fun blendCurrent(c: JSONObject, hourly: JSONObject?, nowMs: Long): JSONObject {
         val out = JSONObject()
         c.opt("time")?.let { out.put("time", it) }
         c.opt("interval")?.let { out.put("interval", it) }
-        for (b in bases(c)) out.put(b, c.mix(b, null, 1.0) ?: JSONObject.NULL)
+        val split = hasModelKeys(c)
+        for (b in bases(c)) {
+            val v = if (split) c.mix(b, null, 1.0) else hourly?.let { shortAt(it, b, nowMs) } ?: c.opt(b)
+            out.put(b, v ?: JSONObject.NULL)
+        }
         return out
+    }
+
+    /** HRRR's [base] at [nowMs], between the hours either side (a code or flag: the nearer hour's); null if it has none. */
+    private fun shortAt(h: JSONObject, base: String, nowMs: Long): Any? {
+        if (base == "is_day") return null
+        val time = h.optJSONArray("time") ?: return null
+        val a = h.optJSONArray("${base}_$SHORT") ?: return null
+        var i = -1
+        for (k in 0 until time.length()) if (time.optLong(k) * 1000L <= nowMs) i = k else break
+        if (i < 0) return null
+        val t0 = time.optLong(i) * 1000L
+        val f = ((nowMs - t0) / HOUR_MS.toDouble()).coerceIn(0.0, 1.0)
+        val v0 = a.opt(i).num()
+        val v1 = if (i + 1 < a.length()) a.opt(i + 1).num() else null
+        if (base in CATEGORICAL) return (if (f < 0.5 || v1 == null) v0 ?: v1 else v1)?.toInt()
+        if (v0 == null || v1 == null) return if (f < 0.5) v0 else v1
+        if (base == DIRECTION) {
+            val r = Math.toRadians(v0)
+            val q = Math.toRadians(v1)
+            return (Math.toDegrees(atan2((1 - f) * sin(r) + f * sin(q), (1 - f) * cos(r) + f * cos(q))) + 360.0) % 360.0
+        }
+        return v0 + (v1 - v0) * f
     }
 
     private fun blendHourly(h: JSONObject, nowMs: Long): JSONObject {

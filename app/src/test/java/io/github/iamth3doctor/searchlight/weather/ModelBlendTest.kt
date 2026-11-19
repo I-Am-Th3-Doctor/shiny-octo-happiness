@@ -152,6 +152,30 @@ class ModelBlendTest {
         assertEquals(1.5, d.uvIndex!!, 1e-9)
     }
 
+    @Test fun nowIsHrrrsEvenWhenCurrentIsAnsweredOnce() {
+        // As Open-Meteo answers: `current` once (best_match's), the hours per model.
+        val m = multi()
+        m.put("current", JSONObject().put("time", now / 1000).put("temperature_2m", 12.0).put("weather_code", 2)
+            .put("is_day", 1).put("wind_direction_10m", 0).put("apparent_temperature", 9.0).put("uv_index", 1.5))
+        val h = m.getJSONObject("hourly")
+        val temps = h.getJSONArray("temperature_2m_gfs_hrrr")
+        temps.put(at(now), 10.0)
+        temps.put(at(now + hour), 14.0)
+        val half = now + hour / 2
+        val c = ModelBlend.blend(m, half).getJSONObject("current")
+        assertEquals("HRRR, half way between its hours", 12.0, ModelBlend.blend(m, half).getJSONObject("current").getDouble("temperature_2m"), 1e-9)
+        val c0 = ModelBlend.blend(m, now).getJSONObject("current")
+        assertEquals(10.0, c0.getDouble("temperature_2m"), 1e-9)
+        assertEquals("HRRR's code", 61, c.getInt("weather_code"))
+        assertEquals(350.0, c.getDouble("wind_direction_10m"), 1e-6)
+        // Not reported hour by hour: best_match's.
+        assertEquals(9.0, c.getDouble("apparent_temperature"), 1e-9)
+        assertEquals(1.5, c.getDouble("uv_index"), 1e-9)
+        assertEquals(1, c.getInt("is_day"))
+        // Where HRRR has no hour (its hole at +5 h), best_match's reading stands.
+        assertEquals(12.0, ModelBlend.blend(m, now + 5 * hour).getJSONObject("current").getDouble("temperature_2m"), 1e-9)
+    }
+
     @Test fun aSingleModelAnswerPassesThrough() {
         val one = JSONObject("""{"current":{"temperature_2m":5.0,"weather_code":0},"daily":{"temperature_2m_max":[6.0]}}""")
         assertSame(one, ModelBlend.blend(one, now))
