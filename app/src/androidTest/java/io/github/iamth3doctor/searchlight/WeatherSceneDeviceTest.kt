@@ -579,7 +579,7 @@ class WeatherSceneDeviceTest {
         val d2 = SystemClock.uptimeMillis()
         instrumentation.sendPointerSync(MotionEvent.obtain(d2, d2, MotionEvent.ACTION_DOWN, rx, ry, 0))
         waitFor("playing again") { on(h) { lapse.day == 1 } }
-        val began = SystemClock.uptimeMillis()
+        val began = on(h) { SystemClock.uptimeMillis() - (lapse.progress * DayLapse.PLAY_MS).toLong() }
         waitFor("to the end of the day", 14_000) { on(h) { lapse.progress } >= 1.0 }
         val took = SystemClock.uptimeMillis() - began
         assertTrue("about 9 s: $took", took in 7_500L..11_500L)
@@ -756,7 +756,8 @@ class WeatherSceneDeviceTest {
         }
         fun release(d: Long) = main { row.dispatchTouchEvent(MotionEvent.obtain(d, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, 40f, 20f, 0)) }
         var down = hold()
-        val began = SystemClock.uptimeMillis()
+        // When the play began: now, less however far it has already got (seeing the hold can lag a slow frame).
+        val began = on(h) { SystemClock.uptimeMillis() - (week.progress * DayLapse.PLAY_MS).toLong() }
         // (Exactly from the start is checked on the stepped clock below; here, a slow frame may have passed.)
         assertTrue("from the start of the day", on(h) { week.progress } < 0.15)
         assertEquals(View.VISIBLE, on(h) { week.overlay.visibility })
