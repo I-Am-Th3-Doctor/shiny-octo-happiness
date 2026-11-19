@@ -199,7 +199,7 @@ class StickyNoteDeviceTest {
                 val rows = list?.let { l -> (0 until l.childCount).map(l::getChildAt) }.orEmpty()
                 row = rows.firstOrNull { r -> a.getString(R.string.widget_sticky_note) in texts(r) }
                 calendarRow = calendarRow ?: rows.firstOrNull { r -> a.getString(R.string.widget_calendar) in texts(r) }
-                if (row == null) list?.scrollBy(0, list.height / 3) // below the fold: scroll on
+                if (row == null) list?.let { it.scrollBy(0, it.height / 3) } // below the fold: scroll on
             }
             row != null
         }
