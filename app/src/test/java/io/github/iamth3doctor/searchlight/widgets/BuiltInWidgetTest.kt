@@ -29,6 +29,15 @@ class BuiltInWidgetTest {
         assertEquals(2 to 2, BuiltInWidget.WEATHER.defaultCols to BuiltInWidget.WEATHER.defaultRows)
     }
 
+    @Test fun threeWeatherWidgets() {
+        assertEquals(BuiltInWidget.WEATHER_3DAY, BuiltInWidget.fromKey("weather_3day"))
+        assertEquals(BuiltInWidget.WEATHER_DAY, BuiltInWidget.fromKey("weather_day"))
+        assertEquals(2 to 2, BuiltInWidget.WEATHER_3DAY.defaultCols to BuiltInWidget.WEATHER_3DAY.defaultRows)
+        assertEquals(4 to 2, BuiltInWidget.WEATHER_DAY.defaultCols to BuiltInWidget.WEATHER_DAY.defaultRows)
+        assertEquals(3, BuiltInWidget.entries.count { it.isWeather })
+        assertFalse(BuiltInWidget.CALENDAR.isWeather)
+    }
+
     @Test fun builtInsSurviveStorageAndRefitting() {
         val stored = listOf(GridSpec(-1, 0, 0, 4, 2), GridSpec(5, 0, 2, 2, 2))
         assertEquals(stored, WidgetGrid.parse(WidgetGrid.serialize(stored)))

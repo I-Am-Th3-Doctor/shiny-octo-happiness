@@ -81,6 +81,10 @@
     <!-- Weather widget -->
     <dimen name="size_weather_min_width">140dp</dimen>   <!-- smallest it resizes to (2x1) -->
     <dimen name="size_weather_min_height">56dp</dimen>
+    <dimen name="size_weather_3day_min_width">140dp</dimen> <!-- the 3-day widget: 2x2 at least -->
+    <dimen name="size_weather_3day_min_height">120dp</dimen>
+    <dimen name="size_weather_day_min_width">250dp</dimen>  <!-- the today widget: 4x2 at least -->
+    <dimen name="size_weather_day_min_height">120dp</dimen>
     <dimen name="size_weather_visual">48dp</dimen>       <!-- the condition visual, 2x2 / 4x2 -->
     <dimen name="size_weather_visual_compact">40dp</dimen>
     <dimen name="size_weather_visual_hour">22dp</dimen>  <!-- in the hourly strip -->

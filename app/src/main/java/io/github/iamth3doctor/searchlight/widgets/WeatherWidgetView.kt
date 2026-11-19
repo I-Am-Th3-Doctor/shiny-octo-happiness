@@ -36,8 +36,9 @@ import io.github.iamth3doctor.searchlight.weatherapp.WeatherSceneView
  * The scene animates while the home screen shows and holds still otherwise, and in battery saver
  * ([WeatherSceneView]). Offline it keeps the last good scene, with a small glyph in the corner.
  *
- * 2x1 stacks the temperature over high/low on the left of a slim window; 2x2 and 4x2 put them in
- * the corner of a bigger one. Tap: the weather screen ([onOpen]). Long press: the grid's edit mode.
+ * 2x1 stacks the temperature over high/low on the left of a slim window; 4x2 puts them in the
+ * corner of a bigger one. 2x2 is just the place, small at the top, and the temperature, large: the
+ * scene is the condition, and nothing else is on it. Tap: the weather screen ([onOpen]). Long press: the grid's edit mode.
  */
 @SuppressLint("ViewConstructor")
 class WeatherWidgetView(context: Context, private val repo: WeatherRepository) : FrameLayout(context) {
@@ -57,6 +58,7 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
             if (field == value) return
             field = value
             layoutText()
+            render()
         }
 
     private fun px(token: Int) = context.px(token)
@@ -65,6 +67,8 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
     val scene = WeatherSceneView(context, mini = true)
     val tempView: TextView = WholeText(context)
     val hiLoView: TextView = WholeText(context)
+    /** The place, small at the top (2x2 only). */
+    val placeView = TextView(context)
     val offlineGlyph = ImageView(context)
     /** A small gold glyph while a severe-weather alert is in effect. */
     val alertGlyph = ImageView(context)
@@ -110,6 +114,20 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
         hiLoView.type(Type.BODY)
         hiLoView.typeface = Typeface.create(hiLoView.typeface, 700, false)
         hiLoView.ellipsize = TextUtils.TruncateAt.END
+        placeView.type(Type.CAPTION)
+        placeView.typeface = Typeface.create(placeView.typeface, 700, false)
+        placeView.setTextColor(context.color(R.color.on_surface))
+        placeView.isSingleLine = true
+        placeView.ellipsize = TextUtils.TruncateAt.END
+        placeView.includeFontPadding = false
+        placeView.setShadowLayer(pxF(R.dimen.glass_text_shadow) * 1.5f, 0f, pxF(R.dimen.stroke_glass), context.color(R.color.scrim))
+        placeView.visibility = GONE
+        val pp = px(R.dimen.space_s) + px(R.dimen.space_xs)
+        addView(placeView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
+            topMargin = pp
+            marginStart = pp
+            marginEnd = pp + px(R.dimen.space_m)
+        })
         addView(textBox, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START))
 
         offlineGlyph.setImageResource(R.drawable.ic_cloud_off)
@@ -197,9 +215,17 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
         scene.conditions = SceneModel.at(data ?: placeholder(now), now, live = true)
         tempView.text = bigTemp(data?.temperatureC)
         hiLoView.text = if (data != null) context.getString(R.string.weather_widget_hi_lo, "${WeatherText.f(data.highC)}°", "${WeatherText.f(data.lowC)}°") else ""
-        hiLoView.visibility = if (data != null) VISIBLE else GONE
+        val standard = size == Size.STANDARD
+        hiLoView.visibility = if (data != null && !standard) VISIBLE else GONE
+        placeView.text = data?.locationName ?: ""
+        placeView.visibility = if (data != null && standard) VISIBLE else GONE
         offlineGlyph.visibility = if (data != null && state.problem == WeatherRepository.Problem.NETWORK) VISIBLE else GONE
         alertGlyph.visibility = if (io.github.iamth3doctor.searchlight.weather.NwsAlerts.active(data?.alerts, now).isNotEmpty()) VISIBLE else GONE
+        // The place moves over for the alert glyph when there is one.
+        (placeView.layoutParams as? LayoutParams)?.let { lp ->
+            val want = px(R.dimen.space_s) + px(R.dimen.space_xs) + if (alertGlyph.visibility == VISIBLE) px(R.dimen.space_m) + px(R.dimen.space_s) else 0
+            if (lp.marginStart != want) { lp.marginStart = want; placeView.layoutParams = lp }
+        }
         contentDescription = if (data != null) {
             context.getString(R.string.weather_widget_desc, "${WeatherText.f(data.temperatureC)}°F", data.condition, data.locationName)
         } else {

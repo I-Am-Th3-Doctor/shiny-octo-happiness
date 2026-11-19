@@ -154,7 +154,10 @@ class WidgetController(
         BuiltInWidget.fromKey(prefs.builtInTypes[id]) ?: BuiltInWidget.CALENDAR
 
     /** Every built-in widget on the grid (frosted glass surfaces). */
-    fun builtInViews(): List<View> = views.values.filter { it is CalendarWidgetView || it is WeatherWidgetView }
+    fun builtInViews(): List<View> = views.values.filter { it is CalendarWidgetView || it is WeatherWidgetView || it is WeatherForecastWidgetView }
+
+    /** The 3-day and today Weather widgets on the grid, live. */
+    fun forecastViews(): List<WeatherForecastWidgetView> = views.values.filterIsInstance<WeatherForecastWidgetView>()
 
     /** The Weather widgets on the grid, live. */
     fun weatherViews(): List<WeatherWidgetView> = views.values.filterIsInstance<WeatherWidgetView>()
@@ -214,7 +217,7 @@ class WidgetController(
         layout = WidgetGrid.upsert(layout, spot)
         render()
         // A new Weather widget: fresh weather now (the last reading shows meanwhile).
-        if (type == BuiltInWidget.WEATHER) activity.searchlight.weather.refresh()
+        if (type.isWeather) activity.searchlight.weather.refresh()
     }
 
     /** The Calendar widget splits month | agenda from three cells wide; narrower, it stacks them. */
@@ -236,8 +239,16 @@ class WidgetController(
             v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity) }
             v.onOpenAlert = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity, alert = true) }
         }
+        BuiltInWidget.WEATHER_3DAY -> forecastView(WeatherForecastWidgetView.Style.THREE_DAYS)
+        BuiltInWidget.WEATHER_DAY -> forecastView(WeatherForecastWidgetView.Style.DAY)
         BuiltInWidget.CALENDAR -> calendarView()
     }
+
+    private fun forecastView(style: WeatherForecastWidgetView.Style): View =
+        WeatherForecastWidgetView(activity, activity.searchlight.weather, style).also { v ->
+            v.onLongPress = { grid.enterEditModeFromLongPress() }
+            v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity) }
+        }
 
     private fun calendarView(): View = CalendarWidgetView(activity, calendarEvents).also { v ->
         v.onLongPress = { grid.enterEditModeFromLongPress() }
@@ -379,6 +390,8 @@ class WidgetController(
         if (BuiltInWidget.isBuiltIn(id)) {
             val (wRes, hRes) = when (builtInType(id)) {
                 BuiltInWidget.WEATHER -> R.dimen.size_weather_min_width to R.dimen.size_weather_min_height
+                BuiltInWidget.WEATHER_3DAY -> R.dimen.size_weather_3day_min_width to R.dimen.size_weather_3day_min_height
+                BuiltInWidget.WEATHER_DAY -> R.dimen.size_weather_day_min_width to R.dimen.size_weather_day_min_height
                 BuiltInWidget.CALENDAR -> R.dimen.size_cal_min_width to R.dimen.size_cal_min_height
             }
             return WidgetGrid.spanFor(activity.resources.getDimension(wRes) / density, grid.cellWidthDp, grid.cols) to

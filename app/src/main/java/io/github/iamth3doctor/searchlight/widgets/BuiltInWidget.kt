@@ -7,7 +7,14 @@ package io.github.iamth3doctor.searchlight.widgets
  */
 enum class BuiltInWidget(val key: String, val defaultCols: Int, val defaultRows: Int) {
     CALENDAR("calendar", 4, 3),
-    WEATHER("weather", 2, 2);
+    /** The live one: the scene, the temperature now. */
+    WEATHER("weather", 2, 2),
+    /** Today and the next two days. */
+    WEATHER_3DAY("weather_3day", 2, 2),
+    /** Now, large, over the next hours' temperature curve. */
+    WEATHER_DAY("weather_day", 4, 2);
+
+    val isWeather: Boolean get() = this != CALENDAR
 
     companion object {
         fun isBuiltIn(id: Int) = id < 0

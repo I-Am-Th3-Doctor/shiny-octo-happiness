@@ -1278,9 +1278,10 @@ class WeatherSceneDeviceTest {
         assertTrue("frames advance on home", frames(h, v) > f0 + 10)
         waitFor("rain in the window") { on(h) { v.scene.renderer.dropCount > 10 } }
 
-        // Just the temperature and high/low: no table, no sentences.
+        // 2x2: just the place, small at the top, and the temperature: no forecast, no other numbers.
         val shown = texts(v).map { it.text.toString() }
-        assertEquals(listOf("52°F", "H 52° · L 39°"), shown)
+        assertEquals(listOf("Tacoma", "52°F"), shown)
+        assertTrue("the place over the number", rect(v.placeView).bottom <= rect(v.tempView).top)
         // Same reading as the Weather tile.
         val tile = tileLine(h)
         assertTrue("tile: $tile", tile.contains("52°F"))
@@ -1337,7 +1338,8 @@ class WeatherSceneDeviceTest {
             Thread.sleep(500)
             assertEquals(mode, on(h) { v.size })
             assertNull("$size: temperature and high/low whole and inside", on(h) { v.fitProblem() })
-            assertEquals(listOf("52°F", "H 52° · L 39°"), texts(v).map { it.text.toString() })
+            assertEquals(if (mode == WeatherWidgetView.Size.STANDARD) listOf("Tacoma", "52°F") else listOf("52°F", "H 52° · L 39°"),
+                texts(v).map { it.text.toString() })
             assertTrue("$size animating", on(h) { v.scene.animating })
             shot(name)
         }
@@ -1396,7 +1398,7 @@ class WeatherSceneDeviceTest {
             }
             assertEquals(WeatherRepository.Problem.NETWORK, onMain { repo.state.problem })
             waitFor("offline glyph") { on(h) { v.offlineShown } }
-            assertEquals("the last good data", listOf("52°F", "H 52° · L 39°"), texts(v).map { it.text.toString() })
+            assertEquals("the last good data", listOf("Tacoma", "52°F"), texts(v).map { it.text.toString() })
             assertTrue("the last good scene, still moving", on(h) { v.scene.conditions!!.cloudCover > 0.9 && v.scene.animating })
             assertTrue("the last known alert", on(h) { v.alertShown })
             val glyph = on(h) { v.offlineGlyph }
@@ -1569,13 +1571,141 @@ class WeatherSceneDeviceTest {
         assertTrue(texts(on(h) { it.window.decorView }).none { t -> t.text.contains("!") || t.text.contains("alert", ignoreCase = true) })
     }
 
+    // ---- the three Weather widgets ----
+
+    private fun addForecast(h: ActivityScenario<MainActivity>, type: BuiltInWidget): io.github.iamth3doctor.searchlight.widgets.WeatherForecastWidgetView {
+        val before = on(h) { it.widgetController.forecastViews().toSet() }
+        h.onActivity {
+            it.widgetController.onActivityResult(WidgetController.REQUEST_PICK, Activity.RESULT_OK,
+                Intent().putExtra(WidgetPickerActivity.EXTRA_BUILTIN, type.key))
+        }
+        waitFor("$type on the grid") { on(h) { it.widgetController.forecastViews().any { v -> v !in before && v.isAttachedToWindow && v.width > 0 } } }
+        return on(h) { it.widgetController.forecastViews().single { v -> v !in before } }
+    }
+
+    private fun opensTheWeatherScreen(click: () -> Unit) {
+        val monitor = instrumentation.addMonitor(WeatherActivity::class.java.name, null, false)
+        try {
+            click()
+            val opened = monitor.waitForActivityWithTimeout(10_000) as WeatherActivity?
+            assertNotNull("the weather screen opened", opened)
+            main { opened!!.finish() }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
+    }
+
+    @Test fun threeWeatherWidgetsInThePicker() {
+        val picker = ActivityScenario.launchActivityForResult(WidgetPickerActivity::class.java)
+        try {
+            val want = listOf(R.string.widget_weather, R.string.widget_weather_3day, R.string.widget_weather_day).map { app.getString(it) }
+            waitFor("all three Weather widgets offered") {
+                var decor: View? = null
+                picker.onActivity { decor = it.window.decorView }
+                val shown = texts(decor!!).map { it.text.toString() }
+                want.all { it in shown }
+            }
+            shot("118-weather-widget-picker")
+        } finally {
+            picker.close()
+        }
+    }
+
+    @Test fun threeDayWidgetShowsTodayAndTheNextTwoRealDays() = home { h ->
+        val w = reading(61, 100, 1.2)
+        show(w)
+        val v = addForecast(h, BuiltInWidget.WEATHER_3DAY)
+        assertEquals(2 to 2, layout(h).single().let { it.colSpan to it.rowSpan })
+        val days = w.detail!!.daily
+        val zone = java.time.ZoneOffset.ofTotalSeconds(off)
+        fun name(i: Int) = java.time.Instant.ofEpochMilli(days[i].date + 12 * hour).atOffset(zone).dayOfWeek
+            .getDisplayName(java.time.format.TextStyle.SHORT, app.resources.configuration.locales[0]).uppercase(app.resources.configuration.locales[0])
+        val labels = on(h) { v.dayLabels.map { it.text.toString() } }
+        assertEquals(listOf(app.getString(R.string.weather_detail_today).uppercase(), name(1), name(2)), labels)
+        assertEquals("never the same day twice", 3, labels.toSet().size)
+        // Today's high and low take in the reading now, like the Weather tile's.
+        val highs = listOf(maxOf(days[0].highC, w.temperatureC), days[1].highC, days[2].highC).map { "${WeatherText.f(it)}°" }
+        val lows = listOf(minOf(days[0].lowC, w.temperatureC), days[1].lowC, days[2].lowC).map { "${WeatherText.f(it)}°" }
+        assertEquals(highs, on(h) { v.dayHighs.map { it.text.toString() } })
+        assertEquals(lows, on(h) { v.dayLows.map { it.text.toString() } })
+        assertEquals((0..2).map { io.github.iamth3doctor.searchlight.weather.ConditionVisual.of(days[it].code, true) }, on(h) { v.dayVisuals.map { it.visual } })
+        assertTrue("three equal columns", on(h) { v.dayLabels.map { (it.parent as View).width }.toSet().size == 1 })
+        for (i in 0..2) assertTrue("column $i shown", on(h) { v.dayLabels[i].isShown && v.dayHighs[i].isShown && v.dayLows[i].isShown && v.dayVisuals[i].isShown })
+        assertTrue("°F, never °C", texts(v).none { it.text.contains("°C") })
+        assertFalse(on(h) { v.offlineShown })
+        shot("119-weather-widget-3day")
+
+        // A new forecast: it follows.
+        show(w.copy(detail = w.detail!!.copy(daily = days.mapIndexed { i, d -> if (i == 1) d.copy(highC = 20.0) else d })))
+        waitFor("updates with the forecast") { on(h) { v.dayHighs[1].text.toString() } == "${WeatherText.f(20.0)}°" }
+
+        // Offline: the last good days, with just the small glyph.
+        show(w, offline = true)
+        waitFor("offline glyph") { on(h) { v.offlineShown } }
+        assertEquals(highs, on(h) { v.dayHighs.map { it.text.toString() } })
+        assertTrue("no warning text", texts(v).none { it.text.contains("offline", ignoreCase = true) })
+        show(w)
+
+        opensTheWeatherScreen { h.onActivity { v.performClick() } }
+    }
+
+    @Test fun wideWidgetShowsNowAndTheDaysCurve() = home { h ->
+        val w = reading(61, 100, 1.2)
+        show(w)
+        val v = addForecast(h, BuiltInWidget.WEATHER_DAY)
+        assertEquals(4 to 2, layout(h).single().let { it.colSpan to it.rowSpan })
+        assertEquals("52°F", on(h) { v.tempView.text.toString() })
+        assertEquals("Tacoma", on(h) { v.placeView.text.toString() })
+        assertEquals(w.condition.uppercase(), on(h) { v.conditionView.text.toString() })
+        assertEquals(io.github.iamth3doctor.searchlight.weather.ConditionVisual.of(61, true), on(h) { v.visual.visual })
+        // The bar: the whole width, under the rest.
+        val bar = on(h) { v.bar }
+        assertTrue("across the widget", on(h) { bar.width > v.width * 0.85 })
+        assertTrue("under the temperature", rect(bar).top >= rect(on(h) { v.tempView }).bottom)
+        val curve = on(h) { bar.curve }
+        assertNotNull(curve)
+        curve!!
+        // The curve is the forecast's hours from now on (the reading now first).
+        val now = curve.start
+        val hours = w.detail!!.hourly.filter { it.time > now && it.time <= now + 12 * hour }
+        assertEquals(listOf(w.temperatureC) + hours.map { it.tempC }, curve.points.map { it.second })
+        assertEquals(listOf(now) + hours.map { it.time }, curve.points.map { it.first })
+        val hi = curve.points.maxOf { it.second }
+        val lo = curve.points.minOf { it.second }
+        waitFor("drawn") { on(h) { bar.markLabels.isNotEmpty() } }
+        assertEquals("H ${WeatherText.f(hi)}°", on(h) { bar.highLabel })
+        assertEquals("L ${WeatherText.f(lo)}°", on(h) { bar.lowLabel })
+        // NOW, then the hours on the hour, every 3.
+        val marks = curve.marks
+        assertEquals(now, marks.first())
+        assertEquals(app.getString(R.string.weather_widget_now), on(h) { bar.markLabels.first() })
+        assertTrue("$marks", marks.size >= 4)
+        for (k in 2 until marks.size) assertEquals(3 * hour, marks[k] - marks[k - 1])
+        val hf = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.hour(app)
+        assertEquals(marks.drop(1).map { hf.format(java.time.Instant.ofEpochMilli(it).atOffset(java.time.ZoneOffset.ofTotalSeconds(off))) },
+            on(h) { bar.markLabels.drop(1) })
+        // The high sits higher on the bar than the low.
+        assertTrue(on(h) { bar.yOf(hi) < bar.yOf(lo) })
+        assertTrue("°F, never °C", texts(v).none { it.text.contains("°C") })
+        shot("120-weather-widget-wide")
+
+        // Offline: the last good data, just the small glyph.
+        show(w, offline = true)
+        waitFor("offline glyph") { on(h) { v.offlineShown } }
+        assertEquals("52°F", on(h) { v.tempView.text.toString() })
+        assertTrue("small", on(h) { v.offlineGlyph.width <= (24 * app.resources.displayMetrics.density) })
+        show(w)
+
+        opensTheWeatherScreen { h.onActivity { v.performClick() } }
+    }
+
     @Test fun widgetAlertGlyphOpensTheAlert() = home { h ->
         show(reading(1, 25, 0.0))
         val v = addWeather(h)
         assertFalse(on(h) { v.alertShown })
         show(storm(reading(1, 25, 0.0)))
         waitFor("alert glyph") { on(h) { v.alertShown } }
-        assertEquals("still just the temperature and high/low", listOf("52°F", "H 52° · L 39°"), texts(v).map { it.text.toString() })
+        assertEquals("still just the place and the temperature", listOf("Tacoma", "52°F"), texts(v).map { it.text.toString() })
         shot("98-widget-alert")
         val monitor = instrumentation.addMonitor(WeatherActivity::class.java.name, null, false)
         try {

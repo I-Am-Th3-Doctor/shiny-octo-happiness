@@ -439,6 +439,9 @@
 
     <!-- Weather widget -->
     <string name="widget_weather">Weather</string>
+    <string name="widget_weather_3day">Weather · 3 days</string>
+    <string name="widget_weather_day">Weather · today</string>
+    <string name="weather_widget_now">NOW</string>
     <string name="weather_widget_feels">Feels %1$s</string>
     <string name="weather_widget_hi_lo">H %1$s · L %2$s</string>
     <string name="weather_widget_updated">Updated %1$s</string>
