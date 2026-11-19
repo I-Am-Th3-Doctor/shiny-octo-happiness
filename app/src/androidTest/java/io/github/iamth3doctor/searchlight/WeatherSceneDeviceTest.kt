@@ -112,6 +112,19 @@ class WeatherSceneDeviceTest {
         done.await(4, java.util.concurrent.TimeUnit.SECONDS)
     }
 
+    /**
+     * Waits for the app's next frame to be drawn. Where the living scene runs behind the screen, the main
+     * thread never goes idle, so [idle] would wait its whole timeout every time.
+     */
+    private fun nextFrame() {
+        val done = java.util.concurrent.CountDownLatch(1)
+        main {
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+            android.view.Choreographer.getInstance().postFrameCallback { handler.post { done.countDown() } }
+        }
+        done.await(2, java.util.concurrent.TimeUnit.SECONDS)
+    }
+
     private fun shot(name: String) {
         idle()
         Thread.sleep(900)
@@ -453,7 +466,11 @@ class WeatherSceneDeviceTest {
 
         // Not before 5 s...
         Thread.sleep((restarted + 3_800 - SystemClock.uptimeMillis()).coerceAtLeast(0))
-        assertEquals("still on the scrubbed hour at 3.8 s", t, on(h) { it.scrubTime })
+        // Read straight on the main thread: ActivityScenario.onActivity first waits for the app to go idle,
+        // which a living scene can put off past the 5 s.
+        val at38 = onMain { WeatherActivity.current!!.scrubTime to SystemClock.uptimeMillis() - restarted }
+        assertTrue("read in time: ${at38.second} ms", at38.second < 4_800)
+        assertEquals("still on the scrubbed hour at 3.8 s", t, at38.first)
         // ...then on its own: the scrubber slides back to NOW, the scene and number with it.
         val slid = ArrayList<Long>()
         var backAt = 0L
@@ -623,7 +640,8 @@ class WeatherSceneDeviceTest {
         assertNull(on(h) { screen.findViewWithTag<View>("weather_lapse_readout") })
         assertNull(on(h) { screen.findViewWithTag<View>("weather_lapse_bar") })
         assertNull("the time-lapse numbers aren't on the screen at all", on(h) { lapse.overlay.parent })
-        assertTrue(on(h) { texts(screen).none { it.isShown && it.text.contains(" · ") && it.text.contains("% rain") } })
+        val shown = texts(screen)
+        assertTrue(on(h) { shown.none { it.isShown && it.text.contains(" · ") && it.text.contains("% rain") } })
     }
 
     @Test fun dragTheDataScreensSceneThroughTheHours() = screen { h ->
@@ -981,7 +999,7 @@ class WeatherSceneDeviceTest {
         for ((n, k) in keys.withIndex()) {
             val card = cards.getValue(k)
             main { scroll.scrollTo(0, (row(k).top - 24 * app.resources.displayMetrics.density).toInt().coerceAtLeast(0)) }
-            idle()
+            nextFrame()
             val next = below(k)
             // Tap: it grows smoothly, the cards under it sliding down with it; nothing overlaps or jumps.
             // Each sample: the card's height, its bottom, the next row's top, this row's top (the panel's coordinates).
@@ -992,12 +1010,12 @@ class WeatherSceneDeviceTest {
             main { card.performClick() }
             repeat(14) {
                 Thread.sleep(50)
-                idle() // that frame laid out
+                nextFrame() // that frame laid out
                 samples += onMain { listOf(card.height, row(k).top + card.bottom, next?.top ?: Int.MAX_VALUE, row(k).top) }
                 clock.addAndGet(30)
             }
             Thread.sleep(150)
-            idle()
+            nextFrame()
             main { panel.expandClock = { SystemClock.uptimeMillis() } }
             assertEquals(k, on(h) { panel.expanded })
             assertTrue("$k: grows over several frames: ${samples.map { it[0] }.distinct()}", samples.map { it[0] }.distinct().size >= 4)
@@ -1069,7 +1087,7 @@ class WeatherSceneDeviceTest {
         // Tap the open one: it closes; everything is back as it was.
         main { cards.getValue("wind").performClick() }
         waitFor("closed") { on(h) { panel.expanded == null && cards.getValue("wind").expander.open == 0f } }
-        idle()
+        nextFrame()
         assertEquals(shutHeights, onMain { cards.mapValues { it.value.height } })
         assertFalse(onMain { cards.values.any { it.art.active } })
 
@@ -1077,7 +1095,7 @@ class WeatherSceneDeviceTest {
         main { panel.animateOverride = false }
         main { cards.getValue("pressure").performClick() }
         show(reading(2, 40, 0.0))
-        idle()
+        nextFrame()
         waitFor("rebuilt") { on(h) { panel.cards["pressure"] !== cards.getValue("pressure") } }
         assertTrue(on(h) { panel.cards.getValue("pressure").expander.open == 1f && panel.expanded == "pressure" })
         assertTrue("°F everywhere", texts(on(h) { panel.body }).none { it.text.contains("°C") })
@@ -1191,7 +1209,8 @@ class WeatherSceneDeviceTest {
         // The widget and the Weather tile show the same city, in °F.
         home { h ->
             val v = addWeather(h)
-            assertEquals(listOf("60°F", "H 62° · L 50°"), texts(v).map { it.text.toString() })
+            // The 2x2 "now" widget: the city on top and the temperature.
+            assertEquals(listOf("Seattle", "60°F"), texts(v).map { it.text.toString() })
             val tile = tileLine(h)
             assertTrue("tile: $tile", tile.contains("60°F"))
         }
@@ -1629,7 +1648,9 @@ class WeatherSceneDeviceTest {
         assertEquals(highs, on(h) { v.dayHighs.map { it.text.toString() } })
         assertEquals(lows, on(h) { v.dayLows.map { it.text.toString() } })
         assertEquals((0..2).map { io.github.iamth3doctor.searchlight.weather.ConditionVisual.of(days[it].code, true) }, on(h) { v.dayVisuals.map { it.visual } })
-        assertTrue("three equal columns", on(h) { v.dayLabels.map { (it.parent as View).width }.toSet().size == 1 })
+        // Equal to the pixel (a width that doesn't divide by three leaves one a pixel over).
+        val widths = on(h) { v.dayLabels.map { (it.parent as View).width } }
+        assertTrue("three equal columns: $widths", widths.max() - widths.min() <= 1 && widths.min() > 0)
         for (i in 0..2) assertTrue("column $i shown", on(h) { v.dayLabels[i].isShown && v.dayHighs[i].isShown && v.dayLows[i].isShown && v.dayVisuals[i].isShown })
         assertTrue("°F, never °C", texts(v).none { it.text.contains("°C") })
         assertFalse(on(h) { v.offlineShown })
