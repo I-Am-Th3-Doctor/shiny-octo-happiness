@@ -32,6 +32,8 @@ import io.github.iamth3doctor.searchlight.ui.type
 import io.github.iamth3doctor.searchlight.weather.ConditionVisual
 import io.github.iamth3doctor.searchlight.weather.WeatherCodes
 import io.github.iamth3doctor.searchlight.weather.WeatherData
+import io.github.iamth3doctor.searchlight.weather.WeatherSkin
+import io.github.iamth3doctor.searchlight.weatherapp.Skins
 import io.github.iamth3doctor.searchlight.weather.WeatherRepository
 import io.github.iamth3doctor.searchlight.weather.WeatherText
 import io.github.iamth3doctor.searchlight.weather.WidgetForecast
@@ -70,9 +72,14 @@ class WeatherForecastWidgetView(
     private fun px(t: Int) = context.px(t)
     private fun pxF(t: Int) = context.pxF(t)
 
-    private val light = style == Style.THREE_DAYS
-    private val ink = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
-    private val muted = if (light) 0x991C1C21.toInt() else context.color(R.color.on_surface_dim)
+    /** The skin in use ([Skins]): the cards' colors and the text's. */
+    var skin: WeatherSkin = Skins.current
+        private set
+    /** A light card (dark text): the 3-day widget on the default skin, and every card on a light skin. */
+    private val light get() = skin.cardLight(style == Style.THREE_DAYS)
+    private val ink get() = skin.cardInk(style == Style.THREE_DAYS)
+    private val muted get() = skin.cardMuted(style == Style.THREE_DAYS)
+    private val skinListener: () -> Unit = { applySkin(); render() }
 
     val offlineGlyph = ImageView(context)
     val offlineShown: Boolean get() = offlineGlyph.visibility == VISIBLE
@@ -108,15 +115,6 @@ class WeatherForecastWidgetView(
             override fun getOutline(view: View, outline: Outline) = outline.setRoundRect(0, 0, view.width, view.height, r)
         }
         clipToOutline = true
-        background = if (light) {
-            GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFFFBF6EC.toInt(), 0xFFF1E7D6.toInt())).apply { cornerRadius = r }
-        } else {
-            GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFF1C1C21.toInt(), 0xFF0E0E11.toInt())).apply { cornerRadius = r }
-        }
-        foreground = GradientDrawable().apply {
-            cornerRadius = r
-            setStroke(pxF(R.dimen.stroke_glass).toInt().coerceAtLeast(1), if (light) 0x1F000000 else context.color(R.color.glass_border))
-        }
         when (style) {
             Style.THREE_DAYS -> buildDays()
             Style.DAY -> buildDay()
@@ -124,7 +122,6 @@ class WeatherForecastWidgetView(
 
         offlineGlyph.setImageResource(R.drawable.ic_cloud_off)
         offlineGlyph.alpha = 0.75f
-        if (light) offlineGlyph.setColorFilter(ink)
         offlineGlyph.contentDescription = context.getString(R.string.weather_offline_desc)
         offlineGlyph.visibility = GONE
         val g = px(R.dimen.space_m)
@@ -138,6 +135,26 @@ class WeatherForecastWidgetView(
             onLongPress?.invoke()
             true
         }
+        applySkin()
+    }
+
+    /** The skin's colors: the card, its text, the condition's accent, the curve's. */
+    fun applySkin() {
+        skin = Skins.current
+        val r = pxF(R.dimen.radius_card)
+        val (top, bottom) = skin.cardColors(style == Style.THREE_DAYS)
+        background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom)).apply { cornerRadius = r }
+        foreground = GradientDrawable().apply {
+            cornerRadius = r
+            setStroke(pxF(R.dimen.stroke_glass).toInt().coerceAtLeast(1), if (light) 0x1F000000 else context.color(R.color.glass_border))
+        }
+        if (light) offlineGlyph.setColorFilter(ink) else offlineGlyph.clearColorFilter()
+        for (t in dayLabels + dayLows) t.setTextColor(muted)
+        for (t in dayHighs) t.setTextColor(ink)
+        tempView.setTextColor(ink)
+        placeView.setTextColor(ink)
+        conditionView.setTextColor(skin.accent)
+        bar.style(skin.accent, ink, muted, light)
     }
 
     private fun TextView.style(style: Int, weight: Int, color: Int) {
@@ -185,7 +202,7 @@ class WeatherForecastWidgetView(
         tempView.setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(R.dimen.text_weather_temp_wide))
         tempView.ellipsize = null
         placeView.style(Type.BODY, 700, ink)
-        conditionView.style(Type.CAPTION, 700, context.color(R.color.gold))
+        conditionView.style(Type.CAPTION, 700, skin.accent)
         conditionView.letterSpacing = 0.08f
         left.addView(tempView)
         left.addView(placeView, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(R.dimen.space_xs) })
@@ -202,12 +219,15 @@ class WeatherForecastWidgetView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         repo.addListener(listener)
+        Skins.addListener(skinListener)
+        if (skin != Skins.current) applySkin()
         render()
         postDelayed(tick, TICK_MS)
     }
 
     override fun onDetachedFromWindow() {
         repo.removeListener(listener)
+        Skins.removeListener(skinListener)
         removeCallbacks(tick)
         super.onDetachedFromWindow()
     }
@@ -275,7 +295,7 @@ class WeatherForecastWidgetView(
             set(value) { field = value; invalidate() }
 
         private val density = resources.displayMetrics.density
-        private val gold = context.color(R.color.gold)
+        private var gold = context.color(R.color.gold)
         private val glass = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x1FFFFFFF }
         private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE; strokeWidth = 2.5f * density; color = gold
@@ -290,6 +310,18 @@ class WeatherForecastWidgetView(
             typeface = Typeface.create(context.resources.getFont(R.font.lexend), 600, false)
         }
         private val value = Paint(label).apply { color = context.color(R.color.on_surface) ; typeface = Typeface.create(context.resources.getFont(R.font.lexend), 700, false) }
+
+        /** The skin's colors: the curve and dots in [accent], numbers in [ink], hours in [muted]. */
+        fun style(accent: Int, ink: Int, muted: Int, light: Boolean) {
+            gold = accent
+            line.color = accent
+            dot.color = accent
+            value.color = ink
+            label.color = muted
+            glass.color = if (light) 0x14000000 else 0x1FFFFFFF
+            tick.color = if (light) 0x33000000 else 0x40FFFFFF
+            invalidate()
+        }
 
         /** Where each hour mark's label went, and the high's and low's (tests). */
         val markLabels = ArrayList<String>()

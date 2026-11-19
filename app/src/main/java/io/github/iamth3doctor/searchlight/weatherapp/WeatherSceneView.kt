@@ -22,6 +22,20 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
 
     val renderer = SceneRenderer(resources.displayMetrics.density, mini)
 
+    /** Called with each frame drawn: a front layer ([SceneRenderer.layered]) laid over the content redraws with it. */
+    var frontRedraw: (() -> Unit)? = null
+
+    private val skinListener: () -> Unit = { applySkin() }
+
+    /** The skin's colors ([Skins]). */
+    fun applySkin() {
+        val skin = Skins.current
+        renderer.palette = skin.scene
+        renderer.outline = skin.outline
+        invalidate()
+        frontRedraw?.invoke()
+    }
+
     var conditions: SceneConditions? = null
         set(value) {
             val first = field == null
@@ -29,6 +43,7 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
             if (value != null) renderer.setTarget(value, immediate = first)
             updateRunning()
             invalidate()
+            frontRedraw?.invoke()
         }
 
     /** Snap straight to the next [conditions] (no easing): a forced scene in tests, or a new place. */
@@ -57,6 +72,7 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
             lastNs = now
             renderer.step(dt)
             invalidate()
+            frontRedraw?.invoke()
             // The next frame after a pause, not on every vsync: the thread idles in between.
             val spent = (System.nanoTime() - now) / 1_000_000
             // Even when a frame runs long (a slow GPU), leave the thread a real gap to idle in.
@@ -71,6 +87,7 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        applySkin()
     }
 
     fun powerSave(): Boolean = powerSaveOverride
@@ -92,6 +109,8 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        Skins.addListener(skinListener)
+        applySkin()
         if (!receiverOn) {
             ContextCompat.registerReceiver(context, powerReceiver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),
                 ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -101,6 +120,7 @@ class WeatherSceneView(context: Context, val mini: Boolean) : View(context) {
     }
 
     override fun onDetachedFromWindow() {
+        Skins.removeListener(skinListener)
         if (receiverOn) {
             runCatching { context.unregisterReceiver(powerReceiver) }
             receiverOn = false

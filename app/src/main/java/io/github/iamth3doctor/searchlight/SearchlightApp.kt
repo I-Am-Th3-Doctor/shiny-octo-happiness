@@ -68,6 +68,7 @@ class SearchlightApp : Application() {
         currency = CurrencyRates(this)
         background = BackgroundSearch(files, media, messages, calendar)
         weather = WeatherRepository(this, prefs)
+        io.github.iamth3doctor.searchlight.weatherapp.Skins.init(prefs.weatherSkin)
         // Focus: the allowlist starts as the default Phone and Messaging apps (once), and DND
         // follows Focus whichever way it's turned on or off.
         prefs.ensureFocusAllowlist(autoFavorites.defaultPackages())

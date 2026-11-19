@@ -42,7 +42,14 @@ class HeroTempView(context: Context) : View(context) {
     private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = bold }
 
     private val gold = context.color(R.color.gold)
-    private val rust = context.color(R.color.accent)
+
+    /** The skin: the face's colors, the extrusion's, and a bold outline so it reads over any sky. */
+    var skin: io.github.iamth3doctor.searchlight.weather.WeatherSkin = Skins.current
+        set(value) { field = value; invalidate() }
+    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = bold; style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND }
+
+    /** The face's color in the middle (the gold skin keeps its own gold). */
+    private fun faceMid(): Int = if (skin == io.github.iamth3doctor.searchlight.weather.WeatherSkin.GOLD) gold else SceneRenderer.mix(skin.numberTop, skin.numberBottom, 0.45)
 
     /** The largest the number is drawn (it shrinks to fit narrower screens). */
     private val maxSize = 168 * density
@@ -143,15 +150,19 @@ class HeroTempView(context: Context) : View(context) {
         val steps = max(4, (d / max(1f, density * 0.75f)).toInt())
         for (i in steps downTo 1) {
             val f = i / steps.toFloat()
-            side.color = SceneRenderer.mix(rust, 0xFF2A1208.toInt(), f * 0.55)
+            side.color = SceneRenderer.mix(skin.accentDeep, 0xFF2A1208.toInt(), f * 0.55)
             if (i == steps) side.setShadowLayer(size * 0.08f, d * 0.4f, d * 0.8f, 0x80000000.toInt()) else side.clearShadowLayer()
             canvas.drawText(text, x + d * f, baseline + d * f, side)
         }
         side.clearShadowLayer()
 
-        // The face: gold, lit from above.
+        // A cartoon outline round the face, then the face, lit from above.
         val top = baseline + fm.ascent * 0.78f
-        face.shader = LinearGradient(0f, top, 0f, baseline, intArrayOf(0xFFFFE7A3.toInt(), gold, 0xFFF0A23A.toInt()),
+        stroke.textSize = size
+        stroke.color = skin.outline
+        stroke.strokeWidth = size * 0.035f
+        canvas.drawText(text, x, baseline, stroke)
+        face.shader = LinearGradient(0f, top, 0f, baseline, intArrayOf(skin.numberTop, faceMid(), skin.numberBottom),
             floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
         canvas.drawText(text, x, baseline, face)
         face.shader = null
@@ -159,9 +170,9 @@ class HeroTempView(context: Context) : View(context) {
         // The unit, small, up by the degree.
         val ux = x + face.measureText(text) + size * 0.02f
         val uBase = top + unitPaint.textSize * 0.95f
-        unitPaint.color = SceneRenderer.mix(rust, 0xFF2A1208.toInt(), 0.3)
+        unitPaint.color = SceneRenderer.mix(skin.accentDeep, 0xFF2A1208.toInt(), 0.3)
         canvas.drawText("F", ux + d * 0.35f, uBase + d * 0.35f, unitPaint)
-        unitPaint.color = gold
+        unitPaint.color = faceMid()
         canvas.drawText("F", ux, uBase, unitPaint)
     }
 }

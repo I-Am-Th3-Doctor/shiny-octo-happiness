@@ -28,6 +28,7 @@ import io.github.iamth3doctor.searchlight.weather.SceneModel
 import io.github.iamth3doctor.searchlight.weather.WeatherData
 import io.github.iamth3doctor.searchlight.weather.WeatherRepository
 import io.github.iamth3doctor.searchlight.weather.WeatherText
+import io.github.iamth3doctor.searchlight.weatherapp.Skins
 import io.github.iamth3doctor.searchlight.weatherapp.WeatherSceneView
 
 /**
@@ -158,6 +159,25 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
             true
         }
         layoutText()
+        applySkin()
+    }
+
+    private val skinListener: () -> Unit = { applySkin() }
+
+    /** The skin in use ([Skins]): the scene follows it on its own; the text goes dark over a light skin's pale sky. */
+    fun applySkin() {
+        val skin = Skins.current
+        val shadow = pxF(R.dimen.glass_text_shadow) * 1.5f
+        for (t in listOf(tempView, hiLoView, placeView)) {
+            if (skin.light) {
+                t.setTextColor(skin.ink)
+                t.setShadowLayer(shadow, 0f, 0f, 0x99FFFFFF.toInt())
+            } else {
+                t.setTextColor(if (skin == io.github.iamth3doctor.searchlight.weather.WeatherSkin.GOLD) context.color(R.color.on_surface) else skin.ink)
+                t.setShadowLayer(shadow, 0f, pxF(R.dimen.stroke_glass), context.color(R.color.scrim))
+            }
+        }
+        if (skin.light) offlineGlyph.setColorFilter(skin.ink) else offlineGlyph.clearColorFilter()
     }
 
     private fun layoutText() {
@@ -192,12 +212,15 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         repo.addListener(listener)
+        Skins.addListener(skinListener)
+        applySkin()
         render()
         postDelayed(tick, TICK_MS)
     }
 
     override fun onDetachedFromWindow() {
         repo.removeListener(listener)
+        Skins.removeListener(skinListener)
         removeCallbacks(tick)
         super.onDetachedFromWindow()
     }

@@ -12,6 +12,7 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import io.github.iamth3doctor.searchlight.weather.SceneConditions
+import io.github.iamth3doctor.searchlight.weather.ScenePalette
 import io.github.iamth3doctor.searchlight.weather.ScenePhysics
 import java.util.Random
 import kotlin.math.PI
@@ -85,6 +86,34 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
      * time-lapse, where an hour passes in a third of a second, keeps up close behind.
      */
     var easeSec = 0.7
+
+    /** The skin's colors (sky, sun, moon, clouds, rain, hills). */
+    var palette: ScenePalette = ScenePalette.DEFAULT
+        set(value) {
+            if (field === value) return
+            field = value
+            skyShader = null
+            overcastShader = null
+            snowPaint.color = value.snow
+        }
+
+    /**
+     * Cartoon style (the hero): flat, bold shapes with an [outline] — a sun with rays, round-puffed
+     * clouds, chunky rain — rather than the soft, photographic look.
+     */
+    var cartoon = false
+    var outline = 0xFF1A1408.toInt()
+
+    /**
+     * Drawn in two layers: [draw] the scene, [drawFront] a few clouds in front of what's laid over
+     * it (the hero's big number sits inside the weather, clouds drifting across it).
+     */
+    var layered = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (w > 0) seedClouds()
+        }
 
     fun setTarget(c: SceneConditions, immediate: Boolean) {
         target = c
@@ -167,6 +196,8 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         /** +1 fading in, -1 fading out (then gone), 0 settled. */
         var fade: Int,
         val tone: Float,
+        /** In front of the hero's number ([layered]). */
+        val front: Boolean = false,
     )
 
     private val clouds = ArrayList<Cloud>()
@@ -189,7 +220,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         val band = if (mini) 0.5f else 0.42f
         val y = h * (0.1f + rnd.nextFloat() * band)
         return Cloud(x, y, puffs, width / 2 + width * 0.15f, 0.6f + rnd.nextFloat() * 0.8f,
-            if (fadeIn) 0f else 1f, if (fadeIn) 1 else 0, rnd.nextFloat())
+            if (fadeIn) 0f else 1f, if (fadeIn) 1 else 0, rnd.nextFloat(), front = layered && rnd.nextFloat() < 0.3f)
     }
 
     private fun seedClouds() {
@@ -345,7 +376,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
 
     private fun drawBirds(canvas: Canvas) {
         if (birds.isEmpty()) return
-        val c = mix(0xFF2A2F3A.toInt(), 0xFF101318.toInt(), darkness)
+        val c = mix(palette.birds.first, palette.birds.second, darkness)
         boltPaint.color = c
         boltPaint.strokeWidth = (if (mini) 1.1f else 1.6f) * density
         for (b in birds) {
@@ -512,14 +543,24 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         drawMoon(canvas)
         drawSun(canvas)
         drawBirds(canvas)
-        drawClouds(canvas)
+        drawClouds(canvas, front = false)
         drawOvercast(canvas)
         if (boltLife > 0) {
             boltPaint.color = Color.argb((255 * boltLife).toInt(), 255, 250, 225)
-            boltPaint.strokeWidth = (if (mini) 1.6f else 2.6f) * density
+            boltPaint.strokeWidth = (if (mini) 1.6f else if (cartoon) 4f else 2.6f) * density
             canvas.drawPath(bolt, boltPaint)
         }
         drawHills(canvas)
+        drawFrontLayer(canvas)
+    }
+
+    /** The front layer: the clouds that drift in front of whatever is laid on the scene ([layered] only). */
+    fun drawFront(canvas: Canvas) {
+        if (!layered || w <= 0 || h <= 0 || target == null) return
+        drawClouds(canvas, front = true)
+    }
+
+    private fun drawFrontLayer(canvas: Canvas) {
         drawRain(canvas)
         drawSnow(canvas)
         drawFog(canvas)
@@ -527,10 +568,29 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         if (flash > 0) canvas.drawColor(Color.argb((110 * flash * flash).toInt(), 235, 238, 255))
     }
 
+    // ------------------------------------------------------------------ where things are (the hero's leader lines)
+
+    /** Where the sun is drawn (x, y), or null below the horizon. */
+    fun sunPoint(): FloatArray? = if (w <= 0 || sunAlt < -2) null else floatArrayOf(skyX(sunAz), skyY(sunAlt))
+
+    /** Where the moon is drawn (x, y), or null below the horizon. */
+    fun moonPoint(): FloatArray? = if (w <= 0 || moonAlt < -2) null else floatArrayOf(skyX(moonAz), skyY(moonAlt))
+
+    /** The sun by day, else the moon; null with neither up. */
+    fun bodyPoint(): FloatArray? = if (darkness < 0.5) sunPoint() ?: moonPoint() else moonPoint() ?: sunPoint()
+
+    /** A cloud well in view (the most solid), or where the clouds would be. */
+    fun cloudPoint(avoid: ((Float, Float) -> Boolean)? = null): FloatArray {
+        val c = clouds.filter { it.fade >= 0 && it.x > w * 0.12f && it.x < w * 0.88f && avoid?.invoke(it.x, it.y) != true }
+            .maxByOrNull { it.alpha * it.halfWidth }
+        return if (c != null) floatArrayOf(c.x, c.y) else floatArrayOf(w * 0.3f, h * 0.22f)
+    }
+
+    /** The horizon (the hills' tops), from the top. */
+    fun horizonY(): Float = h * 0.84f
+
     // Sky colors by the sun's altitude (degrees), night to full day.
     private val stopsAlt = doubleArrayOf(-18.0, -10.0, -4.0, 0.0, 6.0, 15.0)
-    private val stopsTop = intArrayOf(0xFF050816.toInt(), 0xFF0B1230.toInt(), 0xFF1F2A5A.toInt(), 0xFF3C5A9A.toInt(), 0xFF4A7CC4.toInt(), 0xFF3A78D6.toInt())
-    private val stopsBottom = intArrayOf(0xFF121A36.toInt(), 0xFF2B2A55.toInt(), 0xFFB0607A.toInt(), 0xFFF19A6A.toInt(), 0xFFF6C58A.toInt(), 0xFFA9D3F7.toInt())
 
     private fun byAltitude(stops: IntArray): Int {
         val a = sunAlt
@@ -542,17 +602,18 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
     }
 
     private fun drawSky(canvas: Canvas) {
-        var top = byAltitude(stopsTop)
-        var bottom = byAltitude(stopsBottom)
+        val pal = palette
+        var top = byAltitude(pal.skyTop)
+        var bottom = byAltitude(pal.skyBottom)
         val dark = darkness
-        val grayTop = mix(0xFF7F8A96.toInt(), 0xFF12151B.toInt(), dark)
-        val grayBottom = mix(0xFFB9C1CA.toInt(), 0xFF22272F.toInt(), dark)
+        val grayTop = mix(pal.grayDay.first, pal.grayNight.first, dark)
+        val grayBottom = mix(pal.grayDay.second, pal.grayNight.second, dark)
         val overcast = (cover.pow(1.6) * 0.72 + rain * 0.2 + fog * 0.35).coerceIn(0.0, 0.92)
         top = mix(top, grayTop, overcast)
         bottom = mix(bottom, grayBottom, overcast)
         if (storm > 0) {
-            top = mix(top, 0xFF1A1D26.toInt(), storm * 0.45)
-            bottom = mix(bottom, 0xFF3A3F4A.toInt(), storm * 0.35)
+            top = mix(top, mix(pal.grayNight.first, 0xFF1A1D26.toInt(), 0.5), storm * 0.45)
+            bottom = mix(bottom, mix(pal.grayNight.second, 0xFF3A3F4A.toInt(), 0.5), storm * (if (pal === ScenePalette.DEFAULT) 0.35 else 0.2))
         }
         skyTop = top
         skyBottom = bottom
@@ -573,7 +634,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         paint.style = Paint.Style.FILL
         for (i in 0 until stars.size / 4) {
             val tw = 0.55 + 0.45 * sin(time * (0.8 + (i % 7) * 0.25) + stars[i * 4 + 3])
-            paint.color = Color.argb((255 * vis * tw).toInt().coerceIn(0, 255), 255, 255, 255)
+            paint.color = withAlpha(palette.stars, vis * tw)
             canvas.drawCircle(stars[i * 4], stars[i * 4 + 1], stars[i * 4 + 2], paint)
         }
     }
@@ -590,17 +651,33 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         if (sunAlt < -4) return
         val x = skyX(sunAz)
         val y = skyY(sunAlt)
-        val r = min(w, h) * (if (mini) 0.085f else 0.055f)
+        val r = min(w, h) * (if (mini) 0.085f else if (cartoon) 0.075f else 0.055f)
         val vis = (1 - cover * 0.82 - rain * 0.1).coerceIn(0.1, 1.0) * ((sunAlt + 4) / 6).coerceIn(0.0, 1.0)
         val low = ((8 - sunAlt) / 10).coerceIn(0.0, 1.0)
-        val glowColor = mix(0xFFFFE9A8.toInt(), 0xFFFF9E57.toInt(), low)
+        val glowColor = mix(palette.sunGlow.first, palette.sunGlow.second, low)
         bmpPaint.colorFilter = PorterDuffColorFilter(glowColor, PorterDuff.Mode.SRC_IN)
         bmpPaint.alpha = (255 * vis).toInt()
         val g = r * 5
         rect.set(x - g, y - g, x + g, y + g)
         canvas.drawBitmap(glow, null, rect, bmpPaint)
         paint.style = Paint.Style.FILL
-        paint.color = withAlpha(mix(0xFFFFF4CC.toInt(), 0xFFFFC27A.toInt(), low), vis)
+        val core = mix(palette.sunCore.first, palette.sunCore.second, low)
+        if (cartoon) {
+            // Rays, turning slowly; a flat disc with a bold outline.
+            val rr = r * 1.25f
+            boltPaint.color = withAlpha(core, vis)
+            boltPaint.strokeWidth = r * 0.16f
+            for (k in 0 until 10) {
+                val a = time * 0.12 + k * PI / 5
+                val ca = cos(a).toFloat()
+                val sa = sin(a).toFloat()
+                val len = r * (if (k % 2 == 0) 0.55f else 0.38f)
+                canvas.drawLine(x + ca * (rr + r * 0.1f), y + sa * (rr + r * 0.1f), x + ca * (rr + len), y + sa * (rr + len), boltPaint)
+            }
+            paint.color = withAlpha(outline, vis)
+            canvas.drawCircle(x, y, r * 1.12f, paint)
+        }
+        paint.color = withAlpha(core, vis)
         canvas.drawCircle(x, y, r, paint)
     }
 
@@ -611,11 +688,11 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         if (moonAlt < -4) return
         val x = skyX(moonAz)
         val y = skyY(moonAlt)
-        val r = min(w, h) * (if (mini) 0.07f else 0.045f)
+        val r = min(w, h) * (if (mini) 0.07f else if (cartoon) 0.06f else 0.045f)
         val night = darkness
         val vis = (1 - cover * 0.85).coerceIn(0.08, 1.0) * ((moonAlt + 4) / 6).coerceIn(0.0, 1.0) * (0.35 + 0.65 * night)
         if (night > 0.3) {
-            bmpPaint.colorFilter = PorterDuffColorFilter(0xFFDCE4FF.toInt(), PorterDuff.Mode.SRC_IN)
+            bmpPaint.colorFilter = PorterDuffColorFilter(palette.moonGlow, PorterDuff.Mode.SRC_IN)
             bmpPaint.alpha = (150 * vis * night).toInt()
             val g = r * 4
             rect.set(x - g, y - g, x + g, y + g)
@@ -623,7 +700,11 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         }
         // The dark side, faintly, then the lit part: a half disc and the terminator's half ellipse.
         paint.style = Paint.Style.FILL
-        paint.color = withAlpha(0xFF2A3045.toInt(), vis * 0.55)
+        if (cartoon) {
+            paint.color = withAlpha(outline, vis)
+            canvas.drawCircle(x, y, r * 1.12f, paint)
+        }
+        paint.color = withAlpha(palette.moonDark, if (cartoon) vis else vis * 0.55)
         canvas.drawCircle(x, y, r, paint)
         val waxing = moonAge < 0.5
         val k = cos(2 * PI * moonAge).toFloat() // 1 new, 0 quarter, -1 full
@@ -637,26 +718,30 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         moonPath.close()
         canvas.save()
         if (!waxing) canvas.scale(-1f, 1f, x, y) // waning: lit on the left (northern sky)
-        paint.color = withAlpha(0xFFF4ECCB.toInt(), vis)
+        paint.color = withAlpha(palette.moon, vis)
         canvas.drawPath(moonPath, paint)
         canvas.restore()
     }
 
     private fun cloudColor(): Int {
-        var c = mix(0xFFF6F8FA.toInt(), 0xFF5E6670.toInt(), (rain * 0.75 + storm * 0.25 + (cover - 0.8).coerceAtLeast(0.0)).coerceIn(0.0, 0.85))
-        c = mix(c, 0xFF2A303C.toInt(), darkness * 0.82)
+        val pal = palette
+        var c = mix(pal.cloudClear, pal.cloudRain, (rain * 0.75 + storm * 0.25 + (cover - 0.8).coerceAtLeast(0.0)).coerceIn(0.0, 0.85))
+        c = mix(c, pal.cloudNight, darkness * 0.82)
         val dusk = (1 - abs(sunAlt - 1) / 9).coerceIn(0.0, 1.0)
-        return mix(c, 0xFFF2A97E.toInt(), dusk * 0.28)
+        return mix(c, pal.cloudDusk, dusk * 0.28)
     }
 
-    private fun drawClouds(canvas: Canvas) {
+    private fun drawClouds(canvas: Canvas, front: Boolean) {
         if (clouds.isEmpty()) return
         val base = cloudColor()
         val shade = mix(base, Color.BLACK, 0.22)
         val thick = (0.75 + cover * 0.25)
         for (cl in clouds) {
-            val a = (cl.alpha * thick).toFloat().coerceIn(0f, 1f)
+            if (layered && cl.front != front) continue
+            var a = (cl.alpha * thick).toFloat().coerceIn(0f, 1f)
+            if (front) a *= 0.6f
             if (a <= 0.01f) continue
+            if (cartoon) { drawCartoonCloud(canvas, cl, base, shade, a); continue }
             // The shaded underside first, a little lower; then the cloud.
             for (pass in 0..1) {
                 val color = if (pass == 0) shade else mix(base, Color.WHITE, (cl.tone * 0.08).toDouble())
@@ -672,6 +757,31 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
                     canvas.drawBitmap(puff, null, rect, bmpPaint)
                     i += 3
                 }
+            }
+        }
+    }
+
+    /** A cartoon cloud: round puffs, flat-filled, one bold outline round the lot, a shaded belly. */
+    private fun drawCartoonCloud(canvas: Canvas, cl: Cloud, base: Int, shade: Int, a: Float) {
+        val stroke = (if (mini) 1.5f else 2.5f) * density
+        paint.style = Paint.Style.FILL
+        for (pass in 0..2) {
+            paint.color = when (pass) {
+                0 -> withAlpha(outline, a.toDouble())
+                1 -> withAlpha(shade, a.toDouble())
+                else -> withAlpha(mix(base, Color.WHITE, (cl.tone * 0.08).toDouble()), a.toDouble())
+            }
+            var i = 0
+            while (i < cl.puffs.size) {
+                val r = cl.puffs[i + 2]
+                val px = cl.x + cl.puffs[i]
+                val py = cl.y + cl.puffs[i + 1]
+                when (pass) {
+                    0 -> canvas.drawCircle(px, py, r + stroke, paint)
+                    1 -> canvas.drawCircle(px, py, r, paint)
+                    else -> canvas.drawCircle(px, py - r * 0.12f, r * 0.86f, paint)
+                }
+                i += 3
             }
         }
     }
@@ -695,10 +805,16 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
 
     private fun drawHills(canvas: Canvas) {
         paint.style = Paint.Style.FILL
-        paint.color = mix(skyBottom, 0xFF0E1218.toInt(), 0.55)
+        val m = palette.hillMix
+        paint.color = mix(skyBottom, palette.hillFar, 1 - m)
         canvas.drawPath(farHills, paint)
-        paint.color = mix(skyBottom, 0xFF080A0E.toInt(), 0.75)
+        paint.color = mix(skyBottom, palette.hillNear, 1 - m * 0.5556)
         canvas.drawPath(nearHills, paint)
+        if (cartoon) {
+            boltPaint.color = outline
+            boltPaint.strokeWidth = 2.5f * density
+            canvas.drawPath(nearHills, boltPaint)
+        }
     }
 
     private fun drawRain(canvas: Canvas) {
@@ -712,8 +828,8 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
             lines[j + 2] = rx[i] - vx * rs[i] * len
             lines[j + 3] = ry[i] - vy * rs[i] * len
         }
-        rainPaint.strokeWidth = (if (mini) 0.9f else 1.2f) * density
-        rainPaint.color = withAlpha(0xFFD6E6F5.toInt(), 0.42 + 0.2 * rain - darkness * 0.12)
+        rainPaint.strokeWidth = (if (mini) 0.9f else if (cartoon) 2.4f else 1.2f) * density
+        rainPaint.color = withAlpha(palette.rain, (if (cartoon) 0.7 else 0.42) + 0.2 * rain - darkness * 0.12)
         canvas.drawLines(lines, 0, drops * 4, rainPaint)
     }
 
@@ -727,7 +843,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
 
     private fun drawFog(canvas: Canvas) {
         if (fog < 0.02) return
-        val c = mix(0xFFD9DDE2.toInt(), 0xFF3A4048.toInt(), darkness)
+        val c = mix(palette.fog.first, palette.fog.second, darkness)
         for (b in 0 until 3) {
             val cy = h * (0.55f + b * 0.14f) + (sin(time * 0.15 + b * 2.1) * h * 0.02).toFloat()
             val half = h * 0.12f

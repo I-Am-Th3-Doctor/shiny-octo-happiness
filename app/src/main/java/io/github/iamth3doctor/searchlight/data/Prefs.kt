@@ -228,6 +228,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_WEATHER_SOUND, true)
         set(value) = sp.edit().putBoolean(KEY_WEATHER_SOUND, value).apply()
 
+    /** The weather app's skin ([io.github.iamth3doctor.searchlight.weather.WeatherSkin] key; null: the default). */
+    var weatherSkin: String?
+        get() = sp.getString(KEY_WEATHER_SKIN, null)
+        set(value) = sp.edit().putString(KEY_WEATHER_SKIN, value).apply()
+
     var widgetGridUnfolded: List<GridSpec>
         get() = WidgetGrid.parse(sp.getString(KEY_WIDGET_GRID_UNFOLDED, null))
         set(value) = sp.edit().putString(KEY_WIDGET_GRID_UNFOLDED, WidgetGrid.serialize(value)).apply()
@@ -550,6 +555,7 @@ class Prefs(context: Context) {
         private const val KEY_WIDGET_GRID_UNFOLDED = "widget_grid_unfolded"
         private const val KEY_BUILTIN_TYPES = "builtin_widget_types"
         private const val KEY_WEATHER_SOUND = "weather_sound"
+        private const val KEY_WEATHER_SKIN = "weather_skin"
         private const val KEY_CALENDAR_PERMISSION_ASKED = "calendar_permission_asked"
         private const val KEY_CALENDAR_TARGET = "calendar_target"
         private const val KEY_NEXT_UP_DISMISSED = "next_up_dismissed"

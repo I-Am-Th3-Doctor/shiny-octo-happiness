@@ -26,6 +26,9 @@ import io.github.iamth3doctor.searchlight.weather.WeatherData
 import io.github.iamth3doctor.searchlight.weather.WeatherDetail
 import io.github.iamth3doctor.searchlight.weather.WeatherRepository
 import io.github.iamth3doctor.searchlight.weather.WeatherText
+import io.github.iamth3doctor.searchlight.weather.WeatherSkin
+import io.github.iamth3doctor.searchlight.weather.HeroReadings
+import io.github.iamth3doctor.searchlight.weatherapp.Skins
 import io.github.iamth3doctor.searchlight.weatherapp.PrecipGraphView
 import io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity
 import io.github.iamth3doctor.searchlight.weatherapp.WeatherSceneView
@@ -157,9 +160,13 @@ class WeatherSceneDeviceTest {
             app.prefs.focusMode = false
             app.prefs.tempUnit = TempUnit.FAHRENHEIT
             app.prefs.weatherSound = true
+            savedSkin = app.prefs.weatherSkin
+            Skins.set(app, WeatherSkin.GOLD)
             repo.showForTest(reading(0, 2, 0.0), offline = false)
         }
     }
+
+    private var savedSkin: String? = null
 
     private var savedNight = "no"
 
@@ -185,6 +192,8 @@ class WeatherSceneDeviceTest {
             app.prefs.manualPlace = savedPlace
             app.prefs.tempUnit = savedUnit
             app.prefs.weatherSound = savedSound
+            Skins.set(app, WeatherSkin.of(savedSkin))
+            app.prefs.weatherSkin = savedSkin
             repo.showForTest(savedWeather, offline = false)
         }
         shell("input keyevent KEYCODE_HOME")
@@ -325,19 +334,34 @@ class WeatherSceneDeviceTest {
         assertEquals(-135.0, on(h) { it.quick.windArrow.screenAngle }, 1.0)
         h.onActivity { it.setQuick(false) }
 
-        // The top-left button: a cloud in its circle; one tap opens the full numbers (all eleven).
+        // The top-left button: a cloud in its circle (top left, as before); one tap opens the data screen.
+        cloudButtonOpensTheDataScreen(h)
+    }
+
+    /** One tap on the cloud: the data screen (summary, PRECIP, HOURLY, 7 DAYS), not the metric grid. */
+    private fun cloudButtonOpensTheDataScreen(h: ActivityScenario<WeatherActivity>) {
         val menu = on(h) { it.menuButton }
         assertTrue(on(h) { menu.isShown && menu.width == menu.height && menu.drawable != null })
+        val (mx, my) = screenAt(menu, 0f, 0f)
+        val m = 24 * app.resources.displayMetrics.density
+        assertTrue("top left: $mx, $my", mx < m * 2 && my < m * 6)
         touch(menu, on(h) { menu.width / 2f }, on(h) { menu.height / 2f })
-        assertTrue("one tap opens the numbers", on(h) { it.quickShown })
+        settle(h)
+        assertTrue("one tap opens the data screen", on(h) { it.dataShown })
+        assertFalse("not the metric grid", on(h) { it.quickShown })
+        assertEquals(1, on(h) { it.screens.depth })
+        val panel = on(h) { it.panel }
+        for (k in listOf("now", "precip", "hourly", "daily")) assertTrue(k, on(h) { panel.sections[k] != null && panel.sections[k]!!.isAttachedToWindow })
+        assertTrue("the summary and the precip card in view", on(h) { panel.sections["now"]!!.isShown && panel.sections["precip"]!!.isShown })
+        shot("121-cloud-data-screen")
+        h.onActivity { it.back() }
+        settle(h)
         assertEquals(0, on(h) { it.screens.depth })
+        // The metric grid is still the scene's tap, as before.
+        h.onActivity { it.scene.performClick() }
+        assertTrue(on(h) { it.quickShown })
         val all = listOf("temp", "feels", "cloud", "precip", "wind", "humidity", "dew", "uv", "visibility", "sun", "moon")
         assertEquals(all, on(h) { it.quick.values.keys.toList() })
-        for (k in all) assertTrue(k, on(h) { it.quick.values[k]!!.isShown && it.quick.values[k]!!.text.isNotBlank() })
-        shot("115-menu-cloud-open")
-        // Another tap on the cloud keeps them open (it opens; a tap on the numbers or the scene puts them away).
-        touch(menu, on(h) { menu.width / 2f }, on(h) { menu.height / 2f })
-        assertTrue(on(h) { it.quickShown })
         h.onActivity { it.setQuick(false) }
     }
 
@@ -362,7 +386,7 @@ class WeatherSceneDeviceTest {
         assertEquals(0f, on(h) { it.sound.crickets })
         // The number and the condition show the hour too.
         assertEquals("$wantF", on(h) { it.hero.number })
-        assertEquals("Rain", on(h) { it.heroCondition.text.toString() })
+        assertEquals("RAIN", on(h) { it.heroCondition.text.toString() })
         shot("85-scene-scrubbed")
 
         // Drag back across the bar: the scene follows the finger, hour by hour.
@@ -450,7 +474,7 @@ class WeatherSceneDeviceTest {
         touch(bar, on(h) { bar.xOf(t + 10 * 60_000L) }, y)
         val scrubbedAt = SystemClock.uptimeMillis()
         assertEquals(t, on(h) { it.scrubTime })
-        assertEquals("Rain", on(h) { it.heroCondition.text.toString() })
+        assertEquals("RAIN", on(h) { it.heroCondition.text.toString() })
         val armed = on(h) { it.idleReturnAt }
         assertNotNull("away from now: counting", armed)
         assertEquals("5 s from the scrub", 5_000.0, (armed!! - scrubbedAt).toDouble(), 1_000.0)
@@ -872,7 +896,14 @@ class WeatherSceneDeviceTest {
         assertEquals(on(h) { it.scene.conditions!!.code }, on(h) { week.preview.conditions!!.code })
         val f0 = on(h) { week.preview.renderer.frames }
         waitFor("frames keep coming") { on(h) { week.preview.renderer.frames } > f0 + 15 }
-        assertEquals(View.GONE, on(h) { week.overlay.visibility })
+        // At rest: the bar is today, the gold pin at NOW, the readout now; the day's numbers only while one plays.
+        assertEquals(View.VISIBLE, on(h) { week.overlay.visibility })
+        assertEquals(View.GONE, on(h) { week.window.lapseTop.visibility })
+        val nowF = { ((System.currentTimeMillis() - Moon.dayStart(System.currentTimeMillis(), off)) / (24f * hour)) }
+        assertTrue(on(h) { week.lapseBar.atNow })
+        assertEquals("the pin at NOW", nowF(), on(h) { week.lapseBar.progress }, 0.01f)
+        val nowDeg = "${WeatherText.f(onMain { repo.state.data!!.temperatureC })}°"
+        assertTrue(on(h) { week.readout.text.toString() }, on(h) { week.readout.text.toString() }.startsWith("NOW · $nowDeg · "))
         shot("101-week-live")
         fun hold(): Long {
             val d = SystemClock.uptimeMillis()
@@ -887,6 +918,8 @@ class WeatherSceneDeviceTest {
         // (Exactly from the start is checked on the stepped clock below; here, a slow frame may have passed.)
         assertTrue("from the start of the day", on(h) { week.progress } < 0.15)
         assertEquals(View.VISIBLE, on(h) { week.overlay.visibility })
+        assertEquals(View.VISIBLE, on(h) { week.window.lapseTop.visibility })
+        assertFalse("the pin travels the day", on(h) { week.lapseBar.atNow })
         assertTrue(on(h) { week.caption.text.toString() }, on(h) { week.caption.text.toString() }.contains("rain ${hourText(15)}–${hourText(18)}"))
         assertEquals("the bar marks when rain is due", listOf(15 / 24f to 18 / 24f), on(h) { week.lapseBar.windows })
         val readouts = LinkedHashSet<String>()
@@ -907,13 +940,20 @@ class WeatherSceneDeviceTest {
         assertTrue("the whole day in about 9 s: $took ms", took in 8_000L..10_800L)
         // Every sample's readout is the hour the playhead is in (the 3 PM rain itself: on the stepped clock below).
         assertTrue("the readout moves through the hours: $readouts", readouts.size >= 8)
+        // The pin went the whole way along, start to end, with the readout.
+        assertTrue("from the start", pairs.first().first < 0.15)
+        assertEquals("to the end", 1.0, on(h) { week.lapseBar.progress }.toDouble(), 0.001)
         for ((p, r) in pairs) {
             val k = ((DayLapse.time(tomorrow, p) - tomorrow) / hour).toInt()
             assertTrue("at ${"%.3f".format(p)} the readout is hour $k's: $r", r.startsWith("${hourText(k)} · ") || r.startsWith("${hourText(k - 1)} · "))
         }
         release(down)
         assertNull(on(h) { week.previewDay })
-        assertEquals(View.GONE, on(h) { week.overlay.visibility })
+        assertEquals(View.GONE, on(h) { week.window.lapseTop.visibility })
+        // Let go: the pin slides back to NOW, the readout with it.
+        assertTrue(on(h) { week.lapseBar.atNow })
+        waitFor("the pin back at NOW") { abs(on(h) { week.lapseBar.progress } - nowF()) < 0.01f && !on(h) { week.lapseBar.returning } }
+        assertTrue(on(h) { week.readout.text.toString() }.startsWith("NOW · "))
         // Let go: back to the weather now, still alive.
         assertTrue("back on now", on(h) { week.preview.conditions!!.live })
         assertEquals(System.currentTimeMillis().toDouble(), on(h) { week.preview.conditions!!.timeMs }.toDouble(), 60_000.0)
@@ -1123,7 +1163,7 @@ class WeatherSceneDeviceTest {
         assertEquals("a tick per hour", ticks0 + 4, on(h) { it.bar.ticks })
         val wantF = DayBar.readout(onMain { repo.state.data!! }, h0 + 4 * hour).first
         assertEquals("$wantF", on(h) { hero.number })
-        assertEquals("Rain", on(h) { it.heroCondition.text.toString() })
+        assertEquals("RAIN", on(h) { it.heroCondition.text.toString() })
         assertTrue(on(h) { it.bar.readout(h0 + 4 * hour) }.contains("80% rain"))
         assertTrue("the scene rains", on(h) { it.scene.conditions!!.rain } > 0.5)
         assertTrue("and sounds like rain", on(h) { it.sound.rain } > 0.3f)
@@ -1470,8 +1510,7 @@ class WeatherSceneDeviceTest {
                 for (other in listOf(on(h) { it.placeButton }, on(h) { it.heroCondition }, on(h) { it.bar }, on(h) { it.weekHandle })) {
                     assertFalse("nothing over the number", android.graphics.Rect.intersects(rect(on(h) { it.hero }), rect(other)))
                 }
-                assertEquals("Mainly clear", on(h) { it.heroCondition.text.toString() })
-                assertEquals("H 52° · L 39°", on(h) { it.heroHiLo.text.toString() })
+                assertEquals("MAINLY CLEAR", on(h) { it.heroCondition.text.toString() })
                 assertTrue("the scene still plays behind it", on(h) { it.scene.isShown && it.scene.animating })
                 // Scrubbing: the hero shows that hour.
                 h.onActivity { it.bar.scrubTo(h0 + 4 * hour) }
@@ -1588,6 +1627,196 @@ class WeatherSceneDeviceTest {
         assertFalse(on(h) { it.alertShown })
         assertNull(on(h) { it.scene.conditions!!.severe })
         assertTrue(texts(on(h) { it.window.decorView }).none { t -> t.text.contains("!") || t.text.contains("alert", ignoreCase = true) })
+    }
+
+
+    // ---- phase 9: the hero as one cartoon scene, data round it; skins ----
+
+    private fun current(): WeatherActivity = onMain { WeatherActivity.current!! }
+
+    /** The screen's pixels now (a software copy). */
+    private fun screenPixels(): android.graphics.Bitmap {
+        idle()
+        val b = instrumentation.uiAutomation.takeScreenshot()!!
+        return b.copy(android.graphics.Bitmap.Config.ARGB_8888, false).also { b.recycle() }
+    }
+
+    /** [v]'s box on screen. */
+    private fun screenBox(v: View): android.graphics.Rect = onMain {
+        val o = IntArray(2).also { v.getLocationOnScreen(it) }
+        android.graphics.Rect(o[0], o[1], o[0] + v.width, o[1] + v.height)
+    }
+
+    @Test fun theHeroIsOneCartoonSceneWithTheDataRoundIt() = screen { h ->
+        force(h, reading(80, 60, 1.2, windFrom = 250.0, wind = 14.0))
+        val a = current()
+        // One scene, cartoon-style, filling the screen; the number inside it (clouds drift in front of it).
+        assertTrue(onMain { a.scene.renderer.cartoon && a.scene.renderer.layered })
+        assertEquals(onMain { a.heroScreen.width to a.heroScreen.height }, onMain { a.scene.width to a.scene.height })
+        assertTrue("the number is in the scene, not a header over it", onMain { a.hero.parent === a.heroBox })
+        assertTrue(onMain { a.hero.isShown && a.hero.fits() })
+        assertEquals("${WeatherText.f(11.1)}", onMain { a.hero.number })
+        assertNull("nothing overlaps", onMain { a.heroBox.overlaps() })
+        // The callouts: wind, clouds and rain, sun and moon, temperature, UV and visibility.
+        val callouts = onMain { a.heroBox.callouts }
+        assertEquals(HeroReadings.KEYS, callouts.keys.toList())
+        fun lines(k: String) = onMain { callouts.getValue(k).lines.filter { it.isShown }.map { it.text.toString() } }
+        for (k in HeroReadings.KEYS) assertTrue(k, onMain { callouts.getValue(k).isShown } && lines(k).all { it.isNotBlank() && it != "—" })
+        assertTrue(lines("wind").toString(), lines("wind").single().contains("14 mph WSW"))
+        assertEquals(listOf("Cloud 60%", "Rain 0.05 in/h"), lines("sky"))
+        assertTrue(lines("sun").toString(), lines("sun")[0].contains("7:25") && lines("sun")[0].contains("4:30") && lines("sun")[1].endsWith("% lit"))
+        assertEquals("52°F · Feels 45°", lines("temp")[0])
+        assertEquals("Hum 81% · Dew 44°", lines("temp")[1])
+        assertEquals("30.02 inHg", lines("temp")[2])
+        assertTrue(lines("uv").toString(), lines("uv")[0].startsWith("Max UV ") && lines("uv")[1] == "Vis 15 mi")
+        // A thin leader line from each callout to what it describes.
+        waitFor("leader lines drawn") { onMain { a.leaders.drawn.keys.toSet() } == HeroReadings.KEYS.toSet() }
+        val drawn = onMain { a.leaders.drawn.toMap() }
+        val leaderBox = screenBox(onMain { a.leaders })
+        for ((k, l) in drawn) {
+            val box = screenBox(callouts.getValue(k))
+            val sx = l[0] + leaderBox.left
+            val sy = l[1] + leaderBox.top
+            val onEdge = (abs(sx - box.left) < 2 || abs(sx - box.right) < 2 || abs(sy - box.top) < 2 || abs(sy - box.bottom) < 2) &&
+                sx >= box.left - 2 && sx <= box.right + 2 && sy >= box.top - 2 && sy <= box.bottom + 2
+            assertTrue("$k's line starts on its callout's edge", onEdge)
+            assertFalse("$k's line ends outside its callout", box.contains((l[2] + leaderBox.left).toInt(), (l[3] + leaderBox.top).toInt()))
+        }
+        val number = screenBox(onMain { a.hero })
+        assertTrue("the temperature's line points at the number", number.contains((drawn.getValue("temp")[2] + leaderBox.left).toInt(), (drawn.getValue("temp")[3] + leaderBox.top).toInt()))
+        // Each points where it says: the sun or moon, a cloud, the horizon (the sun and moon's callout across the sky from them).
+        val sceneBox = screenBox(onMain { a.scene })
+        for (k in listOf("sun", "sky", "uv", "wind")) {
+            val want = onMain { a.leaders.targetOf(k)!! }
+            val end = drawn.getValue(k)
+            assertEquals("$k's line end", want[0] + sceneBox.left, end[2] + leaderBox.left, 40f)
+            assertEquals(want[1] + sceneBox.top, end[3] + leaderBox.top, 40f)
+        }
+        onMain { a.scene.renderer.bodyPoint() }?.let { body ->
+            val sun = screenBox(callouts.getValue("sun"))
+            assertFalse("the sun or moon isn't behind its own callout", sun.contains((body[0] + sceneBox.left).toInt(), (body[1] + sceneBox.top).toInt()))
+        }
+        // The condition in words at the bottom, the short timeline under it: NOW, then the next hours.
+        assertEquals(onMain { io.github.iamth3doctor.searchlight.weather.WeatherCodes.describe(80).uppercase() }, onMain { a.heroCondition.text.toString() })
+        val tl = onMain { a.heroBox.timeline }
+        val labels = onMain { tl.labels }
+        assertEquals(5, labels.size)
+        assertEquals("NOW", labels[0])
+        val hf = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.hour(app)
+        assertEquals((1..4).map { hf.format(java.time.Instant.ofEpochMilli(h0 + it * hour).atOffset(java.time.ZoneOffset.ofTotalSeconds(off))) }, labels.drop(1))
+        assertEquals((1..4).map { "${WeatherText.f(11.1 + it * 0.25)}°" }, onMain { tl.temps }.drop(1))
+        val cond = screenBox(onMain { a.heroCondition })
+        val line = screenBox(tl)
+        for (k in HeroReadings.KEYS) assertTrue("$k above the condition", screenBox(callouts.getValue(k)).bottom <= cond.top)
+        assertTrue("the number above the condition", number.bottom <= cond.top)
+        assertTrue("the timeline under the condition", line.top >= cond.bottom - 1)
+        assertTrue("over the 7 DAYS and the bar", line.bottom <= screenBox(onMain { a.weekHandle }).top)
+        // The cloud top left, the place in the middle, mute top right: where they were.
+        val top = listOf(onMain { a.menuButton }, onMain { a.placeButton }, onMain { a.muteButton }).map { screenBox(it) }
+        assertTrue(top[0].right < top[1].left && top[1].right < top[2].left)
+        assertEquals("the place centered", onMain { a.heroScreen.width } / 2f, top[1].exactCenterX(), 4f)
+        assertTrue("°F only", texts(onMain { a.window.decorView }).none { it.text.contains("°C") })
+        assertTrue("still alive", onMain { a.scene.animating })
+        shot("122-hero-callouts")
+
+        // Scrubbing: the number, condition, callouts and timeline all show that hour.
+        h.onActivity { it.bar.scrubTo(h0 + 4 * hour) }
+        assertEquals("${WeatherText.f(11.1 + 4 * 0.25)}", onMain { a.hero.number })
+        assertEquals("RAIN", onMain { a.heroCondition.text.toString() })
+        assertEquals("Cloud 100%", lines("sky")[0])
+        assertEquals("Rain 0.16 in/h", lines("sky")[1])
+        assertTrue("from that hour, not NOW", onMain { tl.labels[0] } != "NOW")
+        waitFor("rain falls") { look(h).drops > 50 }
+        shot("123-hero-scrubbed")
+        h.onActivity { it.bar.goLive() }
+        assertEquals("NOW", onMain { tl.labels[0] })
+
+        // Tap the scene: the metric grid in the hero's place (the callouts and lines go with it).
+        h.onActivity { it.scene.performClick() }
+        assertTrue(onMain { a.quickShown && !a.heroBox.isShown && !a.leaders.isShown })
+        h.onActivity { it.setQuick(false) }
+        assertTrue(onMain { a.heroBox.isShown && a.leaders.isShown })
+
+        // Offline: the last good data, the small glyph, nothing else.
+        show(reading(80, 60, 1.2, windFrom = 250.0, wind = 14.0), offline = true)
+        h.onActivity { it.render() }
+        assertTrue(onMain { a.offlineGlyph.isShown })
+        assertEquals("52°F · Feels 45°", lines("temp")[0])
+        assertTrue("no warning text", texts(onMain { a.window.decorView }).none { it.isShown && it.text.contains("offline", ignoreCase = true) })
+    }
+
+    @Test fun skinsChangeTheWholeAppInOneTap() = home { home ->
+        show(reading(2, 40, 0.0))
+        val live = addWeather(home)
+        val wide = addForecast(home, BuiltInWidget.WEATHER_DAY)
+        val ids = mapOf(WeatherSkin.EMBER to "124-skin-ember", WeatherSkin.PAPER to "125-skin-paper", WeatherSkin.NEON to "126-skin-neon")
+        screen { h ->
+            force(h, reading(2, 40, 0.0))
+            // The menu: top right, by the mute button; the skins, the one in use checked.
+            val button = onMain { current().skinButton }
+            assertTrue(onMain { button.isShown })
+            assertTrue("by the mute button", screenBox(button).right <= screenBox(onMain { current().muteButton }).left)
+            touch(button, 10f, 10f)
+            settle(h)
+            assertTrue(onMain { current().menuShown })
+            assertEquals(WeatherSkin.entries.toList(), onMain { current().skinRows.keys.toList() })
+            assertTrue("the default in use", onMain { current().skinRows.getValue(WeatherSkin.GOLD).isSelected })
+            shot("127-skin-menu")
+
+            for (sk in listOf(WeatherSkin.EMBER, WeatherSkin.PAPER, WeatherSkin.NEON, WeatherSkin.GOLD)) {
+                val before = current()
+                // One tap.
+                val row = onMain { before.skinRows.getValue(sk) }
+                touch(row, 30f, 30f)
+                waitFor("rebuilt in ${sk.title}") { onMain { WeatherActivity.current.let { c -> c != null && c !== before && c.skin == sk && c.menuShown } } }
+                val a = current()
+                waitFor("settled") { onMain { a.scene.width > 0 && !a.screens.moving } }
+                assertTrue("${sk.title} checked", onMain { a.skinRows.getValue(sk).isSelected })
+                assertTrue(onMain { a.skinRows.filterKeys { it != sk }.values.none { it.isSelected } })
+                assertEquals(sk, Skins.current)
+                assertEquals(sk.key, onMain { app.prefs.weatherSkin })
+                onMain { a.back() }
+                waitFor("back on the scene") { onMain { a.screens.depth == 0 && !a.screens.moving } }
+                // The whole screen: scene, number, callouts, condition, the bar's pin, the pills.
+                assertTrue(onMain { a.scene.renderer.palette === sk.scene })
+                assertEquals(sk, onMain { a.hero.skin })
+                assertEquals(sk.ink, onMain { a.heroCondition.currentTextColor })
+                for (c in onMain { a.heroBox.callouts.values }) assertEquals(sk.ink, onMain { c.lines[0].currentTextColor })
+                assertEquals(sk, onMain { a.heroBox.timeline.skin })
+                if (sk != WeatherSkin.GOLD) assertEquals(sk, onMain { a.bar.skin })
+                // Readable: text against what's actually under it, on screen.
+                val px = screenPixels()
+                val d = app.resources.displayMetrics.density
+                fun under(x: Int, y: Int) = px.getPixel(x.coerceIn(0, px.width - 1), y.coerceIn(0, px.height - 1)) or 0xFF000000.toInt()
+                for (c in onMain { a.heroBox.callouts.values }) {
+                    val b = screenBox(c)
+                    val bg = under(b.centerX(), b.top + (2 * d).toInt())
+                    val ratio = WeatherSkin.contrast(sk.ink, bg)
+                    assertTrue("${sk.title}: ${c.key} reads (${"%.1f".format(ratio)})", ratio >= 4.5)
+                }
+                val cond = screenBox(onMain { a.heroCondition })
+                val condBg = under(cond.left + (16 * d).toInt(), cond.centerY())
+                assertTrue("${sk.title}: the condition reads", WeatherSkin.contrast(sk.ink, condBg) >= 4.5)
+                px.recycle()
+                ids[sk]?.let { shot(it) }
+                // And the widgets changed with it.
+                assertTrue(onMain { live.scene.renderer.palette === sk.scene })
+                val liveInk = if (sk.light) sk.ink else if (sk == WeatherSkin.GOLD) 0xFFFFFFFF.toInt() else sk.ink
+                assertEquals(liveInk, onMain { live.tempView.currentTextColor })
+                assertEquals(sk, onMain { wide.skin })
+                assertEquals(sk.cardInk(false), onMain { wide.tempView.currentTextColor })
+                assertEquals(sk.accent, onMain { wide.conditionView.currentTextColor })
+                assertEquals(listOf(sk.cardColors(false).first, sk.cardColors(false).second),
+                    onMain { (wide.background as android.graphics.drawable.GradientDrawable).colors!!.toList() })
+                assertTrue("°F only", texts(onMain { a.window.decorView }).none { it.text.contains("°C") })
+                if (sk != WeatherSkin.GOLD) {
+                    touch(onMain { a.skinButton }, 10f, 10f)
+                    waitFor("menu") { onMain { a.menuShown && !a.screens.moving } }
+                }
+            }
+        }
+        // The home screen's widgets in the last skin shown: back to gold.
+        assertEquals(WeatherSkin.GOLD, Skins.current)
     }
 
     // ---- the three Weather widgets ----

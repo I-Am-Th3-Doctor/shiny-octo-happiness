@@ -189,32 +189,71 @@ class WeekView(private val context: Context, private val light: Boolean) {
     fun stop() = stopPreview()
 }
 
-/** The time-lapse's thin bar: the whole day, when rain is due (blue), and how far it has played. */
+/**
+ * The time-lapse's bar: the whole day, when rain is due (blue), and the gold pin where the day is.
+ * While a day plays the pin travels it, start to end; at rest it stands at NOW (and slides back
+ * there when the day is let go).
+ */
 class LapseBarView(context: Context) : View(context) {
     /** Wet spans as fractions of the day. */
     var windows: List<Pair<Float, Float>> = emptyList()
         set(value) { field = value; invalidate() }
+    /** Where the pin is (0..1 through the day). */
     var progress = 0f
         set(value) { field = value.coerceIn(0f, 1f); invalidate() }
+    /** At rest: the pin marks now (not a played moment). */
+    var atNow = true
+        set(value) { field = value; invalidate() }
 
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     private val wet = context.color(R.color.weather_drop)
+    private var slide: android.animation.ValueAnimator? = null
+
+    /** Sliding back to NOW. */
+    val returning: Boolean get() = slide != null
+
+    /** Slides the pin to [f] (NOW), easing. */
+    fun returnTo(f: Float) {
+        cancelReturn()
+        if (!android.animation.ValueAnimator.areAnimatorsEnabled()) { progress = f; return }
+        slide = android.animation.ValueAnimator.ofFloat(progress, f).apply {
+            duration = 420
+            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+            addUpdateListener { progress = it.animatedValue as Float }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) { if (slide === animation) slide = null }
+            })
+            start()
+        }
+    }
+
+    fun cancelReturn() {
+        val s = slide ?: return
+        slide = null
+        s.cancel()
+    }
 
     override fun onDraw(canvas: android.graphics.Canvas) {
         val d = resources.displayMetrics.density
         val h = 4 * d
         val cy = height / 2f
         val r = h / 2
-        val l = 6 * d
+        val l = 8 * d
         val w = width - 2 * l
-        paint.color = 0x40FFFFFF
+        val pin = Skins.current.accent
+        paint.color = if (Skins.current.light) 0x33000000 else 0x40FFFFFF
         canvas.drawRoundRect(l, cy - r, l + w, cy + r, r, r, paint)
         paint.color = wet
         for ((a, b) in windows) canvas.drawRoundRect(l + w * a, cy - r, l + w * b, cy + r, r, r, paint)
-        paint.color = 0xE6FFFFFF.toInt()
+        paint.color = SceneRenderer.withAlpha(pin, 0.9)
         canvas.drawRoundRect(l, cy - r / 2, l + w * progress, cy + r / 2, r, r, paint)
+        // The pin: gold, with a dark ring so it reads over any sky.
+        val x = l + w * progress
         paint.setShadowLayer(3 * d, 0f, 0f, 0x80000000.toInt())
-        canvas.drawCircle(l + w * progress, cy, 5 * d, paint)
+        paint.color = 0xFF1A1408.toInt()
+        canvas.drawCircle(x, cy, 7 * d, paint)
         paint.clearShadowLayer()
+        paint.color = pin
+        canvas.drawCircle(x, cy, 5.5f * d, paint)
     }
 }

@@ -41,6 +41,10 @@ class DayBarView(context: Context) : View(context) {
     var light = false
         set(value) { field = value; invalidate() }
 
+    /** A skin other than the default: its text and accent colors. */
+    var skin: io.github.iamth3doctor.searchlight.weather.WeatherSkin? = null
+        set(value) { field = value; invalidate() }
+
     private var data: WeatherData? = null
     private var nowMs = 0L
     /** The previewed time, or null when live. */
@@ -74,9 +78,9 @@ class DayBarView(context: Context) : View(context) {
         invalidate()
     }
 
-    private fun fg() = if (light) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
-    private fun dim() = if (light) 0x991C1C21.toInt() else 0xB3FFFFFF.toInt()
-    private fun accent() = context.color(if (light) R.color.accent else R.color.gold)
+    private fun fg() = skin?.ink ?: if (light) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
+    private fun dim() = skin?.inkDim ?: if (light) 0x991C1C21.toInt() else 0xB3FFFFFF.toInt()
+    private fun accent() = skin?.accent ?: context.color(if (light) R.color.accent else R.color.gold)
 
     private val zone get() = ZoneOffset.ofTotalSeconds(data?.detail?.utcOffsetSec ?: 0)
     private fun hourLabel(t: Long) = WeatherFormat.hour(context).format(Instant.ofEpochMilli(t).atOffset(zone))

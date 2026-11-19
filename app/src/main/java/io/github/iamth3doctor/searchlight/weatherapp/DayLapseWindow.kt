@@ -50,7 +50,13 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
         }
     }
     val preview = WeatherSceneView(context, mini = false)
-    val overlay = FrameLayout(context).apply { visibility = View.GONE }
+    /**
+     * Over the card: the bar with its pin and the hour readout (always: at rest the pin stands at
+     * NOW), and while a day plays, its temperature and condition ([lapseTop]).
+     */
+    val overlay = FrameLayout(context).apply { visibility = if (card) View.VISIBLE else View.GONE }
+    /** The played day's temperature and condition (only while one plays). */
+    val lapseTop = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
     val lapseTemp = TextView(context)
     val lapseCondition = TextView(context)
     val readout = TextView(context)
@@ -89,17 +95,19 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
     private fun px(t: Int) = context.px(t)
 
     private fun buildOverlay() {
-        val white = 0xFFFFFFFF.toInt()
+        // Over a light skin's pale sky, dark text; otherwise white, shadowed.
+        val skin = Skins.current
+        val ink = if (skin.light) skin.ink else 0xFFFFFFFF.toInt()
         val shadow = context.pxF(R.dimen.glass_text_shadow)
         fun TextView.glass(style: Int, bold: Boolean) {
             type(style)
             if (bold) typeface = Typeface.create(typeface, 700, false)
-            setTextColor(white)
+            setTextColor(ink)
             includeFontPadding = false
-            setShadowLayer(shadow, 0f, 1f, 0x99000000.toInt())
+            setShadowLayer(shadow, 0f, 1f, if (skin.light) 0x99FFFFFF.toInt() else 0x99000000.toInt())
         }
         val m = px(R.dimen.space_s) + px(R.dimen.space_xs)
-        val top = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val top = lapseTop
         lapseTemp.glass(Type.GLANCE, bold = true)
         lapseTemp.tag = "weather_lapse_temp"
         lapseCondition.glass(Type.BODY, bold = true)
@@ -132,6 +140,8 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
         this.data = data
         day = i
         lapseBar.windows = wetWindows(data, i).map { (a, b) -> ((a - dayPoint.date) / DAY_MS.toFloat()) to ((b - dayPoint.date) / DAY_MS.toFloat()) }
+        lapseBar.cancelReturn()
+        lapseBar.atNow = false
         playStart = playClock()
         progress = 0.0
         // An hour passes in a third of a second here: the scene keeps up close behind.
@@ -139,6 +149,7 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
         frame(0.0)
         preview.jumpTo(SceneModel.at(data, DayLapse.time(dayPoint.date, 0.0), live = false))
         overlay.visibility = View.VISIBLE
+        lapseTop.visibility = View.VISIBLE
         preview.paused = false
         main.removeCallbacks(tick)
         main.postDelayed(tick, STEP_MS)
@@ -150,7 +161,8 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
         day = null
         previewTime = null
         main.removeCallbacks(tick)
-        overlay.visibility = View.GONE
+        lapseTop.visibility = View.GONE
+        if (!card) overlay.visibility = View.GONE
         showLive(data, now)
     }
 
@@ -164,6 +176,23 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
         preview.renderer.easeSec = 0.7
         preview.paused = false
         if (data != null) preview.conditions = SceneModel.at(data, now, live = true)
+        if (card) showNowOnBar(data, now)
+    }
+
+    /** At rest, the card's bar is today, its pin at NOW (sliding back there from a played day), the readout now. */
+    private fun showNowOnBar(data: WeatherData?, now: Long) {
+        val detail = data?.detail
+        val today = io.github.iamth3doctor.searchlight.weather.Moon.dayStart(now, detail?.utcOffsetSec ?: 0)
+        val f = ((now - today) / DAY_MS.toFloat()).coerceIn(0f, 1f)
+        val todayIndex = detail?.daily?.indexOfFirst { abs(it.date - today) < 3 * 3_600_000L } ?: -1
+        lapseBar.windows = if (data != null && todayIndex >= 0) wetWindows(data, todayIndex).map { (a, b) ->
+            ((a - today) / DAY_MS.toFloat()) to ((b - today) / DAY_MS.toFloat()) } else emptyList()
+        if (!lapseBar.atNow) lapseBar.returnTo(f) else if (!lapseBar.returning) lapseBar.progress = f
+        lapseBar.atNow = true
+        if (data == null) { readout.text = ""; return }
+        val r = DayLapse.readout(data, now)
+        readout.text = context.getString(R.string.weather_week_readout, context.getString(R.string.weather_bar_now).uppercase(),
+            deg(data.temperatureC), r.precipProb ?: 0)
     }
 
     /** Shows the hour [t] (dragged to on the scene), easing there; [showLive] goes back to now. Not while a day plays. */
