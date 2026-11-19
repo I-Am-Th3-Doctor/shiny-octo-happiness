@@ -237,6 +237,11 @@ class Prefs(context: Context) {
         get() = WidgetGrid.parse(sp.getString(KEY_WIDGET_GRID_UNFOLDED, null))
         set(value) = sp.edit().putString(KEY_WIDGET_GRID_UNFOLDED, WidgetGrid.serialize(value)).apply()
 
+    /** The Sticky note widget's paper (StickyNote.Paper.key; null: yellow). */
+    var stickyNotePaper: String?
+        get() = sp.getString(KEY_STICKY_NOTE_PAPER, null)
+        set(value) = sp.edit().putString(KEY_STICKY_NOTE_PAPER, value).apply()
+
     /** The calendar the Calendar widget adds events to (-1: the primary Google calendar). */
     var calendarTarget: Long
         get() = sp.getLong(KEY_CALENDAR_TARGET, -1L)
@@ -558,6 +563,7 @@ class Prefs(context: Context) {
         private const val KEY_WEATHER_SKIN = "weather_skin"
         private const val KEY_CALENDAR_PERMISSION_ASKED = "calendar_permission_asked"
         private const val KEY_CALENDAR_TARGET = "calendar_target"
+        private const val KEY_STICKY_NOTE_PAPER = "sticky_note_paper"
         private const val KEY_NEXT_UP_DISMISSED = "next_up_dismissed"
         private const val KEY_TEMP_UNIT = "temp_unit"
         private const val KEY_PLACE_NAME = "place_name"

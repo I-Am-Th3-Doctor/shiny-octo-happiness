@@ -160,6 +160,17 @@
     <string name="widget_picker_row">%1$s · %2$s</string>
     <string name="widget_builtin_app">Searchlight</string>
     <string name="widget_calendar">Calendar</string>
+    <string name="widget_sticky_note">Sticky note</string>
+    <string name="sticky_nothing">Nothing on today</string>
+    <string name="sticky_more">+%1$d more</string>
+    <string name="sticky_all_day">All day</string>
+    <string name="sticky_untitled">(No title)</string>
+    <string name="sticky_allow">Tap to allow calendar access</string>
+    <string name="settings_sticky_paper">Sticky note color</string>
+    <string name="sticky_paper_yellow">Yellow</string>
+    <string name="sticky_paper_pink">Pink</string>
+    <string name="sticky_paper_blue">Blue</string>
+    <string name="sticky_paper_green">Green</string>
     <!-- Calendar widget -->
     <string name="cal_prev_month">Previous month</string>
     <string name="cal_next_month">Next month</string>

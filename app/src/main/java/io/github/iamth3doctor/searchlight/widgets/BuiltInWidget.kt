@@ -12,9 +12,14 @@ enum class BuiltInWidget(val key: String, val defaultCols: Int, val defaultRows:
     /** Today and the next two days. */
     WEATHER_3DAY("weather_3day", 2, 2),
     /** Now, large, over the next hours' temperature curve. */
-    WEATHER_DAY("weather_day", 4, 2);
+    WEATHER_DAY("weather_day", 4, 2),
+    /** Today on a paper sticky note: 2 × 2, and it stays that size. */
+    STICKY_NOTE("sticky_note", 2, 2);
 
-    val isWeather: Boolean get() = this != CALENDAR
+    val isWeather: Boolean get() = this == WEATHER || this == WEATHER_3DAY || this == WEATHER_DAY
+
+    /** Its size is fixed: no resize handles. */
+    val fixedSize: Boolean get() = this == STICKY_NOTE
 
     companion object {
         fun isBuiltIn(id: Int) = id < 0

@@ -105,6 +105,8 @@ class SettingsActivity : Activity() {
         binding.reindex.setOnClickListener { app.files.rescan() }
         binding.about.text = getString(R.string.settings_about, BuildConfig.VERSION_NAME)
         binding.calendarTargetRow.setOnClickListener { pickCalendarTarget() }
+        binding.stickyPaperRow.setOnClickListener { pickStickyPaper() }
+        renderStickyPaper()
         binding.calendarMoveLocal.setOnClickListener { confirmMoveLocal() }
 
         prefs.addFavoritesListener(favoritesChanged)
@@ -153,6 +155,29 @@ class SettingsActivity : Activity() {
                 binding.calendarMoveLocal.visibility = if (local > 0 && target != null) android.view.View.VISIBLE else android.view.View.GONE
             }
         }
+    }
+
+    private fun paperLabel(p: io.github.iamth3doctor.searchlight.calendar.StickyNote.Paper) = getString(when (p) {
+        io.github.iamth3doctor.searchlight.calendar.StickyNote.Paper.YELLOW -> R.string.sticky_paper_yellow
+        io.github.iamth3doctor.searchlight.calendar.StickyNote.Paper.PINK -> R.string.sticky_paper_pink
+        io.github.iamth3doctor.searchlight.calendar.StickyNote.Paper.BLUE -> R.string.sticky_paper_blue
+        io.github.iamth3doctor.searchlight.calendar.StickyNote.Paper.GREEN -> R.string.sticky_paper_green
+    })
+
+    private fun renderStickyPaper() {
+        binding.stickyPaperValue.text = paperLabel(io.github.iamth3doctor.searchlight.calendar.StickyNote.Paper.of(prefs.stickyNotePaper))
+    }
+
+    /** The Sticky note's paper: yellow, pink, blue or green (home repaints on return). */
+    private fun pickStickyPaper() {
+        val papers = io.github.iamth3doctor.searchlight.calendar.StickyNote.Paper.entries
+        val current = io.github.iamth3doctor.searchlight.calendar.StickyNote.Paper.of(prefs.stickyNotePaper)
+        AlertDialog.Builder(this).setTitle(R.string.settings_sticky_paper)
+            .wrappingSingleChoice(papers.map(::paperLabel), papers.indexOf(current)) { d, which ->
+                d.dismiss()
+                prefs.stickyNotePaper = papers[which].key
+                renderStickyPaper()
+            }.show()
     }
 
     /** Synced calendars only: a phone-only calendar is never offered. */
