@@ -1003,6 +1003,7 @@ class WeatherActivity : Activity() {
         if (panel.precip.awayFromToday) panel.precip.backToToday()
         if (bar.scrubTime != null) bar.slideToNow { render() }
         endDetailScrub()
+        disarmIdle()
     }
 
     // ------------------------------------------------------------------ sound and haptics
