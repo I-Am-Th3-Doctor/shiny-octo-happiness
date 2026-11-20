@@ -1,18 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="toy_purple">#FF8A2BFF</color>
-    <color name="toy_sky">#FF00A8FF</color>
+    <color name="black">#FF000000</color>
 
-    <style name="Theme.ChildsPlay" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/toy_purple</item>
+    <style name="Theme.Something" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/black</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowShowWallpaper">false</item>
-    </style>
-
-    <style name="Theme.HeroWeather" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/toy_sky</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

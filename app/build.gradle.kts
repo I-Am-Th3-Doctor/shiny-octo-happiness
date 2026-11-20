@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.childsplay.launcher"
+    namespace = "com.something.launcher"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.childsplay.launcher"
+        applicationId = "com.something.launcher"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

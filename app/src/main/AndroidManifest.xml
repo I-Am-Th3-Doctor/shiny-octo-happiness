@@ -32,6 +32,10 @@
         <intent>
             <action android:name="android.settings.SETTINGS" />
         </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
     </queries>
 
     <application
@@ -41,7 +45,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
-        android:theme="@style/Theme.ChildsPlay">
+        android:theme="@style/Theme.Something">
 
         <activity
             android:name=".MainActivity"
@@ -68,8 +72,8 @@
             android:label="@string/weather_name"
             android:icon="@mipmap/ic_weather"
             android:roundIcon="@mipmap/ic_weather"
-            android:taskAffinity="com.childsplay.heroweather"
-            android:theme="@style/Theme.HeroWeather"
+            android:taskAffinity="com.something.weather"
+            android:theme="@style/Theme.Something"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
