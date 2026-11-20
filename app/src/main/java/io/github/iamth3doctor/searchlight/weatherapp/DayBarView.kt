@@ -24,6 +24,8 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
+// Not used by Searchlight: kept for the second launcher's hero screen (the full-screen scene,
+// its giant number, callouts, day bar, quick numbers, 7-day view and sound).
 /**
  * "Play the weather": the day at a glance along the bottom of the weather screen. The temperature
  * across the next day as a line (its high and low marked), rain chances as blue bars under it,

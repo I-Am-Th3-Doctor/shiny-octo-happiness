@@ -23,8 +23,9 @@ import java.util.Date
 
 /**
  * Icon, then one line: place · temp · condition · high/low · updated (it scrolls when it
- * doesn't fit). Tap: open your weather app (chosen on first tap), or set a location / retry
- * when there's no weather to show.
+ * doesn't fit). Tap: open your weather app (chosen in Settings or from the long-press menu);
+ * with none chosen, or one that can't be opened, the weather's conditions screen instead. With
+ * no weather to show: set a location / retry.
  * Long-press: switch °F/°C, refresh, weather settings.
  */
 class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
@@ -54,8 +55,7 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
             when {
                 repo.state.problem == WeatherRepository.Problem.NEEDS_LOCATION -> openSettings()
                 repo.state.data == null -> repo.refresh() // the tile says "tap to retry"
-                // The weather screen: the living scene of the conditions now.
-                else -> io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity)
+                else -> openWeather(v)
             }
         }
         card.setOnLongClickListener { showMenu(it); true }
@@ -148,6 +148,16 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
             }
             show()
         }
+    }
+
+    /**
+     * Your weather app; if none is chosen, it's gone, or it won't open, the conditions screen
+     * (the day, precipitation, hours and 7 days, from Searchlight's own forecast).
+     */
+    private fun openWeather(source: View) {
+        val app = weatherApp()
+        if (app != null && activity.searchlight.apps.launch(app, source, activity, quiet = true)) return
+        io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity)
     }
 
     /** The chosen weather app, if it's still installed. */

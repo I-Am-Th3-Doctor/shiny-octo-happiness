@@ -15,6 +15,8 @@ import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.ui.color
 import kotlin.math.max
 
+// Not used by Searchlight: kept for the second launcher's hero screen (the full-screen scene,
+// its giant number, callouts, day bar, quick numbers, 7-day view and sound).
 /**
  * The weather screen's hero: the temperature as oversized, dimensional numbers in Lexend Bold:
  * a gold face over a rust extrusion stepping down and right, with a soft shadow, so it stands off

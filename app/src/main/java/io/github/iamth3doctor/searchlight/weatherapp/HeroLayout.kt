@@ -28,6 +28,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
+// Not used by Searchlight: kept for the second launcher's hero screen (the full-screen scene,
+// its giant number, callouts, day bar, quick numbers, 7-day view and sound).
 /**
  * A data callout on the hero: a small label over a line or three of numbers, on a pad of the
  * skin's color so it reads over any sky. A leader line ([LeaderLinesView]) runs from it to what it

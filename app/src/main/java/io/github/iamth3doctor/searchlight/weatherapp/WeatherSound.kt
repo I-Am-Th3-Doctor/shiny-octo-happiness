@@ -9,6 +9,8 @@ import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.sin
 
+// Not used by Searchlight: kept for the second launcher's hero screen (the full-screen scene,
+// its giant number, callouts, day bar, quick numbers, 7-day view and sound).
 /**
  * The scene's soft soundtrack, synthesized on the phone (no sound files): rain as a hiss with
  * patters of drops, wind as a low gusting rush, crickets on a dry night, thunder as a rumble when

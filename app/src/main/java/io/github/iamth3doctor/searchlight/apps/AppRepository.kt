@@ -248,11 +248,15 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
 
     // ------------------------------------------------------------------ actions
 
-    fun launch(entry: AppEntry, source: View?, from: Context = context) {
+    /**
+     * Opens [entry]; whether it opened. A failure says so in a toast, unless [quiet] (the caller
+     * has somewhere else to go instead).
+     */
+    fun launch(entry: AppEntry, source: View?, from: Context = context, quiet: Boolean = false): Boolean {
         prefs.recordLaunch(entry.key)
         if (entry.isSelf) {
             from.startActivity(Intent(from, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            return
+            return true
         }
         val bounds = source?.let {
             val loc = IntArray(2)
@@ -262,12 +266,14 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
         val opts = source?.let {
             ActivityOptions.makeClipRevealAnimation(it, 0, 0, it.width, it.height).toBundle()
         }
-        try {
+        return try {
             launcherApps.startMainActivity(entry.component, entry.user, bounds, opts)
+            true
         } catch (e: Exception) {
             Log.w(TAG, "Launch failed for ${entry.key}", e)
-            Toast.makeText(context, R.string.launch_failed, Toast.LENGTH_SHORT).show()
+            if (!quiet) Toast.makeText(context, R.string.launch_failed, Toast.LENGTH_SHORT).show()
             scheduleReload()
+            false
         }
     }
 

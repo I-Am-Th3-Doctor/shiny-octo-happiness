@@ -26,6 +26,8 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.TextStyle
 
+// Not used by Searchlight: kept for the second launcher's hero screen (the full-screen scene,
+// its giant number, callouts, day bar, quick numbers, 7-day view and sound).
 /**
  * The 7-day view's content: a window on the scene, then a row per day (its condition, chance of
  * rain, low and high). Hold a day and the window plays that whole day as a time-lapse from its

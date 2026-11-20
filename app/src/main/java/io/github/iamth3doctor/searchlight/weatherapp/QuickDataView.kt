@@ -21,6 +21,8 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.math.roundToInt
 
+// Not used by Searchlight: kept for the second launcher's hero screen (the full-screen scene,
+// its giant number, callouts, day bar, quick numbers, 7-day view and sound).
 /**
  * The quick view: the numbers drawn straight over the dimmed scene when it's tapped. Cloud cover,
  * chance of precipitation, wind (with an arrow), temperature, feels-like, humidity, dew point,
