@@ -525,8 +525,10 @@ class CalendarWidgetDeviceTest {
             val asked = app.calendarEvents.permissionRequests
             tap(v.allowButton)
             waitFor("permission requested") { app.calendarEvents.permissionRequests == asked + 1 }
-            Thread.sleep(1500) // the request's result comes back (granted underneath, so no dialog)
-            if ("GrantPermissions" in shell("dumpsys activity activities")) shell("input keyevent KEYCODE_BACK")
+            // Granted underneath, so Android's permission screen closes on its own: wait for that. Only
+            // if it's still up after a good while press Back (a Back after it's gone would close home).
+            val gone = runCatching { waitFor("permission screen closed", 8_000) { "GrantPermissions" !in shell("dumpsys activity activities") } }.isSuccess
+            if (!gone) shell("input keyevent KEYCODE_BACK")
             waitFor("home again") { on(h) { it.hasWindowFocus() } }
             assertTrue(on(h) { v.permissionRow.isShown })
             val id = layout(h).single().id
