@@ -79,14 +79,12 @@
     <dimen name="size_cal_min_height">200dp</dimen>
 
     <!-- Weather widget -->
-    <dimen name="size_weather_min_width">140dp</dimen>   <!-- smallest it resizes to (2x1) -->
-    <dimen name="size_weather_min_height">56dp</dimen>
-    <dimen name="size_weather_visual">48dp</dimen>       <!-- the condition visual, 2x2 / 4x2 -->
     <dimen name="size_weather_visual_compact">40dp</dimen>
     <dimen name="size_weather_visual_hour">22dp</dimen>  <!-- in the hourly strip -->
-    <dimen name="size_weather_detail_max">460dp</dimen>  <!-- the detail panel's widest -->
     <dimen name="text_weather_temp">36sp</dimen>
-    <dimen name="text_weather_temp_compact">28sp</dimen>
+    <dimen name="size_weather_metric_art">150dp</dimen> <!-- an open metric card's animated picture -->
+    <dimen name="size_weather_island">128dp</dimen>      <!-- the precip card's island -->
+    <dimen name="size_weather_precip_graph">112dp</dimen>
     <dimen name="text_weather_detail_temp">64sp</dimen>
     <dimen name="stroke_hairline">1.5dp</dimen>
     <dimen name="stroke_glass">1dp</dimen>

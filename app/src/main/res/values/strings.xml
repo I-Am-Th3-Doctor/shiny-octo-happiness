@@ -93,10 +93,6 @@
     <string name="widget_pin_title">Add this widget to your home screen?</string>
     <string name="widget_pin_add">Add</string>
     <string name="rail_all_apps">All apps</string>
-    <string name="weather_app">Weather app</string>
-    <string name="weather_app_choose">Choose weather app</string>
-    <string name="weather_app_none">None (tapping the tile asks)</string>
-    <string name="weather_app_unset">Not chosen: tapping the weather tile asks</string>
 
 
     <string name="battery_full">Fully charged</string>
@@ -442,20 +438,12 @@
     <string name="weather_widget_feels">Feels %1$s</string>
     <string name="weather_widget_hi_lo">H %1$s · L %2$s</string>
     <string name="weather_widget_updated">Updated %1$s</string>
-    <string name="weather_widget_offline">offline — showing last update</string>
-    <string name="weather_widget_offline_short">offline</string>
     <string name="weather_widget_no_data">No weather yet</string>
     <string name="weather_widget_desc">Weather: %1$s, %2$s in %3$s. Tap for details.</string>
-    <string name="weather_detail_now">Now</string>
     <string name="weather_detail_hourly">Hourly</string>
     <string name="weather_detail_daily">7 days</string>
     <string name="weather_detail_sun">Sun</string>
     <string name="weather_detail_moon">Moon</string>
-    <string name="weather_detail_sunrise">Sunrise</string>
-    <string name="weather_detail_sunset">Sunset</string>
-    <string name="weather_detail_moonrise">Moonrise</string>
-    <string name="weather_detail_moonset">Moonset</string>
-    <string name="weather_detail_phase">Phase</string>
     <string name="weather_detail_humidity">Humidity</string>
     <string name="weather_detail_dew">Dew point %1$s</string>
     <string name="weather_detail_visibility">Visibility</string>
@@ -468,5 +456,57 @@
     <string name="weather_detail_no_set">No set today</string>
     <string name="weather_detail_today">Today</string>
     <string name="weather_detail_now_hour">Now</string>
-    <string name="weather_detail_close">Close</string>
+    <!-- Weather screen -->
+    <string name="weather_offline_desc">Offline — showing the last update</string>
+    <string name="weather_detail_lit">%1$d%% lit</string>
+    <!-- Weather: precip card -->
+    <string name="weather_precip">Precip</string>
+    <string name="weather_precip_rate">RATE</string>
+    <string name="weather_precip_total">TOTAL</string>
+    <string name="weather_precip_chance">CHANCE</string>
+    <string name="weather_precip_type">TYPE</string>
+    <string name="weather_precip_day">DAY</string>
+    <string name="weather_precip_week">WEEK</string>
+    <string name="weather_precip_rain">RAIN</string>
+    <string name="weather_precip_snow">SNOW</string>
+    <string name="weather_precip_none">NONE</string>
+    <string name="weather_precip_dry">No rain expected in the next day</string>
+    <string name="weather_precip_rain_now">Raining this hour</string>
+    <string name="weather_precip_snow_now">Snowing this hour</string>
+    <string name="weather_precip_rain_around">Rain expected around %1$s</string>
+    <string name="weather_precip_snow_around">Snow expected around %1$s</string>
+    <string name="weather_precip_graph_desc">Precipitation over time. Drag to scrub through the hours.</string>
+    <string name="weather_island_desc">Precipitation: %1$s</string>
+    <!-- Weather: severe alerts (National Weather Service) -->
+    <string name="weather_alert_pill_desc">Weather alert: %1$s. Tap for details.</string>
+    <string name="weather_alert_effective">Effective %1$s</string>
+    <string name="weather_alert_expires">Expires %1$s</string>
+    <string name="weather_alert_what_to_do">What to do</string>
+    <string name="weather_back">Back</string>
+    <string name="weather_metric_hint">Tap for how it works</string>
+    <string name="weather_metric_open">Open; tap to close</string>
+    <string name="weather_metric_daylight">Daylight %1$s</string>
+    <string name="weather_metric_sun_up">Sunset in %1$s</string>
+    <string name="weather_metric_sun_before">Sunrise in %1$s</string>
+    <string name="weather_metric_sun_down">The sun has set</string>
+    <string name="weather_metric_moon_none">The moon isn\'t up today</string>
+    <string name="weather_metric_moon_dark">best seen %1$s, in a dark sky</string>
+    <string name="weather_metric_moon_day">up only in daylight today</string>
+    <string name="weather_metric_dew">Dew point %1$s: %2$s</string>
+    <string name="weather_metric_vis">You can see about %1$s: %2$s</string>
+    <string name="weather_metric_uv">UV %1$s · %2$s: %3$s</string>
+    <string name="weather_metric_aqi">AQI %1$d · %2$s: %3$s</string>
+    <string name="weather_metric_wind">%1$s mph from %2$s: %3$s</string>
+    <string name="weather_metric_calm">Calm</string>
+    <string name="weather_alert_title">Weather alert</string>
+    <string name="weather_places_title">Locations</string>
+    <string name="weather_places_search">Search for a city</string>
+    <string name="weather_places_home">%1$s (home)</string>
+    <string name="weather_places_home_unknown">Home</string>
+    <string name="weather_places_saved">Saved</string>
+    <string name="weather_places_results">Results</string>
+    <string name="weather_places_none">No places found</string>
+    <string name="weather_places_failed">Couldn\'t search: check your connection</string>
+    <string name="weather_places_remove">Remove %1$s</string>
+    <string name="weather_places_desc">%1$s. Tap to change location.</string>
 </resources>

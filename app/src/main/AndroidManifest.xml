@@ -109,6 +109,14 @@
             </intent-filter>
         </activity>
 
+        <!-- The weather screen: the conditions (from the Weather widget and tile). -->
+        <activity
+            android:name=".weatherapp.WeatherActivity"
+            android:exported="false"
+            android:label="@string/widget_weather"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:theme="@style/Theme.Searchlight.Weather" />
+
         <!-- "Paused during focus": a restricted app opened from Searchlight while Focus blocks it. -->
         <activity
             android:name=".focus.PausedActivity"

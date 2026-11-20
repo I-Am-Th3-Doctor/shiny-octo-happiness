@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class AlertsTest {
+class AlertsPrecipTest {
 
     private val hour = 3_600_000L
     private val now = 1_795_550_400_000L // 2026-11-18 20:00 UTC (12:00 PST)
@@ -74,6 +74,26 @@ class AlertsTest {
         val days = (0 until 7).map { i -> DayPoint(h0 - 12 * hour + i * 24 * hour, 12.0, 5.0, if (i == 2) 73 else 61, 40 + i, null, null, 1.0 + i) }
         val d = WeatherDetail(-28800, 9.0, 80, 5.0, 1015.0, 20000.0, 5.0, 180.0, 1.0, hours, days, 20, cloudPct = 20, precipMm = 0.0)
         return WeatherData("Tacoma", 47.25, -122.44, 10.0, 1, true, 12.0, 5.0, now, d, alerts)
+    }
+
+    @Test fun precipRowsFollowTheHour() {
+        val d = data()
+        val dry = Precip.at(d, now)
+        assertEquals(0.0, dry.rateIn, 1e-9)
+        assertEquals(5, dry.chance)
+        assertEquals(Precip.Type.NONE, dry.type)
+        val wet = Precip.at(d, now / hour * hour + 3 * hour + 10 * 60_000L)
+        assertEquals("0.09 IN", Precip.format(wet.rateIn))
+        assertEquals(78, wet.chance)
+        assertEquals(Precip.Type.RAIN, wet.type)
+        // Rain expected around the hour it starts, from the hourly forecast.
+        assertEquals(now / hour * hour + 3 * hour, Precip.nextWet(d, now)!!.time)
+        assertNull(Precip.nextWet(d, now, withinMs = 2 * hour))
+        // The week: a day's total and chance; snow on a snowy day.
+        val day3 = Precip.day(d, now + 2 * 24 * hour)
+        assertEquals(Precip.Type.SNOW, day3.type)
+        assertEquals(42, day3.chance)
+        assertEquals(3.0 / 25.4, day3.rateIn, 1e-9)
     }
 
 }

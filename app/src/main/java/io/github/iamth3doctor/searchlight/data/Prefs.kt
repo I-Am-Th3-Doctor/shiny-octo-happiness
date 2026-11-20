@@ -191,11 +191,6 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_MUSIC_PACKAGE, null)
         set(value) = sp.edit().putString(KEY_MUSIC_PACKAGE, value).apply()
 
-    /** App key (see AppEntry.key) of the app the weather tile opens; null = not chosen yet. */
-    var weatherAppKey: String?
-        get() = sp.getString(KEY_WEATHER_APP, null)
-        set(value) = sp.edit().putString(KEY_WEATHER_APP, value).apply()
-
     /** The four Quick Actions slots, in order. Unknown/missing entries fall back per slot. */
     var quickActionSlots: List<QuickAction>
         get() = SlotConfig.parse(
@@ -293,6 +288,33 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_WEATHER, null)?.let(WeatherData::fromJson)
         set(value) = sp.edit().putString(KEY_WEATHER, value?.toJson()).apply()
 
+    /** The city the weather shows (picked on the weather screen); null = home (device location or [manualPlace]). */
+    var weatherCity: GeoPlace?
+        get() = sp.getString("weather_city", null)?.let { runCatching { placeFromJson(org.json.JSONObject(it)) }.getOrNull() }
+        set(value) = sp.edit().putString("weather_city", value?.let { placeToJson(it).toString() }).apply()
+
+    /** Cities saved on the weather screen (besides home), in the order saved. */
+    var weatherCities: List<GeoPlace>
+        get() = runCatching {
+            val a = org.json.JSONArray(sp.getString("weather_cities", "[]"))
+            (0 until a.length()).map { placeFromJson(a.getJSONObject(it)) }
+        }.getOrDefault(emptyList())
+        set(value) = sp.edit().putString("weather_cities",
+            org.json.JSONArray().apply { value.forEach { put(placeToJson(it)) } }.toString()).apply()
+
+    /** The last good reading for each place ([key]: "home", or the city's coordinates), for switching back offline. */
+    fun cachedWeather(key: String): WeatherData? =
+        sp.getString("weather_cache_$key", null)?.let { runCatching { WeatherData.fromJson(it) }.getOrNull() }
+
+    fun cacheWeather(key: String, data: WeatherData?) =
+        sp.edit().putString("weather_cache_$key", data?.toJson()).apply()
+
+    private fun placeToJson(p: GeoPlace) = org.json.JSONObject().put("n", p.name).putOpt("a", p.admin).putOpt("c", p.countryCode)
+        .put("lat", p.latitude).put("lon", p.longitude)
+
+    private fun placeFromJson(o: org.json.JSONObject) = GeoPlace(o.getString("n"), o.optString("a").takeIf { it.isNotBlank() },
+        o.optString("c").takeIf { it.isNotBlank() }, o.getDouble("lat"), o.getDouble("lon"))
+
     // ---- Favorites: an ordered list of up to MAX_FAVORITES app keys ----
 
     /** Manual = the six you pick; Automatic = picked from your app usage (see AutoFavorites). */
@@ -373,7 +395,6 @@ class Prefs(context: Context) {
 
     val predictedSlotActive: Boolean get() = predictedSlot && favoritesMode == FavoritesMode.MANUAL
 
-
     /** Best predictions first, as last worked out; empty without usage access or history. */
     val predictions: List<String>
         get() = sp.getString(KEY_PREDICTIONS, "").orEmpty().split('\n').filter { it.isNotEmpty() }
@@ -388,7 +409,6 @@ class Prefs(context: Context) {
         sp.edit().putString(KEY_PREDICTIONS, keys.joinToString("\n")).putLong(KEY_PREDICTIONS_AT, at).apply()
         favoriteListeners.toList().forEach { it() }
     }
-
 
     /**
      * Adds [key] to the first free slot of the row: the manual picks (five of them while the
@@ -511,7 +531,6 @@ class Prefs(context: Context) {
         private const val KEY_IDLE_CARD = "idle_card"
         private const val KEY_MUSIC_FRONT = "music_auto_front"
         private const val KEY_MUSIC_PACKAGE = "music_default_package"
-        private const val KEY_WEATHER_APP = "weather_app"
         private const val KEY_QA_SLOTS = "quick_action_slots"
         private const val KEY_LEGACY_WIDGETS = "widgets"
         private const val KEY_WIDGET_GRID = "widget_grid"
