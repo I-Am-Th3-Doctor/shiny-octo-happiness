@@ -83,17 +83,6 @@ class WidgetController(
         grid.listener = this
         host.onProvidersChanged = ::refreshProviders
         migrateFromStack()
-        migrateBuiltIns()
-    }
-
-    /** The 3-day and today Weather widgets (retired) become the one plain Weather widget, at 2 × 2; Sticky notes leave. */
-    private fun migrateBuiltIns() {
-        val types = prefs.builtInTypes
-        val (t, folded) = BuiltInWidget.migrate(types, prefs.widgetGrid)
-        val (_, open) = BuiltInWidget.migrate(types, prefs.widgetGridUnfolded)
-        if (t != types) prefs.builtInTypes = t
-        if (folded != prefs.widgetGrid) prefs.widgetGrid = folded
-        if (open != prefs.widgetGridUnfolded) prefs.widgetGridUnfolded = open
     }
 
     /**
@@ -170,6 +159,17 @@ class WidgetController(
     /** The Weather widgets on the grid, live. */
     fun weatherViews(): List<WeatherWidgetView> = views.values.filterIsInstance<WeatherWidgetView>()
 
+    /** The open Weather detail view, if any (tests). */
+    var weatherDetail: WeatherDetailSheet? = null
+        private set
+
+    fun openWeatherDetail(): WeatherDetailSheet =
+        WeatherDetailSheet(activity, activity.searchlight.weather, decorate).let { sheet ->
+            weatherDetail = sheet
+            sheet.onDismissed = { if (weatherDetail === sheet) weatherDetail = null }
+            sheet.show()
+        }
+
     /** The Calendar widgets on the grid (either posture), live. */
     fun calendarViews(): List<CalendarWidgetView> = views.values.filterIsInstance<CalendarWidgetView>()
 
@@ -225,12 +225,13 @@ class WidgetController(
         layout = WidgetGrid.upsert(layout, spot)
         render()
         // A new Weather widget: fresh weather now (the last reading shows meanwhile).
-        if (type.isWeather) activity.searchlight.weather.refresh()
+        if (type == BuiltInWidget.WEATHER) activity.searchlight.weather.refresh()
     }
 
     /** The Calendar widget splits month | agenda from three cells wide; narrower, it stacks them. */
     private fun arrange(v: View, spec: GridSpec) {
         if (v is CalendarWidgetView) v.stacked = spec.colSpan < SPLIT_MIN_COLS
+        if (v is WeatherWidgetView) v.size = WeatherWidgetView.sizeFor(spec.colSpan, spec.rowSpan)
     }
 
     /** Add / details / edit / delete for Calendar widgets' events (set by the home screen). */
@@ -243,9 +244,8 @@ class WidgetController(
     private fun builtInView(id: Int): View = when (builtInType(id)) {
         BuiltInWidget.WEATHER -> WeatherWidgetView(activity, activity.searchlight.weather).also { v ->
             v.onLongPress = { grid.enterEditModeFromLongPress() }
-            // Straight to the conditions screen (the day, precipitation, hourly, 7 days).
-            v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity, details = true) }
-            decorate(v) // the glass's text shadow for the current Glass transparency, as the Calendar's
+            v.onOpen = { if (!grid.editMode) openWeatherDetail() }
+            v.onContentChanged = decorate
         }
         BuiltInWidget.CALENDAR -> calendarView()
     }
@@ -381,7 +381,7 @@ class WidgetController(
     }
 
     override fun resizable(id: Int): Pair<Boolean, Boolean> {
-        if (BuiltInWidget.isBuiltIn(id)) return if (builtInType(id).fixedSize) false to false else true to true
+        if (BuiltInWidget.isBuiltIn(id)) return true to true
         val mode = manager.getAppWidgetInfo(id)?.resizeMode ?: return false to false
         return (mode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0) to (mode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0)
     }
@@ -389,11 +389,8 @@ class WidgetController(
     override fun minSpan(id: Int): Pair<Int, Int> {
         if (BuiltInWidget.isBuiltIn(id)) {
             val (wRes, hRes) = when (builtInType(id)) {
+                BuiltInWidget.WEATHER -> R.dimen.size_weather_min_width to R.dimen.size_weather_min_height
                 BuiltInWidget.CALENDAR -> R.dimen.size_cal_min_width to R.dimen.size_cal_min_height
-                // Fixed at 2 × 2.
-                BuiltInWidget.WEATHER -> builtInType(id).let { t ->
-                    return t.defaultCols.coerceAtMost(grid.cols) to t.defaultRows.coerceAtMost(grid.rows)
-                }
             }
             return WidgetGrid.spanFor(activity.resources.getDimension(wRes) / density, grid.cellWidthDp, grid.cols) to
                 WidgetGrid.spanFor(activity.resources.getDimension(hRes) / density, grid.cellHeightDp, grid.rows)

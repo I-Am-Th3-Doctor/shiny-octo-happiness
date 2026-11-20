@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class AlertsPrecipTest {
+class AlertsTest {
 
     private val hour = 3_600_000L
     private val now = 1_795_550_400_000L // 2026-11-18 20:00 UTC (12:00 PST)
@@ -76,38 +76,4 @@ class AlertsPrecipTest {
         return WeatherData("Tacoma", 47.25, -122.44, 10.0, 1, true, 12.0, 5.0, now, d, alerts)
     }
 
-    @Test fun precipRowsFollowTheHour() {
-        val d = data()
-        val dry = Precip.at(d, now)
-        assertEquals(0.0, dry.rateIn, 1e-9)
-        assertEquals(5, dry.chance)
-        assertEquals(Precip.Type.NONE, dry.type)
-        val wet = Precip.at(d, now / hour * hour + 3 * hour + 10 * 60_000L)
-        assertEquals("0.09 IN", Precip.format(wet.rateIn))
-        assertEquals(78, wet.chance)
-        assertEquals(Precip.Type.RAIN, wet.type)
-        // Rain expected around the hour it starts, from the hourly forecast.
-        assertEquals(now / hour * hour + 3 * hour, Precip.nextWet(d, now)!!.time)
-        assertNull(Precip.nextWet(d, now, withinMs = 2 * hour))
-        // The week: a day's total and chance; snow on a snowy day.
-        val day3 = Precip.day(d, now + 2 * 24 * hour)
-        assertEquals(Precip.Type.SNOW, day3.type)
-        assertEquals(42, day3.chance)
-        assertEquals(3.0 / 25.4, day3.rateIn, 1e-9)
-    }
-
-    @Test fun anAlertTurnsTheSceneSevere() {
-        val calm = SceneModel.at(data(), now, live = true)
-        assertNull(calm.severe)
-        assertTrue(!calm.thunder && calm.rain == 0.0)
-        val storm = WeatherAlert("s", "Severe Thunderstorm Warning", "", "Severe", now - hour, now + 2 * hour, "", "", "")
-        val c = SceneModel.at(data(listOf(storm)), now, live = true)
-        assertEquals(AlertKind.THUNDER, c.severe)
-        assertTrue(c.thunder && c.rain >= 0.85 && c.cloudCover == 1.0)
-        // After it expires, the forecast's own weather again.
-        assertNull(SceneModel.at(data(listOf(storm)), now + 3 * hour, live = false).severe)
-        val snow = WeatherAlert("w", "Winter Storm Warning", "", "Severe", null, null, "", "", "")
-        val s = SceneModel.at(data(listOf(snow)), now, live = true)
-        assertTrue(s.snow >= 0.9 && s.rain == 0.0)
-    }
 }

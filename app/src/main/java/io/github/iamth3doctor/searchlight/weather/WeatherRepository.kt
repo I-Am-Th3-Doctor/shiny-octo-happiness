@@ -101,16 +101,12 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
         if (holdForTest) return
         if (state.loading) return
         setState(state.copy(loading = true))
-        val gen = generation
-        val city = prefs.weatherCity
-        val key = cityKey(city)
         val manual = prefs.manualPlace
         val previous = state.data
         val canUseDevice = hasLocationPermission()
         worker.execute {
             val result: State = try {
                 val target: Triple<String, Double, Double>? = when {
-                    city != null -> Triple(city.name, city.latitude, city.longitude)
                     manual != null -> Triple(manual.name, manual.latitude, manual.longitude)
                     canUseDevice -> deviceLocation()?.let { loc ->
                         val name = if (previous != null && distanceKm(previous, loc) < 3) previous.locationName else placeName(loc)
@@ -122,8 +118,9 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
                     State(previous, false, if (canUseDevice) Problem.LOCATION_UNAVAILABLE else Problem.NEEDS_LOCATION)
                 } else {
                     val (name, lat, lon) = target
-                    // Each stretch from its best model (one request). Should Open-Meteo ever refuse a
-                    // model by name, best_match alone still gives a forecast.
+                    // Each stretch from its best model (one request): HRRR for the next 48 hours,
+                    // ECMWF IFS for days 3-7. Should Open-Meteo ever refuse a model by name,
+                    // best_match alone still gives a forecast.
                     val json = try {
                         httpGet(OpenMeteo.forecastUrl(lat, lon))
                     } catch (e: HttpStatusException) {
@@ -158,63 +155,14 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
                 State(previous, false, Problem.NETWORK)
             }
             main.post {
-                // Switched cities meanwhile: this answer is for the old one.
-                if (gen != generation) return@post
-                result.data?.let { if (it !== previous) { prefs.lastWeather = it; prefs.cacheWeather(key, it) } }
+                result.data?.let { if (it !== previous) prefs.lastWeather = it }
                 setState(result)
             }
         }
     }
 
-    // ------------------------------------------------------------------ cities
-
-    private var generation = 0
-
-    /** The city shown (null: home, the device's location or the place set in settings). */
-    val city: GeoPlace? get() = prefs.weatherCity
-
-    /** Cities saved on the weather screen, besides home. */
-    val savedCities: List<GeoPlace> get() = prefs.weatherCities
-
-    /** Home's name as last fetched (e.g. "Tacoma"), or null before any reading there. */
-    fun homeName(): String? =
-        (if (city == null) state.data?.locationName else null) ?: prefs.cachedWeather(HOME)?.locationName ?: prefs.manualPlace?.name
-
-    /**
-     * Shows [place] (null: home) everywhere: the weather screen, the widget and the Weather tile all
-     * follow, so they always agree. Its last good reading shows at once (offline too), then it refreshes.
-     */
-    fun selectCity(place: GeoPlace?) {
-        val from = cityKey(city)
-        val to = cityKey(place)
-        if (from == to && (place == null) == (city == null)) return
-        state.data?.let { prefs.cacheWeather(from, it) }
-        prefs.weatherCity = place
-        generation++
-        val cached = prefs.cachedWeather(to)
-        prefs.lastWeather = cached
-        setState(State(cached, loading = false, problem = null))
-        refresh()
-    }
-
-    /** Saves [place] to the list (once). */
-    fun saveCity(place: GeoPlace) {
-        val list = prefs.weatherCities
-        if (list.none { cityKey(it) == cityKey(place) }) prefs.weatherCities = list + place
-    }
-
-    /** Takes [place] off the list (back to home if it was showing). */
-    fun removeCity(place: GeoPlace) {
-        prefs.weatherCities = prefs.weatherCities.filter { cityKey(it) != cityKey(place) }
-        if (city?.let(::cityKey) == cityKey(place)) selectCity(null)
-    }
-
-    /** Tests: answers city searches instead of the network. */
-    @Volatile var searchForTest: ((String) -> List<GeoPlace>?)? = null
-
     /** ZIP/city lookup for the manual location picker. [onResult] gets null on network failure. */
     fun searchPlaces(query: String, onResult: (List<GeoPlace>?) -> Unit) {
-        searchForTest?.let { fake -> main.post { onResult(fake(query)) }; return }
         worker.execute {
             val places = try {
                 OpenMeteo.parseGeocode(httpGet(OpenMeteo.geocodeUrl(query)))
@@ -296,15 +244,10 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
         }
     }
 
-    companion object {
-        /** The cache key for [place] (null: home). */
-        fun cityKey(place: GeoPlace?): String =
-            if (place == null) HOME else String.format(Locale.US, "%.3f,%.3f", place.latitude, place.longitude)
-
-        const val HOME = "home"
-        private const val TAG = "Weather"
-        private const val PERIOD_MS = 30 * 60 * 1000L
-        private const val UNLOCK_MIN_AGE_MS = 2 * 60 * 1000L
-        private const val FRESH_FIX_MS = 30 * 60 * 1000L
+    private companion object {
+        const val TAG = "Weather"
+        const val PERIOD_MS = 30 * 60 * 1000L
+        const val UNLOCK_MIN_AGE_MS = 2 * 60 * 1000L
+        const val FRESH_FIX_MS = 30 * 60 * 1000L
     }
 }

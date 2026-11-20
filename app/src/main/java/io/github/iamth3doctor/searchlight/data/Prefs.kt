@@ -191,6 +191,11 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_MUSIC_PACKAGE, null)
         set(value) = sp.edit().putString(KEY_MUSIC_PACKAGE, value).apply()
 
+    /** App key (see AppEntry.key) of the app the weather tile opens; null = not chosen yet. */
+    var weatherAppKey: String?
+        get() = sp.getString(KEY_WEATHER_APP, null)
+        set(value) = sp.edit().putString(KEY_WEATHER_APP, value).apply()
+
     /** The four Quick Actions slots, in order. Unknown/missing entries fall back per slot. */
     var quickActionSlots: List<QuickAction>
         get() = SlotConfig.parse(
@@ -217,16 +222,6 @@ class Prefs(context: Context) {
             id to e.substringAfter(':')
         }.toMap()
         set(value) = sp.edit().putString(KEY_BUILTIN_TYPES, value.entries.joinToString(";") { "${it.key}:${it.value}" }).apply()
-
-    /** The weather screen's sound and haptics (on unless turned off there; never while the phone is silenced). */
-    var weatherSound: Boolean
-        get() = sp.getBoolean(KEY_WEATHER_SOUND, true)
-        set(value) = sp.edit().putBoolean(KEY_WEATHER_SOUND, value).apply()
-
-    /** The weather app's skin ([io.github.iamth3doctor.searchlight.weather.WeatherSkin] key; null: the default). */
-    var weatherSkin: String?
-        get() = sp.getString(KEY_WEATHER_SKIN, null)
-        set(value) = sp.edit().putString(KEY_WEATHER_SKIN, value).apply()
 
     var widgetGridUnfolded: List<GridSpec>
         get() = WidgetGrid.parse(sp.getString(KEY_WIDGET_GRID_UNFOLDED, null))
@@ -297,33 +292,6 @@ class Prefs(context: Context) {
     var lastWeather: WeatherData?
         get() = sp.getString(KEY_WEATHER, null)?.let(WeatherData::fromJson)
         set(value) = sp.edit().putString(KEY_WEATHER, value?.toJson()).apply()
-
-    /** The city the weather shows (picked on the weather screen); null = home (device location or [manualPlace]). */
-    var weatherCity: GeoPlace?
-        get() = sp.getString("weather_city", null)?.let { runCatching { placeFromJson(org.json.JSONObject(it)) }.getOrNull() }
-        set(value) = sp.edit().putString("weather_city", value?.let { placeToJson(it).toString() }).apply()
-
-    /** Cities saved on the weather screen (besides home), in the order saved. */
-    var weatherCities: List<GeoPlace>
-        get() = runCatching {
-            val a = org.json.JSONArray(sp.getString("weather_cities", "[]"))
-            (0 until a.length()).map { placeFromJson(a.getJSONObject(it)) }
-        }.getOrDefault(emptyList())
-        set(value) = sp.edit().putString("weather_cities",
-            org.json.JSONArray().apply { value.forEach { put(placeToJson(it)) } }.toString()).apply()
-
-    /** The last good reading for each place ([key]: "home", or the city's coordinates), for switching back offline. */
-    fun cachedWeather(key: String): WeatherData? =
-        sp.getString("weather_cache_$key", null)?.let { runCatching { WeatherData.fromJson(it) }.getOrNull() }
-
-    fun cacheWeather(key: String, data: WeatherData?) =
-        sp.edit().putString("weather_cache_$key", data?.toJson()).apply()
-
-    private fun placeToJson(p: GeoPlace) = org.json.JSONObject().put("n", p.name).putOpt("a", p.admin).putOpt("c", p.countryCode)
-        .put("lat", p.latitude).put("lon", p.longitude)
-
-    private fun placeFromJson(o: org.json.JSONObject) = GeoPlace(o.getString("n"), o.optString("a").takeIf { it.isNotBlank() },
-        o.optString("c").takeIf { it.isNotBlank() }, o.getDouble("lat"), o.getDouble("lon"))
 
     // ---- Favorites: an ordered list of up to MAX_FAVORITES app keys ----
 
@@ -543,13 +511,12 @@ class Prefs(context: Context) {
         private const val KEY_IDLE_CARD = "idle_card"
         private const val KEY_MUSIC_FRONT = "music_auto_front"
         private const val KEY_MUSIC_PACKAGE = "music_default_package"
+        private const val KEY_WEATHER_APP = "weather_app"
         private const val KEY_QA_SLOTS = "quick_action_slots"
         private const val KEY_LEGACY_WIDGETS = "widgets"
         private const val KEY_WIDGET_GRID = "widget_grid"
         private const val KEY_WIDGET_GRID_UNFOLDED = "widget_grid_unfolded"
         private const val KEY_BUILTIN_TYPES = "builtin_widget_types"
-        private const val KEY_WEATHER_SOUND = "weather_sound"
-        private const val KEY_WEATHER_SKIN = "weather_skin"
         private const val KEY_CALENDAR_PERMISSION_ASKED = "calendar_permission_asked"
         private const val KEY_CALENDAR_TARGET = "calendar_target"
         private const val KEY_NEXT_UP_DISMISSED = "next_up_dismissed"

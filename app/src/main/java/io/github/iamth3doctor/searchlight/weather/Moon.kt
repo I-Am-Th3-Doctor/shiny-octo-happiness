@@ -11,11 +11,10 @@ import kotlin.math.sqrt
 import kotlin.math.tan
 
 /**
- * The moon, worked out on the phone (no free API has it): where it truly is, from the main terms
- * of Meeus's lunar theory ("Astronomical Algorithms", ch. 47; good to a few arcminutes), against
- * where the sun is. Its phase is the real angle between them (not an average month), so a new or
- * full moon lands within minutes of the almanac's. Rise and set come from its altitude through
- * the day (SunCalc's scan). Pure; JVM-tested.
+ * The moon, worked out on the phone (no API has it for free): its phase from the synodic month,
+ * and its rise and set for a day by scanning its altitude hour by hour (the method of the SunCalc
+ * library, after "Astronomy on the Personal Computer"). Good to a few minutes, plenty for a
+ * forecast. Pure; JVM-tested.
  */
 object Moon {
 
@@ -24,56 +23,31 @@ object Moon {
         FULL("Full moon"), WANING_GIBBOUS("Waning gibbous"), LAST_QUARTER("Last quarter"), WANING_CRESCENT("Waning crescent"),
     }
 
-    private fun centuries(ms: Long) = toDays(ms) / 36525.0
-    private fun norm(deg: Double) = ((deg % 360) + 360) % 360
-
-    /** The moon's apparent ecliptic longitude and latitude (degrees) at [ms]. */
-    fun ecliptic(ms: Long): Pair<Double, Double> {
-        val t = centuries(ms)
-        val lp = 218.3164477 + 481267.88123421 * t
-        val d = RAD * (297.8501921 + 445267.1114034 * t)
-        val m = RAD * (357.5291092 + 35999.0502909 * t)
-        val mp = RAD * (134.9633964 + 477198.8675055 * t)
-        val f = RAD * (93.2720950 + 483202.0175233 * t)
-        val lon = lp + 6.288774 * sin(mp) + 1.274027 * sin(2 * d - mp) + 0.658314 * sin(2 * d) +
-            0.213618 * sin(2 * mp) - 0.185116 * sin(m) - 0.114332 * sin(2 * f) + 0.058793 * sin(2 * d - 2 * mp) +
-            0.057066 * sin(2 * d - m - mp) + 0.053322 * sin(2 * d + mp) + 0.045758 * sin(2 * d - m) -
-            0.040923 * sin(m - mp) - 0.034720 * sin(d) - 0.030383 * sin(m + mp) + 0.015327 * sin(2 * d - 2 * f) -
-            0.012528 * sin(mp + 2 * f) + 0.010980 * sin(mp - 2 * f) + 0.010675 * sin(4 * d - mp) + 0.010034 * sin(3 * mp)
-        val lat = 5.128122 * sin(f) + 0.280602 * sin(mp + f) + 0.277693 * sin(mp - f) + 0.173237 * sin(2 * d - f) +
-            0.055413 * sin(2 * d - mp + f) + 0.046271 * sin(2 * d - mp - f)
-        return norm(lon) to lat
-    }
-
-    /** The sun's apparent ecliptic longitude (degrees) at [ms]. */
-    fun sunLongitude(ms: Long): Double {
-        val t = centuries(ms)
-        val m = RAD * (357.52911 + 35999.05029 * t)
-        val c = (1.914602 - 0.004817 * t) * sin(m) + 0.019993 * sin(2 * m) + 0.000289 * sin(3 * m)
-        return norm(280.46646 + 36000.76983 * t + c)
-    }
-
-    /** How far the moon is ahead of the sun (degrees, 0..360): 0 new, 90 first quarter, 180 full. */
-    fun elongation(ms: Long): Double = norm(ecliptic(ms).first - sunLongitude(ms))
+    private const val SYNODIC_DAYS = 29.530588853
+    /** A known new moon: 2000-01-06 18:14 UTC. */
+    private const val NEW_MOON_MS = 947_182_440_000L
 
     /** How far through its cycle the moon is at [ms]: 0 new, 0.5 full, back to 1. */
-    fun age(ms: Long): Double = elongation(ms) / 360.0
+    fun age(ms: Long): Double {
+        val days = (ms - NEW_MOON_MS) / 86_400_000.0
+        return ((days / SYNODIC_DAYS) % 1.0 + 1.0) % 1.0
+    }
 
     /** The lit fraction of the disc (0..1). */
-    fun illumination(ms: Long): Double = (1 - cos(RAD * elongation(ms))) / 2
+    fun illumination(ms: Long): Double = (1 - cos(2 * PI * age(ms))) / 2
 
-    /** The phase's name: the four main phases each own the day or so around their exact moment. */
+    /** The phase's name: the four main phases each own a day or so around their exact moment. */
     fun phase(ms: Long): Phase {
-        val e = elongation(ms)
-        val d = 12.2 // the moon gains about 12.2° a day on the sun
+        val a = age(ms)
+        val d = 1.0 / SYNODIC_DAYS // a day, as a fraction of the cycle
         return when {
-            e < d / 2 || e > 360 - d / 2 -> Phase.NEW
-            abs(e - 90) < d / 2 -> Phase.FIRST_QUARTER
-            abs(e - 180) < d / 2 -> Phase.FULL
-            abs(e - 270) < d / 2 -> Phase.LAST_QUARTER
-            e < 90 -> Phase.WAXING_CRESCENT
-            e < 180 -> Phase.WAXING_GIBBOUS
-            e < 270 -> Phase.WANING_GIBBOUS
+            a < d || a > 1 - d -> Phase.NEW
+            abs(a - 0.25) < d -> Phase.FIRST_QUARTER
+            abs(a - 0.5) < d -> Phase.FULL
+            abs(a - 0.75) < d -> Phase.LAST_QUARTER
+            a < 0.25 -> Phase.WAXING_CRESCENT
+            a < 0.5 -> Phase.WAXING_GIBBOUS
+            a < 0.75 -> Phase.WANING_GIBBOUS
             else -> Phase.WANING_CRESCENT
         }
     }
@@ -96,26 +70,20 @@ object Moon {
         return 0.0002967 / tan(h + 0.00312536 / (h + 0.08901179))
     }
 
-    /** Where the moon is in the sky at [ms] from [lat], [lon]: altitude (radians, with refraction) and azimuth (radians from south, west positive). */
-    fun position(ms: Long, lat: Double, lon: Double): Pair<Double, Double> {
-        val (l, b) = ecliptic(ms)
-        return horizontal(ms, lat, lon, rightAscension(RAD * l, RAD * b), declination(RAD * l, RAD * b), refract = true)
-    }
-
     /** The moon's altitude (radians, with refraction) at [ms], seen from [lat], [lon]. */
-    fun altitude(ms: Long, lat: Double, lon: Double): Double = position(ms, lat, lon).first
-
-    internal fun horizontal(ms: Long, lat: Double, lon: Double, ra: Double, dec: Double, refract: Boolean): Pair<Double, Double> {
+    fun altitude(ms: Long, lat: Double, lon: Double): Double {
         val d = toDays(ms)
+        val l0 = RAD * (218.316 + 13.176396 * d)
+        val m = RAD * (134.963 + 13.064993 * d)
+        val f = RAD * (93.272 + 13.229350 * d)
+        val l = l0 + RAD * 6.289 * sin(m)
+        val b = RAD * 5.128 * sin(f)
+        val ra = rightAscension(l, b)
+        val dec = declination(l, b)
         val h = siderealTime(d, RAD * -lon) - ra
-        val phi = RAD * lat
-        val alt = altitude(h, phi, dec)
-        val az = atan2(sin(h), cos(h) * sin(phi) - tan(dec) * cos(phi))
-        return (if (refract) alt + refraction(alt) else alt) to az
+        val alt = altitude(h, RAD * lat, dec)
+        return alt + refraction(alt)
     }
-
-    internal fun equatorial(lonDeg: Double, latDeg: Double): Pair<Double, Double> =
-        rightAscension(RAD * lonDeg, RAD * latDeg) to declination(RAD * lonDeg, RAD * latDeg)
 
     /** Rise and set within the day starting at [dayStartMs] (local midnight); null when it doesn't happen that day. */
     data class Times(val rise: Long?, val set: Long?)

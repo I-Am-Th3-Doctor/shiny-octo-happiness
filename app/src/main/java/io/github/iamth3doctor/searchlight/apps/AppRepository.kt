@@ -248,15 +248,11 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
 
     // ------------------------------------------------------------------ actions
 
-    /**
-     * Opens [entry]; whether it opened. A failure says so in a toast, unless [quiet] (the caller
-     * has somewhere else to go instead).
-     */
-    fun launch(entry: AppEntry, source: View?, from: Context = context, quiet: Boolean = false): Boolean {
+    fun launch(entry: AppEntry, source: View?, from: Context = context) {
         prefs.recordLaunch(entry.key)
         if (entry.isSelf) {
             from.startActivity(Intent(from, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            return true
+            return
         }
         val bounds = source?.let {
             val loc = IntArray(2)
@@ -266,14 +262,12 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
         val opts = source?.let {
             ActivityOptions.makeClipRevealAnimation(it, 0, 0, it.width, it.height).toBundle()
         }
-        return try {
+        try {
             launcherApps.startMainActivity(entry.component, entry.user, bounds, opts)
-            true
         } catch (e: Exception) {
             Log.w(TAG, "Launch failed for ${entry.key}", e)
-            if (!quiet) Toast.makeText(context, R.string.launch_failed, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.launch_failed, Toast.LENGTH_SHORT).show()
             scheduleReload()
-            false
         }
     }
 
@@ -284,10 +278,7 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
      * this way and just use [launch].
      */
     fun launchAdjacent(entry: AppEntry, from: Context) {
-        if (entry.isSelf || entry.user != android.os.Process.myUserHandle()) {
-            launch(entry, null, from)
-            return
-        }
+        if (entry.isSelf || entry.user != android.os.Process.myUserHandle()) return launch(entry, null, from)
         prefs.recordLaunch(entry.key)
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)

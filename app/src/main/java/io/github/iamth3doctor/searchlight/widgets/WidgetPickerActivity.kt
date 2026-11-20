@@ -199,10 +199,7 @@ class WidgetPickerActivity : Activity() {
             h.b.preview.setImageDrawable(null)
             if (row.builtIn != null) {
                 h.b.preview.setImageResource(
-                    when (row.builtIn) {
-                        BuiltInWidget.WEATHER -> R.drawable.preview_weather_widget
-                        BuiltInWidget.CALENDAR -> R.drawable.preview_calendar_widget
-                    },
+                    if (row.builtIn == BuiltInWidget.WEATHER) R.drawable.preview_weather_widget else R.drawable.preview_calendar_widget,
                 )
                 return
             }

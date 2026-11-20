@@ -68,9 +68,6 @@ class SearchlightApp : Application() {
         currency = CurrencyRates(this)
         background = BackgroundSearch(files, media, messages, calendar)
         weather = WeatherRepository(this, prefs)
-        // Searchlight's weather is in its own colors: the skins (and their menu) belong to the
-        // second launcher's hero screen, so any skin chosen there is left saved, but not used here.
-        io.github.iamth3doctor.searchlight.weatherapp.Skins.init(null)
         // Focus: the allowlist starts as the default Phone and Messaging apps (once), and DND
         // follows Focus whichever way it's turned on or off.
         prefs.ensureFocusAllowlist(autoFavorites.defaultPackages())
