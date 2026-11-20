@@ -30,6 +30,56 @@ class MetricArtTest {
         return WeatherData("Tacoma", 47.25, -122.44, 7.0, 2, true, 9.0, 3.0, now, detail)
     }
 
+    @Test fun theTimeLapsePlaysTheWholeDayInAboutNineSeconds() {
+        assertTrue(DayLapse.PLAY_MS in 8_000L..10_000L)
+        val tomorrow = dayStart + 24 * hour
+        assertEquals(tomorrow, DayLapse.time(tomorrow, 0.0))
+        assertTrue(DayLapse.time(tomorrow, 1.0) in tomorrow + 23 * hour until tomorrow + 24 * hour)
+        assertEquals(tomorrow + 12 * hour, DayLapse.time(tomorrow, 0.5) + 30_000L) // half way: about noon
+        assertEquals(0.0, DayLapse.progress(0), 1e-9)
+        assertEquals(0.5, DayLapse.progress(DayLapse.PLAY_MS / 2), 1e-9)
+        assertEquals("then it rests at the end", 1.0, DayLapse.progress(DayLapse.PLAY_MS * 3), 1e-9)
+    }
+
+    @Test fun rainArrivesAtItsHourAndStopsAtItsHour() {
+        val d = data()
+        val tomorrow = dayStart + 24 * hour
+        assertEquals(listOf(tomorrow + 15 * hour to tomorrow + 18 * hour), DayLapse.wetWindows(d, tomorrow))
+        assertEquals(emptyList<Pair<Long, Long>>(), DayLapse.wetWindows(d, dayStart))
+        // Played through: dry at 2:59 PM, raining from 3 PM, dry again at 6 PM.
+        assertEquals(0.0, SceneModel.at(d, tomorrow + 15 * hour - 60_000L, live = false).rain, 0.0)
+        assertTrue(SceneModel.at(d, tomorrow + 15 * hour, live = false).rain > 0.4)
+        assertTrue(SceneModel.at(d, tomorrow + 17 * hour + 59 * 60_000L, live = false).rain > 0.4)
+        assertEquals(0.0, SceneModel.at(d, tomorrow + 18 * hour, live = false).rain, 0.0)
+        // The readout rides along hour by hour.
+        val r = DayLapse.readout(d, tomorrow + 15 * hour + 20 * 60_000L)
+        assertEquals(tomorrow + 15 * hour, r.hourMs)
+        assertEquals(80, r.precipProb)
+        assertEquals(63, r.code)
+        assertEquals(5.0 + 15 * 0.4, r.tempC, 1e-9)
+        val dry = DayLapse.readout(d, tomorrow + 14 * hour + 59 * 60_000L)
+        assertEquals(10, dry.precipProb)
+    }
+
+    @Test fun theSunRisesArcsAndSetsAndTheMoonHasTheNight() {
+        val d = data()
+        val tomorrow = dayStart + 24 * hour
+        val dawn = SceneModel.at(d, tomorrow + 3 * hour, live = false)
+        val noon = SceneModel.at(d, tomorrow + 12 * hour, live = false)
+        val dusk = SceneModel.at(d, tomorrow + 21 * hour, live = false)
+        assertTrue(dawn.sunAltDeg < 0 && dusk.sunAltDeg < 0)
+        assertTrue(noon.sunAltDeg > 10)
+        assertTrue("east in the morning, west after", SceneModel.at(d, tomorrow + 9 * hour, live = false).sunAz < 0 &&
+            SceneModel.at(d, tomorrow + 15 * hour, live = false).sunAz > 0)
+        // Days past the hourly forecast still play, from the day's own forecast.
+        val later = dayStart + 5 * 24 * hour
+        assertTrue(DayLapse.readout(d, later + 13 * hour).let { it.hourMs == later + 13 * hour && it.code == 2 })
+        // A wet day past the hourly forecast: wet all day, as the scene plays it.
+        val wetDay = d.copy(detail = d.detail!!.copy(daily = d.detail!!.daily.mapIndexed { i, x -> if (i == 5) x.copy(code = 95, precipMm = 12.0) else x }))
+        assertEquals(listOf(later to later + 24 * hour), DayLapse.wetWindows(wetDay, later))
+        assertEquals(emptyList<Pair<Long, Long>>(), DayLapse.wetWindows(d, later))
+    }
+
     @Test fun sunArcAndDaylight() {
         val rise = dayStart + 7 * hour
         val set = dayStart + 16 * hour + 30 * 60_000L

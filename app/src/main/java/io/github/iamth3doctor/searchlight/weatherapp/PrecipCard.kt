@@ -196,9 +196,9 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
         val next = Precip.nextWet(d, nowMs)
         expected.text = when {
             next == null -> context.getString(R.string.weather_precip_dry)
-            next.time <= nowMs -> context.getString(if (io.github.iamth3doctor.searchlight.weather.WeatherCodes.isSnow(next.code)) R.string.weather_precip_snow_now else R.string.weather_precip_rain_now)
+            next.time <= nowMs -> context.getString(if (io.github.iamth3doctor.searchlight.weather.SceneModel.isSnow(next.code)) R.string.weather_precip_snow_now else R.string.weather_precip_rain_now)
             else -> context.getString(
-                if (io.github.iamth3doctor.searchlight.weather.WeatherCodes.isSnow(next.code)) R.string.weather_precip_snow_around else R.string.weather_precip_rain_around,
+                if (io.github.iamth3doctor.searchlight.weather.SceneModel.isSnow(next.code)) R.string.weather_precip_snow_around else R.string.weather_precip_rain_around,
                 WeatherFormat.hour(context).format(Instant.ofEpochMilli(next.time).atOffset(zone)),
             )
         }
@@ -270,7 +270,7 @@ class IslandView(context: Context) : View(context) {
     private fun update() {
         val power = context.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
         val should = isAttachedToWindow && windowVisibility == VISIBLE && isShown && !power &&
-            WeatherMotion.powerSaveOverride != true
+            WeatherSceneView.powerSaveOverride != true
         if (should == running) return
         running = should
         if (should) { lastNs = 0L; choreographer.postFrameCallback(frame) } else choreographer.removeFrameCallback(frame)
@@ -325,7 +325,7 @@ class IslandView(context: Context) : View(context) {
         // Grass top: an ellipse with a lip, greener when wet.
         val grass = if (wet) 0xFF4E8F57.toInt() else 0xFF7BAA4E.toInt()
         oval.set(cx - iw / 2, topY - h * 0.07f, cx + iw / 2, topY + h * 0.07f)
-        paint.color = WeatherColors.mix(grass, 0xFF000000.toInt(), 0.25)
+        paint.color = SceneRenderer.mix(grass, 0xFF000000.toInt(), 0.25)
         canvas.drawOval(oval, paint)
         oval.offset(0f, -h * 0.02f)
         paint.color = grass
@@ -335,7 +335,7 @@ class IslandView(context: Context) : View(context) {
         paint.color = 0xFF5A3D27.toInt()
         val tx = cx - iw * 0.18f
         canvas.drawRect(tx - 2 * density, topY - h * 0.2f, tx + 2 * density, topY - h * 0.02f, paint)
-        paint.color = WeatherColors.mix(grass, 0xFF0F3D1C.toInt(), 0.45)
+        paint.color = SceneRenderer.mix(grass, 0xFF0F3D1C.toInt(), 0.45)
         canvas.drawCircle(tx, topY - h * 0.24f, h * 0.09f, paint)
         canvas.drawCircle(tx + h * 0.06f, topY - h * 0.19f, h * 0.07f, paint)
 
@@ -484,7 +484,7 @@ class PrecipGraphView(context: Context, private val light: Boolean) : View(conte
         path.lineTo(points.last().first, bottom)
         path.lineTo(points.first().first, bottom)
         path.close()
-        fill.shader = LinearGradient(0f, top, 0f, bottom, WeatherColors.withAlpha(drop, 0.95), WeatherColors.withAlpha(drop, 0.55), Shader.TileMode.CLAMP)
+        fill.shader = LinearGradient(0f, top, 0f, bottom, SceneRenderer.withAlpha(drop, 0.95), SceneRenderer.withAlpha(drop, 0.55), Shader.TileMode.CLAMP)
         canvas.drawPath(path, fill)
         fill.shader = null
     }
@@ -494,14 +494,14 @@ class PrecipGraphView(context: Context, private val light: Boolean) : View(conte
         if (points.size < 2) return
         val pts = points.map { (x, p) -> x to (bottom - p.coerceIn(0, 100) / 100f * (bottom - top)) }
         smooth(pts)
-        line.color = WeatherColors.withAlpha(drop, 0.9)
+        line.color = SceneRenderer.withAlpha(drop, 0.9)
         line.strokeWidth = 1.6f * density
         line.pathEffect = null
         canvas.drawPath(path, line)
         path.lineTo(pts.last().first, bottom)
         path.lineTo(pts.first().first, bottom)
         path.close()
-        fill.shader = LinearGradient(0f, top, 0f, bottom, WeatherColors.withAlpha(drop, 0.45), WeatherColors.withAlpha(drop, 0.08), Shader.TileMode.CLAMP)
+        fill.shader = LinearGradient(0f, top, 0f, bottom, SceneRenderer.withAlpha(drop, 0.45), SceneRenderer.withAlpha(drop, 0.08), Shader.TileMode.CLAMP)
         canvas.drawPath(path, fill)
         fill.shader = null
     }

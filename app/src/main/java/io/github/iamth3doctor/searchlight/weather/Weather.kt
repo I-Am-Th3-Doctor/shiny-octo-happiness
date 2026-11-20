@@ -80,10 +80,6 @@ data class GeoPlace(
 
 /** WMO weather interpretation codes, as returned by Open-Meteo's `weather_code`. */
 object WeatherCodes {
-    fun isSnow(code: Int) = code in 71..77 || code == 85 || code == 86
-    fun isThunder(code: Int) = code in 95..99
-    fun isWet(code: Int) = code in 51..67 || code in 80..82 || isThunder(code)
-
     fun describe(code: Int): String = when (code) {
         0 -> "Clear sky"
         1 -> "Mainly clear"

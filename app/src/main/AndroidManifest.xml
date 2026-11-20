@@ -109,7 +109,7 @@
             </intent-filter>
         </activity>
 
-        <!-- The weather screen: the conditions (from the Weather widget and tile). -->
+        <!-- The weather screen: a living scene of the conditions (from the Weather widget and tile). -->
         <activity
             android:name=".weatherapp.WeatherActivity"
             android:exported="false"

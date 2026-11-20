@@ -122,8 +122,8 @@ object Precip {
     fun format(inches: Double): String = String.format(Locale.US, "%.2f IN", inches)
 
     private fun typeOf(code: Int, mm: Double?, chance: Int?): Type = when {
-        WeatherCodes.isSnow(code) -> Type.SNOW
-        WeatherCodes.isWet(code) || (mm ?: 0.0) >= 0.1 -> Type.RAIN
+        SceneModel.isSnow(code) -> Type.SNOW
+        SceneModel.isWet(code) || (mm ?: 0.0) >= 0.1 -> Type.RAIN
         else -> Type.NONE
     }
 

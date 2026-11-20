@@ -90,7 +90,7 @@ class MetricArtView(context: Context, private val light: Boolean) : View(context
     private val sunColor = 0xFFFFC94D.toInt()
     private val drop = 0xFF5AA9F0.toInt()
 
-    private fun powerSave() = WeatherMotion.powerSaveOverride
+    private fun powerSave() = WeatherSceneView.powerSaveOverride
         ?: (context.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true)
 
     private val running get() = active && isAttachedToWindow && isShown && !powerSave()

@@ -4,8 +4,64 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /*
- * The numbers behind the conditions' animated metric cards: all from the forecast already on hand (no other calls). Pure (no Android types); JVM-tested.
+ * The numbers behind the 7-day view's day time-lapse and the details' animated metric cards:
+ * all from the forecast already on hand (no other calls). Pure (no Android types); JVM-tested.
  */
+
+/** A whole day played as a time-lapse: midnight to midnight there, in [PLAY_MS]. */
+object DayLapse {
+    const val PLAY_MS = 9_000L
+    private const val HOUR = 3_600_000L
+    private const val DAY = 24 * HOUR
+
+    /** The time [f] (0..1) of the way through the day starting at [dayStart] (its local midnight). */
+    fun time(dayStart: Long, f: Double): Long = dayStart + (f.coerceIn(0.0, 1.0) * (DAY - 60_000L)).toLong()
+
+    /** How far through the play [elapsedMs] in is (0..1, then it rests at the end). */
+    fun progress(elapsedMs: Long): Double = (elapsedMs.toDouble() / PLAY_MS).coerceIn(0.0, 1.0)
+
+    /** What the hour readout says at [t]: that hour's start, temperature, chance of rain and condition. */
+    data class Readout(val hourMs: Long, val tempC: Double, val precipProb: Int?, val code: Int)
+
+    fun readout(data: WeatherData, t: Long): Readout {
+        val hour = data.detail?.hourly?.lastOrNull { it.time <= t && t - it.time < HOUR }
+        if (hour != null) return Readout(hour.time, hour.tempC, hour.precipProb, hour.code)
+        // Past the hourly forecast: the day's own forecast, played through the day.
+        val off = (data.detail?.utcOffsetSec ?: 0) * 1000L
+        val start = Math.floorDiv(t + off, HOUR) * HOUR - off
+        val c = SceneModel.at(data, start, live = false)
+        val day = data.detail?.daily?.lastOrNull { it.date <= t }
+        return Readout(start, c.tempC, day?.precipPct, c.code)
+    }
+
+    /**
+     * The hours of a day where rain (or snow) is expected: (start, end) pairs, end exclusive. The
+     * hour the scene plays for each: the hourly forecast, or past it the day's own forecast.
+     */
+    fun wetWindows(data: WeatherData, dayStart: Long): List<Pair<Long, Long>> {
+        val hours = data.detail?.hourly.orEmpty()
+        val made by lazy { SceneModel.fromDay(data, dayStart + 12 * HOUR)?.detail?.hourly.orEmpty() }
+        val out = ArrayList<Pair<Long, Long>>()
+        var open: Long? = null
+        for (k in 0 until 24) {
+            val t = dayStart + k * HOUR
+            val pastForecast = hours.isEmpty() || t > hours.last().time + 2 * HOUR
+            val h = if (pastForecast) made.lastOrNull { it.time <= t } else hours.lastOrNull { it.time <= t }
+            val wet = h != null && isWet(h)
+            if (wet && open == null) open = t
+            if (!wet && open != null) { out += open to t; open = null }
+        }
+        open?.let { out += it to dayStart + DAY }
+        return out
+    }
+
+    /** An hour that plays wet: a wet condition, or measurable precipitation that's likely. */
+    fun isWet(h: HourPoint): Boolean {
+        val code = h.code
+        val wetCode = code in 51..67 || code in 71..77 || code in 80..86 || code in 95..99
+        return wetCode || ((h.precipMm ?: 0.0) >= 0.1 && (h.precipProb ?: 100) >= 30)
+    }
+}
 
 /** The details' metric cards, expanded: what each animation shows. */
 object MetricArt {

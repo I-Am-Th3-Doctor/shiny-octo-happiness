@@ -96,4 +96,18 @@ class AlertsPrecipTest {
         assertEquals(3.0 / 25.4, day3.rateIn, 1e-9)
     }
 
+    @Test fun anAlertTurnsTheSceneSevere() {
+        val calm = SceneModel.at(data(), now, live = true)
+        assertNull(calm.severe)
+        assertTrue(!calm.thunder && calm.rain == 0.0)
+        val storm = WeatherAlert("s", "Severe Thunderstorm Warning", "", "Severe", now - hour, now + 2 * hour, "", "", "")
+        val c = SceneModel.at(data(listOf(storm)), now, live = true)
+        assertEquals(AlertKind.THUNDER, c.severe)
+        assertTrue(c.thunder && c.rain >= 0.85 && c.cloudCover == 1.0)
+        // After it expires, the forecast's own weather again.
+        assertNull(SceneModel.at(data(listOf(storm)), now + 3 * hour, live = false).severe)
+        val snow = WeatherAlert("w", "Winter Storm Warning", "", "Severe", null, null, "", "", "")
+        val s = SceneModel.at(data(listOf(snow)), now, live = true)
+        assertTrue(s.snow >= 0.9 && s.rain == 0.0)
+    }
 }

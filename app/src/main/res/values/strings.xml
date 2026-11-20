@@ -93,10 +93,6 @@
     <string name="widget_pin_title">Add this widget to your home screen?</string>
     <string name="widget_pin_add">Add</string>
     <string name="rail_all_apps">All apps</string>
-    <string name="weather_app">Weather app</string>
-    <string name="weather_app_choose">Choose weather app</string>
-    <string name="weather_app_none">None (tapping the tile asks)</string>
-    <string name="weather_app_unset">Not chosen: tapping the weather tile asks</string>
 
 
     <string name="battery_full">Fully charged</string>
@@ -439,15 +435,26 @@
 
     <!-- Weather widget -->
     <string name="widget_weather">Weather</string>
+    <string name="widget_weather_3day">Weather · 3 days</string>
+    <string name="widget_weather_day">Weather · today</string>
+    <string name="weather_widget_now">NOW</string>
     <string name="weather_widget_feels">Feels %1$s</string>
     <string name="weather_widget_hi_lo">H %1$s · L %2$s</string>
     <string name="weather_widget_updated">Updated %1$s</string>
+    <string name="weather_widget_offline">offline — showing last update</string>
+    <string name="weather_widget_offline_short">offline</string>
     <string name="weather_widget_no_data">No weather yet</string>
     <string name="weather_widget_desc">Weather: %1$s, %2$s in %3$s. Tap for details.</string>
+    <string name="weather_detail_now">Now</string>
     <string name="weather_detail_hourly">Hourly</string>
     <string name="weather_detail_daily">7 days</string>
     <string name="weather_detail_sun">Sun</string>
     <string name="weather_detail_moon">Moon</string>
+    <string name="weather_detail_sunrise">Sunrise</string>
+    <string name="weather_detail_sunset">Sunset</string>
+    <string name="weather_detail_moonrise">Moonrise</string>
+    <string name="weather_detail_moonset">Moonset</string>
+    <string name="weather_detail_phase">Phase</string>
     <string name="weather_detail_humidity">Humidity</string>
     <string name="weather_detail_dew">Dew point %1$s</string>
     <string name="weather_detail_visibility">Visibility</string>
@@ -460,8 +467,24 @@
     <string name="weather_detail_no_set">No set today</string>
     <string name="weather_detail_today">Today</string>
     <string name="weather_detail_now_hour">Now</string>
+    <string name="weather_detail_close">Close</string>
     <!-- Weather screen -->
+    <string name="weather_bar_desc">The day\'s forecast. Tap or drag to preview an hour; tap Now for live weather.</string>
+    <string name="weather_bar_now">Now</string>
+    <string name="weather_bar_rain">%1$d%% rain</string>
     <string name="weather_offline_desc">Offline — showing the last update</string>
+    <string name="weather_scene_desc">Weather scene: %1$s, %2$s. Tap for details.</string>
+    <string name="weather_sound_on">Sound on</string>
+    <string name="weather_sound_off">Sound off</string>
+    <string name="weather_sound_silenced">Your phone is silenced, so the weather stays quiet</string>
+    <string name="weather_more_desc">Weather details</string>
+    <string name="weather_menu_desc">Menu: skins</string>
+    <string name="weather_menu_title">Menu</string>
+    <string name="weather_skin_section">Skin</string>
+    <string name="weather_skin_active">In use</string>
+    <string name="weather_skin_desc">%1$s skin</string>
+    <string name="weather_skin_desc_active">%1$s skin, in use</string>
+    <string name="weather_wind_arrow_desc">Wind %1$d mph, blowing %2$s</string>
     <string name="weather_detail_lit">%1$d%% lit</string>
     <!-- Weather: precip card -->
     <string name="weather_precip">Precip</string>
@@ -486,7 +509,12 @@
     <string name="weather_alert_effective">Effective %1$s</string>
     <string name="weather_alert_expires">Expires %1$s</string>
     <string name="weather_alert_what_to_do">What to do</string>
+    <string name="weather_alert_glyph_desc">Severe weather alert. Tap for details.</string>
     <string name="weather_back">Back</string>
+    <string name="weather_week_title">7 days</string>
+    <string name="weather_week_hint">Hold a day to watch it play</string>
+    <string name="weather_week_wet">rain %1$s–%2$s</string>
+    <string name="weather_week_readout">%1$s · %2$s · %3$d%% rain</string>
     <string name="weather_metric_hint">Tap for how it works</string>
     <string name="weather_metric_open">Open; tap to close</string>
     <string name="weather_metric_daylight">Daylight %1$s</string>
@@ -494,6 +522,7 @@
     <string name="weather_metric_sun_before">Sunrise in %1$s</string>
     <string name="weather_metric_sun_down">The sun has set</string>
     <string name="weather_metric_moon_none">The moon isn\'t up today</string>
+    <string name="weather_metric_moon_up">Up %1$s</string>
     <string name="weather_metric_moon_dark">best seen %1$s, in a dark sky</string>
     <string name="weather_metric_moon_day">up only in daylight today</string>
     <string name="weather_metric_dew">Dew point %1$s: %2$s</string>
@@ -502,7 +531,23 @@
     <string name="weather_metric_aqi">AQI %1$d · %2$s: %3$s</string>
     <string name="weather_metric_wind">%1$s mph from %2$s: %3$s</string>
     <string name="weather_metric_calm">Calm</string>
+    <string name="weather_week_open">7 days</string>
+    <string name="weather_week_open_desc">7-day forecast. Swipe up from the scene to open it.</string>
+    <string name="weather_details">Details</string>
+    <string name="weather_details_title">Details</string>
     <string name="weather_alert_title">Weather alert</string>
+    <string name="weather_quick_cloud">Cloud cover</string>
+    <string name="weather_quick_precip">Precip chance</string>
+    <string name="weather_quick_wind">Wind</string>
+    <string name="weather_quick_temp">Temperature</string>
+    <string name="weather_quick_feels">Feels like</string>
+    <string name="weather_quick_humidity">Humidity</string>
+    <string name="weather_quick_dew">Dew point</string>
+    <string name="weather_quick_uv">Max UV</string>
+    <string name="weather_quick_visibility">Visibility</string>
+    <string name="weather_quick_sun">Sunrise · Sunset</string>
+    <string name="weather_quick_moon">Moon</string>
+    <string name="weather_quick_more">Precip, hourly and more</string>
     <string name="weather_places_title">Locations</string>
     <string name="weather_places_search">Search for a city</string>
     <string name="weather_places_home">%1$s (home)</string>

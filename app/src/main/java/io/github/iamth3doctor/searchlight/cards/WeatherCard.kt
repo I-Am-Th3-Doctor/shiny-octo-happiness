@@ -14,7 +14,6 @@ import android.widget.TextView
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.WidgetCenterActivity
 import io.github.iamth3doctor.searchlight.searchlight
-import io.github.iamth3doctor.searchlight.ui.pickWeatherApp
 import io.github.iamth3doctor.searchlight.ui.pxF
 import io.github.iamth3doctor.searchlight.weather.TempUnit
 import io.github.iamth3doctor.searchlight.weather.Temperature
@@ -23,9 +22,8 @@ import java.util.Date
 
 /**
  * Icon, then one line: place · temp · condition · high/low · updated (it scrolls when it
- * doesn't fit). Tap: open your weather app (chosen in Settings or from the long-press menu);
- * with none chosen, or one that can't be opened, the weather's conditions screen instead. With
- * no weather to show: set a location / retry.
+ * doesn't fit). Tap: open your weather app (chosen on first tap), or set a location / retry
+ * when there's no weather to show.
  * Long-press: switch °F/°C, refresh, weather settings.
  */
 class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
@@ -49,13 +47,16 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
 
     override fun bind(root: View) {
         emoji = root.findViewById(R.id.weatherEmoji)
+        // The weather in grays, like the weather screen and widgets.
+        io.github.iamth3doctor.searchlight.weatherapp.Monochrome.apply(emoji)
         line = root.findViewById(R.id.weatherLine)
         val card = root.findViewById<View>(R.id.card)
         card.setOnClickListener { v ->
             when {
                 repo.state.problem == WeatherRepository.Problem.NEEDS_LOCATION -> openSettings()
                 repo.state.data == null -> repo.refresh() // the tile says "tap to retry"
-                else -> io.github.iamth3doctor.searchlight.weatherapp.OpenWeather.open(activity, v)
+                // The weather screen: the living scene of the conditions now.
+                else -> io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity)
             }
         }
         card.setOnLongClickListener { showMenu(it); true }
@@ -135,14 +136,12 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
         PopupMenu(activity, anchor).apply {
             menu.add(0, 1, 0, activity.getString(R.string.weather_switch_unit, other.symbol))
             menu.add(0, 2, 1, R.string.weather_refresh)
-            menu.add(0, 4, 2, R.string.weather_app_choose)
             menu.add(0, 3, 3, R.string.weather_settings)
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     1 -> { prefs.tempUnit = other; render() }
                     2 -> repo.refresh()
                     3 -> openSettings()
-                    4 -> activity.pickWeatherApp()
                 }
                 true
             }

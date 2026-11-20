@@ -1151,7 +1151,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     /** The surfaces with glass behind their text. */
     private fun glassSurfaces(): List<View> =
-        listOf(binding.homeCard, binding.resultsPanel, binding.webPill, binding.rail, binding.allApps) + widgets.calendarViews() + widgets.weatherViews()
+        listOf(binding.homeCard, binding.resultsPanel, binding.webPill, binding.rail, binding.allApps) + widgets.calendarViews()
 
     /**
      * Toward Clear the glass stops darkening the wallpaper under it, so white text on it gets a

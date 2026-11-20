@@ -50,14 +50,33 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     /** Now, in ms. */
     var clock: () -> Long = System::currentTimeMillis
 
+    /** Holding a day in the 7 DAYS list: play it ([onHoldDay] with its index) until let go ([onReleaseDay]). */
+    var onHoldDay: ((Int) -> Unit)? = null
+    var onReleaseDay: (() -> Unit)? = null
+    /** The day being held, or null. */
+    var heldDay: () -> Int? = { null }
+
     /** The 7 DAYS rows (tests). */
     val dayRows = ArrayList<View>()
 
-    /** The big number and condition at the top (tests read them). */
+    /** The big number and condition at the top (tests read them; a played day takes them over). */
     var nowTemp: TextView? = null
         private set
     var nowCondition: TextView? = null
         private set
+    private var liveTemp: CharSequence = ""
+    private var liveCondition: CharSequence = ""
+
+    /** A played moment's temperature and condition in the big number's place; null: now's again. */
+    fun showMoment(tempC: Double?, condition: String?) {
+        if (tempC == null) {
+            nowTemp?.text = liveTemp
+            nowCondition?.text = liveCondition
+        } else {
+            nowTemp?.text = "${WeatherText.f(tempC)}°F"
+            nowCondition?.text = condition
+        }
+    }
 
     /** The precip card (kept across renders, so its graph and island keep their state). */
     val precip = PrecipCard(context, light)
@@ -68,7 +87,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     private val fg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
     private val dim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
     private val accent = context.color(if (light) R.color.accent else R.color.gold)
-    private val insetColor = if (light) 0x14000000 else context.color(R.color.surface_inset)
+    private val insetColor = if (light) 0x99FFFFFF.toInt() else context.color(R.color.surface_inset)
 
     private fun text(style: Int, dimmed: Boolean = false, bold: Boolean = false) = TextView(context).apply {
         type(style)
@@ -98,6 +117,11 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     }
 
     private fun deg(c: Double) = "${WeatherText.f(c)}°"
+
+    /** Marks day [i]'s row as the one playing (or not). */
+    fun highlightDay(i: Int, on: Boolean) {
+        (dayRows.getOrNull(i)?.background as? GradientDrawable)?.setColor(if (on) (if (light) 0x1A000000 else 0x26FFFFFF) else 0)
+    }
 
     fun render(state: WeatherRepository.State) {
         body.removeAllViews()
@@ -146,6 +170,8 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         col.addView(cond)
         nowTemp = temp
         nowCondition = cond
+        liveTemp = temp.text
+        liveCondition = cond.text
         d?.feelsLikeC?.let { f -> col.addView(text(Type.BODY, dimmed = true).apply { text = context.getString(R.string.weather_widget_feels, deg(f)) }) }
         col.addView(text(Type.BODY, dimmed = true).apply { text = context.getString(R.string.weather_widget_hi_lo, deg(data.highC), deg(data.lowC)) })
         row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(R.dimen.space_m) })
@@ -241,7 +267,12 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
             row.addView(text(Type.BODY, bold = true).apply { text = deg(day.highC); gravity = Gravity.END },
                 LinearLayout.LayoutParams(col + px(R.dimen.space_s), ViewGroup.LayoutParams.WRAP_CONTENT))
             row.contentDescription = "$name, ${WeatherCodes.describe(day.code)}, high ${deg(day.highC)}, low ${deg(day.lowC)}" +
-                (day.precipPct?.let { ", $it% chance of precipitation" } ?: "")
+                (day.precipPct?.let { ", $it% chance of precipitation" } ?: "") + ". Hold to preview."
+            // Hold a day: it plays as a time-lapse at the top of the screen until let go.
+            row.background = GradientDrawable().apply { cornerRadius = pxF(R.dimen.radius_card) / 3; setColor(0) }
+            DayLapseWindow.holdToPlay(row, isHeld = { heldDay() == i },
+                onHold = { onHoldDay?.invoke(i) },
+                onRelease = { onReleaseDay?.invoke() })
             dayRows += row
             list.addView(row, lp())
         }
