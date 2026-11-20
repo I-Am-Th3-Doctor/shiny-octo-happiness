@@ -38,6 +38,15 @@ class BuiltInWidgetTest {
         assertFalse(BuiltInWidget.CALENDAR.isWeather)
     }
 
+    @Test fun stickyNoteIsAFixedTwoByTwo() {
+        assertEquals(BuiltInWidget.STICKY_NOTE, BuiltInWidget.fromKey("sticky_note"))
+        assertEquals(2 to 2, BuiltInWidget.STICKY_NOTE.defaultCols to BuiltInWidget.STICKY_NOTE.defaultRows)
+        assertTrue(BuiltInWidget.STICKY_NOTE.fixedSize)
+        assertFalse(BuiltInWidget.STICKY_NOTE.isWeather)
+        // Only the note is fixed; every other widget still resizes.
+        assertEquals(listOf(BuiltInWidget.STICKY_NOTE), BuiltInWidget.entries.filter { it.fixedSize })
+    }
+
     @Test fun builtInsSurviveStorageAndRefitting() {
         val stored = listOf(GridSpec(-1, 0, 0, 4, 2), GridSpec(5, 0, 2, 2, 2))
         assertEquals(stored, WidgetGrid.parse(WidgetGrid.serialize(stored)))

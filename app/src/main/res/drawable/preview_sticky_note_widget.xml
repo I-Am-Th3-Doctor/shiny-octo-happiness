@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget-picker preview of the built-in Sticky note: a frosted glass note, tilted, a strip of tape on
+     top, the date in marker, three lines in pen (the second, next, bold and underlined; the
+     first ticked off) and the curled corner. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="@dimen/size_preview_width" android:height="@dimen/size_preview_height"
+    android:viewportWidth="120" android:viewportHeight="88">
+    <group android:rotation="-2" android:pivotX="60" android:pivotY="44">
+        <!-- shadow -->
+        <path android:fillColor="#33000000" android:pathData="M28,9h66v58l-11,11h-55z" />
+        <!-- paper, corner folded -->
+        <path android:fillColor="#E6F0F1F3" android:pathData="M26,6h66v58c-2,6 -6,10 -11,11h-55z" />
+        <path android:fillColor="#E6FFFFFF" android:pathData="M26,6h66v30c-30,2 -50,12 -66,24z" />
+        <!-- curl -->
+        <path android:fillColor="#FFD9DCE0" android:pathData="M92,64c-2,6 -6,10 -11,11c3,-6 6,-10 11,-11z" />
+        <!-- tape -->
+        <path android:fillColor="#B3F2F3F5" android:pathData="M48,1h24l0.8,2l-0.8,2l0.8,2l-0.8,2h-24l-0.8,-2l0.8,-2l-0.8,-2z" />
+        <!-- date, in marker -->
+        <path android:fillColor="#FF26272B" android:pathData="M33,17h40a3,3 0,0 1,0 6h-40a3,3 0,0 1,0 -6z" />
+        <!-- done: tick and struck line -->
+        <path android:strokeColor="#BF26272B" android:strokeWidth="1.4" android:strokeLineCap="round"
+            android:pathData="M32,35l2,2l3,-4 M40,34.5h30" />
+        <path android:fillColor="#BF26272B" android:pathData="M40,33.4h30a1.1,1.1 0,0 1,0 2.2h-30a1.1,1.1 0,0 1,0 -2.2z" />
+        <!-- next: red, underlined -->
+        <path android:fillColor="#FF111114" android:pathData="M34,46m-1.3,0a1.3,1.3 0,1 1,2.6,0a1.3,1.3 0,1 1,-2.6,0" />
+        <path android:fillColor="#FF111114" android:pathData="M40,44.8h34a1.2,1.2 0,0 1,0 2.4h-34a1.2,1.2 0,0 1,0 -2.4z" />
+        <path android:strokeColor="#FF111114" android:strokeWidth="1" android:strokeLineCap="round" android:pathData="M40,50.5c10,1 22,1 34,-0.5" />
+        <!-- later -->
+        <path android:fillColor="#FF26272B" android:pathData="M34,58m-0.9,0a0.9,0.9 0,1 1,1.8,0a0.9,0.9 0,1 1,-1.8,0" />
+        <path android:fillColor="#FF26272B" android:pathData="M40,56.8h26a1.2,1.2 0,0 1,0 2.4h-26a1.2,1.2 0,0 1,0 -2.4z" />
+    </group>
+</vector>

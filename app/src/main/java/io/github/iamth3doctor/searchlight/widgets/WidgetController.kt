@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.view.View
 import androidx.core.content.ContextCompat
 import io.github.iamth3doctor.searchlight.calendar.CalendarEvents
+import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.Permissions
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
@@ -166,10 +167,19 @@ class WidgetController(
     fun calendarViews(): List<CalendarWidgetView> = views.values.filterIsInstance<CalendarWidgetView>()
 
     /** Returning home, calendar access granted, or the date changed: every Calendar widget reloads. */
-    fun refreshCalendars() = calendarViews().forEach { it.refresh() }
+    fun refreshCalendars() {
+        calendarViews().forEach { it.refresh() }
+        stickyNoteViews().forEach { it.refresh() }
+    }
+
+    /** The Sticky notes on the grid (either posture), live. */
+    fun stickyNoteViews(): List<StickyNoteWidgetView> = views.values.filterIsInstance<StickyNoteWidgetView>()
 
     /** A minute went by (while home is showing): live labels move on. */
-    fun tickCalendars() = calendarViews().forEach { it.tick() }
+    fun tickCalendars() {
+        calendarViews().forEach { it.tick() }
+        stickyNoteViews().forEach { it.tick() }
+    }
 
     private val refreshCalendarsNow = Runnable { refreshCalendars() }
 
@@ -242,12 +252,23 @@ class WidgetController(
         BuiltInWidget.WEATHER_3DAY -> forecastView(WeatherForecastWidgetView.Style.THREE_DAYS)
         BuiltInWidget.WEATHER_DAY -> forecastView(WeatherForecastWidgetView.Style.DAY)
         BuiltInWidget.CALENDAR -> calendarView()
+        BuiltInWidget.STICKY_NOTE -> stickyNoteView(id)
     }
 
     private fun forecastView(style: WeatherForecastWidgetView.Style): View =
         WeatherForecastWidgetView(activity, activity.searchlight.weather, style).also { v ->
             v.onLongPress = { grid.enterEditModeFromLongPress() }
             v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity) }
+        }
+
+    private fun stickyNoteView(id: Int): View =
+        // Each note keeps its own small tilt, one way or the other, as if stuck on by hand.
+        StickyNoteWidgetView(activity, calendarEvents, tiltDeg = if (id % 2 == 0) -1.6f else 1.3f).also { v ->
+            v.onLongPress = { grid.enterEditModeFromLongPress() }
+            v.onRequestPermission = { if (!grid.editMode) requestCalendarPermission() }
+            v.onOpenToday = { now -> if (!grid.editMode) Actions.openCalendarAt(activity, now) }
+            v.onOpenEvent = { e -> if (!grid.editMode) Actions.openEvent(activity, e.eventId, e.begin, e.end) }
+            v.refresh()
         }
 
     private fun calendarView(): View = CalendarWidgetView(activity, calendarEvents).also { v ->
@@ -381,7 +402,7 @@ class WidgetController(
     }
 
     override fun resizable(id: Int): Pair<Boolean, Boolean> {
-        if (BuiltInWidget.isBuiltIn(id)) return true to true
+        if (BuiltInWidget.isBuiltIn(id)) return if (builtInType(id).fixedSize) false to false else true to true
         val mode = manager.getAppWidgetInfo(id)?.resizeMode ?: return false to false
         return (mode and AppWidgetProviderInfo.RESIZE_HORIZONTAL != 0) to (mode and AppWidgetProviderInfo.RESIZE_VERTICAL != 0)
     }
@@ -393,6 +414,9 @@ class WidgetController(
                 BuiltInWidget.WEATHER_3DAY -> R.dimen.size_weather_3day_min_width to R.dimen.size_weather_3day_min_height
                 BuiltInWidget.WEATHER_DAY -> R.dimen.size_weather_day_min_width to R.dimen.size_weather_day_min_height
                 BuiltInWidget.CALENDAR -> R.dimen.size_cal_min_width to R.dimen.size_cal_min_height
+                // Fixed at 2 × 2.
+                BuiltInWidget.STICKY_NOTE -> return BuiltInWidget.STICKY_NOTE.defaultCols.coerceAtMost(grid.cols) to
+                    BuiltInWidget.STICKY_NOTE.defaultRows.coerceAtMost(grid.rows)
             }
             return WidgetGrid.spanFor(activity.resources.getDimension(wRes) / density, grid.cellWidthDp, grid.cols) to
                 WidgetGrid.spanFor(activity.resources.getDimension(hRes) / density, grid.cellHeightDp, grid.rows)
