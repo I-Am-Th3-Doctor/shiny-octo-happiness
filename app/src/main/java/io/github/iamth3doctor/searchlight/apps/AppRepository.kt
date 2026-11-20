@@ -284,7 +284,10 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
      * this way and just use [launch].
      */
     fun launchAdjacent(entry: AppEntry, from: Context) {
-        if (entry.isSelf || entry.user != android.os.Process.myUserHandle()) return launch(entry, null, from)
+        if (entry.isSelf || entry.user != android.os.Process.myUserHandle()) {
+            launch(entry, null, from)
+            return
+        }
         prefs.recordLaunch(entry.key)
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)
