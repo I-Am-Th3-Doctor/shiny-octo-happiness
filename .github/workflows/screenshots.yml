@@ -70,6 +70,10 @@ jobs:
             adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-*.txt' || true
             adb shell wm size 1840x2208
             adb shell wm density 420
+            # Wait until the new size has really reached the display (a slow emulator can take a
+            # while), so it doesn't land mid-test and restart the activity under the first one.
+            for i in $(seq 1 60); do adb shell dumpsys window displays | grep -q "cur=1840x2208" && break; sleep 1; done
+            adb shell input keyevent KEYCODE_HOME
             sleep 5
             adb shell wm size
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded || touch /tmp/device-tests-failed
