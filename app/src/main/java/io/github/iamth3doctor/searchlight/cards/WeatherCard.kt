@@ -14,7 +14,6 @@ import android.widget.TextView
 import io.github.iamth3doctor.searchlight.R
 import io.github.iamth3doctor.searchlight.WidgetCenterActivity
 import io.github.iamth3doctor.searchlight.searchlight
-import io.github.iamth3doctor.searchlight.ui.pickWeatherApp
 import io.github.iamth3doctor.searchlight.ui.pxF
 import io.github.iamth3doctor.searchlight.weather.TempUnit
 import io.github.iamth3doctor.searchlight.weather.Temperature
@@ -23,9 +22,8 @@ import java.util.Date
 
 /**
  * Icon, then one line: place · temp · condition · high/low · updated (it scrolls when it
- * doesn't fit). Tap: open your weather app (chosen in Settings or from the long-press menu);
- * with none chosen, or one that can't be opened, the weather's conditions screen instead. With
- * no weather to show: set a location / retry.
+ * doesn't fit). Tap: the weather's conditions screen (the day, precipitation, hours and 7 days),
+ * as the Weather widget opens. With no weather to show: set a location / retry.
  * Long-press: switch °F/°C, refresh, weather settings.
  */
 class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
@@ -55,7 +53,7 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
             when {
                 repo.state.problem == WeatherRepository.Problem.NEEDS_LOCATION -> openSettings()
                 repo.state.data == null -> repo.refresh() // the tile says "tap to retry"
-                else -> openWeather(v)
+                else -> io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity)
             }
         }
         card.setOnLongClickListener { showMenu(it); true }
@@ -135,33 +133,18 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
         PopupMenu(activity, anchor).apply {
             menu.add(0, 1, 0, activity.getString(R.string.weather_switch_unit, other.symbol))
             menu.add(0, 2, 1, R.string.weather_refresh)
-            menu.add(0, 4, 2, R.string.weather_app_choose)
             menu.add(0, 3, 3, R.string.weather_settings)
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     1 -> { prefs.tempUnit = other; render() }
                     2 -> repo.refresh()
                     3 -> openSettings()
-                    4 -> activity.pickWeatherApp()
                 }
                 true
             }
             show()
         }
     }
-
-    /**
-     * Your weather app; if none is chosen, it's gone, or it won't open, the conditions screen
-     * (the day, precipitation, hours and 7 days, from Searchlight's own forecast).
-     */
-    private fun openWeather(source: View) {
-        val app = weatherApp()
-        if (app != null && activity.searchlight.apps.launch(app, source, activity, quiet = true)) return
-        io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity)
-    }
-
-    /** The chosen weather app, if it's still installed. */
-    private fun weatherApp() = prefs.weatherAppKey?.let { activity.searchlight.apps.find(it) }
 
     private fun openSettings() = activity.startActivity(Intent(activity, WidgetCenterActivity::class.java))
 }

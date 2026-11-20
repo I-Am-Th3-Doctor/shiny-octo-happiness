@@ -184,14 +184,12 @@ class WeatherSceneDeviceTest {
             app.prefs.tempUnit = TempUnit.FAHRENHEIT
             app.prefs.weatherSound = true
             savedSkin = app.prefs.weatherSkin
-            savedWeatherApp = app.prefs.weatherAppKey
             Skins.set(app, WeatherSkin.GOLD)
             repo.showForTest(reading(0, 2, 0.0), offline = false)
         }
     }
 
     private var savedSkin: String? = null
-    private var savedWeatherApp: String? = null
 
     private var savedNight = "no"
 
@@ -219,7 +217,6 @@ class WeatherSceneDeviceTest {
             app.prefs.weatherSound = savedSound
             Skins.set(app, WeatherSkin.of(savedSkin))
             app.prefs.weatherSkin = savedSkin
-            app.prefs.weatherAppKey = savedWeatherApp
             repo.showForTest(savedWeather, offline = false)
         }
         shell("input keyevent KEYCODE_HOME")
@@ -1071,53 +1068,41 @@ class WeatherSceneDeviceTest {
         }
     }
 
-    /** The package of the app on top of the screen. */
-    private fun topPackage(): String =
-        shell("dumpsys activity activities").lineSequence().firstOrNull { "topResumedActivity" in it || "mResumedActivity" in it }
-            ?.substringAfter(" u0 ", "")?.substringBefore('/')?.trim().orEmpty()
-
     private fun allViews(root: View): List<View> =
         listOf(root) + ((root as? ViewGroup)?.let { g -> (0 until g.childCount).flatMap { allViews(g.getChildAt(it)) } } ?: emptyList())
 
-    @Test fun theWeatherTileOpensTheChosenWeatherApp() = home { h ->
-        // The chosen app (a weather app on a phone; the Clock here, the emulator having none).
-        val chosen = onMain { app.apps.apps.firstOrNull { it.component.packageName == "com.google.android.deskclock" } ?: app.apps.apps.first { !it.isSelf } }
-        main { app.prefs.weatherAppKey = chosen.key }
-        tapTile(h)
-        waitFor("${chosen.component.packageName} opened", 15_000) { topPackage() == chosen.component.packageName }
-        assertNull("not Searchlight's weather screen", onMain { WeatherActivity.current })
-        shot("115-tile-opens-weather-app")
-        shell("input keyevent KEYCODE_HOME")
-    }
-
-    @Test fun withNoWeatherAppTheTileOpensTheConditionsNeverTheHero() = home { h ->
-        // None chosen, then one that's no longer installed (it can't be opened).
-        for (key in listOf(null, "gone.weather.app/gone.weather.app.Main#0")) {
-            main { app.prefs.weatherAppKey = key }
-            val monitor = instrumentation.addMonitor(WeatherActivity::class.java.name, null, false)
-            try {
-                tapTile(h)
-                val opened = monitor.waitForActivityWithTimeout(10_000) as WeatherActivity?
-                assertNotNull("$key: the weather opened", opened)
-                waitFor("$key: on the conditions") { onMain { opened!!.dataShown && !opened.screens.moving && opened.dataScreen.width > 0 } }
-                val panel = onMain { opened!!.panel }
-                for (k in listOf("now", "summary", "precip", "hourly", "daily")) assertNotNull("$key: the conditions' $k", onMain { panel.sections[k] })
-                // No hero anywhere: no full-screen scene of its own, giant number, callouts or day bar.
-                val views = onMain { allViews(opened!!.window.decorView) }
-                assertTrue("$key: no hero", views.none {
-                    it is io.github.iamth3doctor.searchlight.weatherapp.HeroLayout || it is io.github.iamth3doctor.searchlight.weatherapp.HeroTempView ||
-                        it is io.github.iamth3doctor.searchlight.weatherapp.DayBarView || it is io.github.iamth3doctor.searchlight.weatherapp.QuickDataView ||
-                        it.tag == "weather_screen_hero"
-                })
-                // The scene there is the dimmed one behind the conditions.
-                assertTrue(views.any { it is WeatherSceneView })
-                if (key == null) shot("115-tile-opens-conditions")
-                // Back closes the weather (there's nothing under the conditions).
-                main { opened!!.back() }
-                waitFor("$key: closed") { onMain { opened!!.isFinishing } }
-            } finally {
-                instrumentation.removeMonitor(monitor)
-            }
+    @Test fun theWeatherTileOpensTheConditionsNeverTheHero() = home { h ->
+        show(reading(3, 100, 0.0))
+        val monitor = instrumentation.addMonitor(WeatherActivity::class.java.name, null, false)
+        try {
+            tapTile(h)
+            val opened = monitor.waitForActivityWithTimeout(10_000) as WeatherActivity?
+            assertNotNull("the weather opened", opened)
+            waitFor("straight on the conditions") { onMain { opened!!.dataShown && !opened.screens.moving && opened.dataScreen.width > 0 } }
+            assertEquals("nothing under or over them", 0, onMain { opened!!.screens.depth })
+            // The same data as before: now (temperature, condition, feels like, high/low), the day,
+            // precipitation, the metric cards (humidity, wind, ...), the hours and the 7 days.
+            val panel = onMain { opened!!.panel }
+            for (k in listOf("now", "summary", "precip", "hourly", "daily")) assertNotNull("the conditions' $k", onMain { panel.sections[k] })
+            val now = texts(onMain { panel.sections["now"]!! }).map { it.text.toString() }
+            val data = onMain { repo.state.data!! }
+            assertTrue(now.toString(), "52°F" in now && data.condition in now && now.any { it.startsWith("Feels ") } &&
+                "H ${f(data.highC)}° · L ${f(data.lowC)}°" in now)
+            assertTrue("humidity and wind", onMain { panel.cards.keys.containsAll(listOf("humidity", "wind")) })
+            assertEquals(7, onMain { panel.dayRows.size })
+            // No hero anywhere: no giant number, callouts, day bar or quick numbers.
+            val views = onMain { allViews(opened!!.window.decorView) }
+            assertTrue("no hero", views.none {
+                it is io.github.iamth3doctor.searchlight.weatherapp.HeroLayout || it is io.github.iamth3doctor.searchlight.weatherapp.HeroTempView ||
+                    it is io.github.iamth3doctor.searchlight.weatherapp.DayBarView || it is io.github.iamth3doctor.searchlight.weatherapp.QuickDataView ||
+                    it.tag == "weather_screen_hero"
+            })
+            shot("115-tile-opens-conditions")
+            // Back closes the weather: there's nothing under the conditions.
+            main { opened!!.back() }
+            waitFor("closed") { onMain { opened!!.isFinishing } }
+        } finally {
+            instrumentation.removeMonitor(monitor)
         }
     }
 
