@@ -1443,7 +1443,7 @@ class WeatherSceneDeviceTest {
             val now = texts(onMain { opened!!.panel.sections["now"]!! }).map { it.text.toString() }
             for (t in widget.drop(1)) assertTrue("'$t' as on the conditions screen: $now", t in now)
             // The precip card, hourly and the 7 days are all there.
-            assertTrue(onMain { opened!!.panel.precip.isShown })
+            for (k in listOf("summary", "precip", "hourly", "daily")) assertNotNull("the conditions screen's $k", onMain { opened!!.panel.sections[k] })
             shot("121-widget-opens-conditions")
             main { opened!!.finish() }
         } finally {
