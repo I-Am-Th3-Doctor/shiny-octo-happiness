@@ -31,7 +31,7 @@ import io.github.iamth3doctor.searchlight.weather.WeatherText
  * a small condition icon; the condition in words; today's high and low in gold. Nothing moves.
  * Offline it keeps the last good reading, with only a small glyph in the corner.
  *
- * Tap: the weather app's conditions screen ([onOpen]). Long press: the grid's edit mode.
+ * Tap: your weather app, else the conditions screen, as the Weather tile ([onOpen]). Long press: the grid's edit mode.
  */
 @SuppressLint("ViewConstructor")
 class WeatherWidgetView(context: Context, private val repo: WeatherRepository) : LinearLayout(context) {

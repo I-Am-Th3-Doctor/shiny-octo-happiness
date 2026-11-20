@@ -164,6 +164,7 @@ class WeatherSceneDeviceTest {
             savedUnfolded = app.prefs.widgetGridUnfolded
             savedTypes = app.prefs.builtInTypes
             savedWeatherApp = app.prefs.weatherAppKey
+            app.prefs.weatherAppKey = null
             savedWeather = app.prefs.lastWeather
             savedPlace = app.prefs.manualPlace
             savedUnit = app.prefs.tempUnit
@@ -644,6 +645,7 @@ class WeatherSceneDeviceTest {
     }
 
     @Test fun tappingTheWidgetOpensTheConditionsScreenWithTheSameReading() = home { h ->
+        // No weather app chosen: the conditions screen.
         show(reading(3, 100, 0.0))
         val v = addWeather(h)
         val widget = texts(v).map { it.text.toString() }
@@ -653,7 +655,6 @@ class WeatherSceneDeviceTest {
             val opened = monitor.waitForActivityWithTimeout(10_000) as WeatherActivity?
             assertNotNull("the weather app opened", opened)
             waitFor("at the conditions screen") { onMain { opened!!.dataShown && !opened.screens.moving } }
-            assertTrue(onMain { opened!!.intent.getBooleanExtra(WeatherActivity.EXTRA_DETAILS, false) })
             val now = texts(onMain { opened!!.panel.sections["now"]!! }).map { it.text.toString() }
             for (t in widget.drop(1)) assertTrue("'$t' as on the conditions screen: $now", t in now)
             // The precip card, hourly and the 7 days are all there.
@@ -674,6 +675,19 @@ class WeatherSceneDeviceTest {
         } finally {
             instrumentation.removeMonitor(monitor2)
         }
+    }
+
+    @Test fun theWidgetOpensTheChosenWeatherAppAsTheTileDoes() = home { h ->
+        show(reading(3, 100, 0.0))
+        val v = addWeather(h)
+        // The chosen app (a weather app on a phone; the Clock here, the emulator having none).
+        val chosen = onMain { app.apps.apps.firstOrNull { it.component.packageName == "com.google.android.deskclock" } ?: app.apps.apps.first { !it.isSelf } }
+        main { app.prefs.weatherAppKey = chosen.key }
+        on(h) { v.performClick() }
+        waitFor("${chosen.component.packageName} opened", 15_000) { topPackage() == chosen.component.packageName }
+        assertNull("not Searchlight's weather screen", onMain { WeatherActivity.current })
+        shot("121-widget-opens-weather-app")
+        shell("input keyevent KEYCODE_HOME")
     }
 
     // ---- offline ----

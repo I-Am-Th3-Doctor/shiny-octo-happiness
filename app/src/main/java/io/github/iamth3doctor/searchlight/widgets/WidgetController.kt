@@ -243,8 +243,8 @@ class WidgetController(
     private fun builtInView(id: Int): View = when (builtInType(id)) {
         BuiltInWidget.WEATHER -> WeatherWidgetView(activity, activity.searchlight.weather).also { v ->
             v.onLongPress = { grid.enterEditModeFromLongPress() }
-            // Straight to the conditions screen (the day, precipitation, hourly, 7 days).
-            v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity, details = true) }
+            // As the Weather tile: your weather app, else the conditions screen.
+            v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.OpenWeather.open(activity, v) }
             decorate(v) // the glass's text shadow for the current Glass transparency, as the Calendar's
         }
         BuiltInWidget.CALENDAR -> calendarView()

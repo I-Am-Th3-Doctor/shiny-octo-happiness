@@ -55,7 +55,7 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
             when {
                 repo.state.problem == WeatherRepository.Problem.NEEDS_LOCATION -> openSettings()
                 repo.state.data == null -> repo.refresh() // the tile says "tap to retry"
-                else -> openWeather(v)
+                else -> io.github.iamth3doctor.searchlight.weatherapp.OpenWeather.open(activity, v)
             }
         }
         card.setOnLongClickListener { showMenu(it); true }
@@ -149,19 +149,6 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
             show()
         }
     }
-
-    /**
-     * Your weather app; if none is chosen, it's gone, or it won't open, the conditions screen
-     * (the day, precipitation, hours and 7 days, from Searchlight's own forecast).
-     */
-    private fun openWeather(source: View) {
-        val app = weatherApp()
-        if (app != null && activity.searchlight.apps.launch(app, source, activity, quiet = true)) return
-        io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity)
-    }
-
-    /** The chosen weather app, if it's still installed. */
-    private fun weatherApp() = prefs.weatherAppKey?.let { activity.searchlight.apps.find(it) }
 
     private fun openSettings() = activity.startActivity(Intent(activity, WidgetCenterActivity::class.java))
 }

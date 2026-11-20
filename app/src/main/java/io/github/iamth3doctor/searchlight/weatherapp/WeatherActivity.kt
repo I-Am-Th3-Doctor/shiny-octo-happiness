@@ -460,14 +460,10 @@ class WeatherActivity : Activity() {
         /** Opens straight to the severe-weather alert's details. */
         const val EXTRA_ALERT = "alert"
 
-        /** Opens the conditions (they're where the weather always opens; kept for callers that ask). */
-        const val EXTRA_DETAILS = "details"
-
-        fun open(context: Context, alert: Boolean = false, details: Boolean = false) {
+        fun open(context: Context, alert: Boolean = false) {
             context.startActivity(Intent(context, WeatherActivity::class.java).apply {
                 if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 if (alert) putExtra(EXTRA_ALERT, true)
-                if (details) putExtra(EXTRA_DETAILS, true)
             })
         }
     }

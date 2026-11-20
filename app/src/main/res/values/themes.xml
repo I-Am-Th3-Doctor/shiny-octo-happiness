@@ -17,7 +17,7 @@
         <item name="android:alertDialogTheme">@style/Theme.Searchlight.Dialog</item>
     </style>
 
-    <!-- The weather screen: its own full-screen scene, edge to edge. -->
+    <!-- The weather screen (the conditions): edge to edge. -->
     <style name="Theme.Searchlight.Weather" parent="android:Theme.DeviceDefault.DayNight">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:windowActionBar">false</item>
