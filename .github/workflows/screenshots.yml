@@ -81,7 +81,7 @@ jobs:
             adb shell wm size reset
             adb shell wm density reset
             mkdir -p shots
-            for i in 1 2 3; do adb pull /sdcard/Download/searchlight-shots/. shots/ && break; echo "adb pull failed, retrying"; sleep 3; done
+            for i in 1 2 3 4 5 6; do adb pull /sdcard/Download/searchlight-shots/. shots/ && break; echo "adb pull failed, retrying"; adb reconnect || true; adb wait-for-device; sleep 5; done
             ls shots
             cat shots/widgets-*.txt || true
             cat shots/watchdog-*.txt || true
@@ -107,6 +107,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Only a complete set replaces the last one: a copy off the emulator cut short leaves it as it was.
+          on=$(adb shell ls /sdcard/Download/searchlight-shots 2>/dev/null | grep -c '\.png' || true)
+          here=$(ls shots/*.png 2>/dev/null | wc -l)
+          echo "screenshots: $here copied, $on on the emulator"
+          if [ "$here" -lt 100 ] || { [ "$on" -gt 0 ] && [ "$here" -lt "$on" ]; }; then
+            echo "::error::only $here screenshots copied off the emulator; the last release stays"; exit 1
+          fi
           # Deleting a release of ~300 files in one call can time out (HTTP 502) and leave it in
           # place, so empty it a file at a time first, then delete it and its tag, retrying.
           for try in 1 2 3; do
@@ -120,7 +127,7 @@ jobs:
           if gh api "repos/$GITHUB_REPOSITORY/releases/tags/screenshots-latest" --jq .id >/dev/null 2>&1; then
             echo "::error::the old screenshots-latest release could not be removed"; exit 1
           fi
-          gh release create screenshots-latest shots/*.png shots/*.txt \
+          gh release create screenshots-latest shots/*.png $(ls shots/*.txt 2>/dev/null) \
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "Screenshots #${{ github.run_number }} (${GITHUB_SHA::7})" \
