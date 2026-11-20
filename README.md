@@ -42,14 +42,17 @@ to grant calendar access, then again to open your calendar on today.
 
 ## Install
 
-A prebuilt debug APK is in `dist/Something-debug.apk`. Or build it yourself:
+Every push builds a debug APK on GitHub Actions and publishes it as the rolling pre-release
+**`something-latest`** (Releases → "Something debug build #N"). Open that on your phone, tap the
+`.apk`, and install. Then press Home and choose **Something**. The debug package is
+`com.something.launcher.debug`.
+
+To build locally instead:
 
 ```
 ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
-
-Then press Home and choose **Something**. The debug package is `com.something.launcher.debug`.
 
 ## Tests
 
