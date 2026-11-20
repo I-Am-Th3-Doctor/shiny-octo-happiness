@@ -86,9 +86,15 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
     var refreshRequests = 0
         private set
 
-    /** Tests: what the home screen and widgets show, as if fetched (offline = the last fetch failed). */
-    fun showForTest(data: WeatherData?, offline: Boolean) =
+    /**
+     * Tests: what the home screen and widgets show, as if fetched (offline = the last fetch failed).
+     * A real fetch still under way is dropped when it lands (as on switching cities), so it can't
+     * replace this.
+     */
+    fun showForTest(data: WeatherData?, offline: Boolean) {
+        generation++
         setState(State(data, loading = false, problem = if (offline) Problem.NETWORK else null))
+    }
 
     fun refreshIfOlderThan(maxAgeMs: Long) {
         val age = System.currentTimeMillis() - (state.data?.fetchedAt ?: 0)

@@ -685,7 +685,7 @@ class WeatherSceneDeviceTest {
             repo.showForTest(storm(reading(3, 96, 0.0)), offline = false)
         }
         home { h ->
-            val v = addWeather(h)
+            var v = addWeather(h)
             assertFalse(on(h) { v.offlineShown })
             shell("cmd connectivity airplane-mode enable")
             Thread.sleep(3000)
@@ -699,7 +699,10 @@ class WeatherSceneDeviceTest {
                 main { repo.showForTest(repo.state.data, offline = true) }
             }
             assertEquals(WeatherRepository.Problem.NETWORK, onMain { repo.state.problem })
-            waitFor("offline glyph") { on(h) { v.offlineShown } }
+            // Airplane mode can rebuild the home screen (its radios change): the widget as it is now.
+            fun widget() = on(h) { it.widgetController.weatherViews().single() }
+            waitFor("offline glyph") { widget().let { w -> on(h) { w.offlineShown } } }
+            v = widget()
             val last = onMain { repo.state.data!! }
             assertEquals("the last good data, and no warning text", listOf("Tacoma", "52°F", last.condition, "H ${f(last.highC)}° · L ${f(last.lowC)}°"),
                 texts(v).map { it.text.toString() })
