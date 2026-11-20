@@ -314,13 +314,6 @@
             <TextView android:id="@+id/calendarTargetValue" style="@style/SettingsRowSummary" />
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/stickyPaperRow"
-            style="@style/SettingsRow">
-            <TextView style="@style/SettingsRowTitle" android:text="@string/settings_sticky_paper" />
-            <TextView android:id="@+id/stickyPaperValue" style="@style/SettingsRowSummary" />
-        </LinearLayout>
-
         <!-- Events stranded on phone-only calendars: shown with a one-time move when there are any. -->
         <TextView
             android:id="@+id/calendarLocalInfo"

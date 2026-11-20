@@ -166,11 +166,6 @@
     <string name="sticky_all_day">All day</string>
     <string name="sticky_untitled">(No title)</string>
     <string name="sticky_allow">Tap to allow calendar access</string>
-    <string name="settings_sticky_paper">Sticky note color</string>
-    <string name="sticky_paper_yellow">Yellow</string>
-    <string name="sticky_paper_pink">Pink</string>
-    <string name="sticky_paper_blue">Blue</string>
-    <string name="sticky_paper_green">Green</string>
     <!-- Calendar widget -->
     <string name="cal_prev_month">Previous month</string>
     <string name="cal_next_month">Next month</string>

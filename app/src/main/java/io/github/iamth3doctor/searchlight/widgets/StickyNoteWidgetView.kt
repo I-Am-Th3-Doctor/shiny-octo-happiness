@@ -33,6 +33,9 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
+ * Not part of Searchlight: kept for the second launcher, and not offered or placed here (a note
+ * placed before is taken off the grid; see BuiltInWidget.migrate).
+ *
  * The Sticky note widget (2 × 2, not resizable): a paper note stuck to the home screen, tilted a
  * little as if placed by hand, with tape across the top, a soft shadow and a curled corner.
  * Today's date in marker, today's events in pen (see [StickyNote]): the next one in red (blue on

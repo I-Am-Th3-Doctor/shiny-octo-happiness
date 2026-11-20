@@ -40,6 +40,7 @@ class BuiltInWidgetTest {
 
     @Test fun retiredWeatherWidgetsBecomeTheOneAtItsSize() {
         val types = mapOf(-1 to "weather_day", -2 to "weather_3day", -3 to "calendar", -4 to "weather", -5 to "sticky_note", -6 to "weather")
+        // (A Sticky note placed before: taken off the grid, not turned into a Calendar.)
         val placed = listOf(
             GridSpec(-1, 0, 0, 4, 2), GridSpec(-2, 0, 2, 2, 2), GridSpec(-3, 0, 4, 4, 3),
             GridSpec(-4, 2, 2, 2, 1), GridSpec(-5, 0, 7, 2, 2), GridSpec(9, 2, 7, 3, 1),
@@ -47,23 +48,21 @@ class BuiltInWidgetTest {
             GridSpec(-6, 4, 0, 2, 1), GridSpec(10, 4, 1, 2, 1),
         )
         val (t, specs) = BuiltInWidget.migrate(types, placed)
-        assertEquals(mapOf(-1 to "weather", -2 to "weather", -3 to "calendar", -4 to "weather", -5 to "sticky_note", -6 to "weather"), t)
+        assertEquals(mapOf(-1 to "weather", -2 to "weather", -3 to "calendar", -4 to "weather", -6 to "weather"), t)
         assertEquals(listOf(
             GridSpec(-1, 0, 0, 2, 2), GridSpec(-2, 0, 2, 2, 2), GridSpec(-3, 0, 4, 4, 3),
-            GridSpec(-4, 2, 2, 2, 2), GridSpec(-5, 0, 7, 2, 2), GridSpec(9, 2, 7, 3, 1),
+            GridSpec(-4, 2, 2, 2, 2), GridSpec(9, 2, 7, 3, 1),
             GridSpec(-6, 4, 0, 2, 1), GridSpec(10, 4, 1, 2, 1),
         ), specs)
         // Already migrated: nothing changes.
         assertEquals(t to specs, BuiltInWidget.migrate(t, specs))
     }
 
-    @Test fun stickyNoteIsAFixedTwoByTwo() {
-        assertEquals(BuiltInWidget.STICKY_NOTE, BuiltInWidget.fromKey("sticky_note"))
-        assertEquals(2 to 2, BuiltInWidget.STICKY_NOTE.defaultCols to BuiltInWidget.STICKY_NOTE.defaultRows)
-        assertTrue(BuiltInWidget.STICKY_NOTE.fixedSize)
-        assertFalse(BuiltInWidget.STICKY_NOTE.isWeather)
-        // The note and the Weather widget are fixed; the Calendar still resizes.
-        assertEquals(listOf(BuiltInWidget.WEATHER, BuiltInWidget.STICKY_NOTE), BuiltInWidget.entries.filter { it.fixedSize })
+    @Test fun theStickyNoteIsNotInSearchlight() {
+        assertNull(BuiltInWidget.fromKey("sticky_note"))
+        assertEquals(listOf(BuiltInWidget.CALENDAR, BuiltInWidget.WEATHER), BuiltInWidget.entries.toList())
+        // Only the Weather widget is fixed; the Calendar still resizes.
+        assertEquals(listOf(BuiltInWidget.WEATHER), BuiltInWidget.entries.filter { it.fixedSize })
     }
 
     @Test fun builtInsSurviveStorageAndRefitting() {

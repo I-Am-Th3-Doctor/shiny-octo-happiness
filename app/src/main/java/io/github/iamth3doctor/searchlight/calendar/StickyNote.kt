@@ -7,6 +7,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
+ * Kept for the second launcher's Sticky note (not used by Searchlight itself).
+ *
  * What the Sticky note widget writes: today's date in marker ("WED NOV 18"), then today's events
  * in pen, in time order (all-day first), at most [MAX_LINES] of them with "+N more" under. The
  * next event (the one on now, else the next to start) is in a different ink; ones already over

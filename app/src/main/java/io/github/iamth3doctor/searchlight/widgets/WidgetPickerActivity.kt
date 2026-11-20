@@ -53,8 +53,6 @@ class WidgetPickerActivity : Activity() {
             "${BuiltInWidget.CALENDAR.defaultCols} × ${BuiltInWidget.CALENDAR.defaultRows}", BuiltInWidget.CALENDAR),
         Row(null, getString(R.string.widget_builtin_app), getString(R.string.widget_weather),
             "${BuiltInWidget.WEATHER.defaultCols} × ${BuiltInWidget.WEATHER.defaultRows}", BuiltInWidget.WEATHER),
-        Row(null, getString(R.string.widget_builtin_app), getString(R.string.widget_sticky_note),
-            "${BuiltInWidget.STICKY_NOTE.defaultCols} × ${BuiltInWidget.STICKY_NOTE.defaultRows}", BuiltInWidget.STICKY_NOTE),
     )
 
     private val main = Handler(Looper.getMainLooper())
@@ -204,7 +202,6 @@ class WidgetPickerActivity : Activity() {
                     when (row.builtIn) {
                         BuiltInWidget.WEATHER -> R.drawable.preview_weather_widget
                         BuiltInWidget.CALENDAR -> R.drawable.preview_calendar_widget
-                        BuiltInWidget.STICKY_NOTE -> R.drawable.preview_sticky_note_widget
                     },
                 )
                 return

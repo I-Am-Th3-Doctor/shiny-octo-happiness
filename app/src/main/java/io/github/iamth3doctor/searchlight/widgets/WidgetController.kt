@@ -8,8 +8,6 @@ import android.content.IntentFilter
 import android.view.View
 import androidx.core.content.ContextCompat
 import io.github.iamth3doctor.searchlight.calendar.CalendarEvents
-import io.github.iamth3doctor.searchlight.calendar.StickyNote
-import io.github.iamth3doctor.searchlight.ui.Actions
 import io.github.iamth3doctor.searchlight.ui.Permissions
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
@@ -88,7 +86,7 @@ class WidgetController(
         migrateBuiltIns()
     }
 
-    /** The 3-day and today Weather widgets (retired) become the one plain Weather widget, at 2 × 2. */
+    /** The 3-day and today Weather widgets (retired) become the one plain Weather widget, at 2 × 2; Sticky notes leave. */
     private fun migrateBuiltIns() {
         val types = prefs.builtInTypes
         val (t, folded) = BuiltInWidget.migrate(types, prefs.widgetGrid)
@@ -175,23 +173,11 @@ class WidgetController(
     /** The Calendar widgets on the grid (either posture), live. */
     fun calendarViews(): List<CalendarWidgetView> = views.values.filterIsInstance<CalendarWidgetView>()
 
-    /** The Sticky notes on the grid (either posture), live. */
-    fun stickyNoteViews(): List<StickyNoteWidgetView> = views.values.filterIsInstance<StickyNoteWidgetView>()
+    /** Returning home, calendar access granted, or the date changed: every Calendar widget reloads. */
+    fun refreshCalendars() = calendarViews().forEach { it.refresh() }
 
-    /** Returning home, calendar access granted, or the date changed: every Calendar widget and Sticky note reloads. */
-    fun refreshCalendars() {
-        calendarViews().forEach { it.refresh() }
-        stickyNoteViews().forEach {
-            it.paper = StickyNote.Paper.of(prefs.stickyNotePaper)
-            it.refresh()
-        }
-    }
-
-    /** A minute went by (while home is showing): live labels move on (and a note rolls over at midnight). */
-    fun tickCalendars() {
-        calendarViews().forEach { it.tick() }
-        stickyNoteViews().forEach { it.tick() }
-    }
+    /** A minute went by (while home is showing): live labels move on. */
+    fun tickCalendars() = calendarViews().forEach { it.tick() }
 
     private val refreshCalendarsNow = Runnable { refreshCalendars() }
 
@@ -262,19 +248,7 @@ class WidgetController(
             decorate(v) // the glass's text shadow for the current Glass transparency, as the Calendar's
         }
         BuiltInWidget.CALENDAR -> calendarView()
-        BuiltInWidget.STICKY_NOTE -> stickyNoteView(id)
     }
-
-    private fun stickyNoteView(id: Int): View =
-        // Each note keeps its own small tilt, one way or the other, as if stuck on by hand.
-        StickyNoteWidgetView(activity, calendarEvents, tiltDeg = if (id % 2 == 0) -1.6f else 1.3f).also { v ->
-            v.paper = StickyNote.Paper.of(prefs.stickyNotePaper)
-            v.onLongPress = { grid.enterEditModeFromLongPress() }
-            v.onRequestPermission = { if (!grid.editMode) requestCalendarPermission() }
-            v.onOpenToday = { now -> if (!grid.editMode) Actions.openCalendarAt(activity, now) }
-            v.onOpenEvent = { e -> if (!grid.editMode) Actions.openEvent(activity, e.eventId, e.begin, e.end) }
-            v.refresh()
-        }
 
     private fun calendarView(): View = CalendarWidgetView(activity, calendarEvents).also { v ->
         v.onLongPress = { grid.enterEditModeFromLongPress() }
@@ -417,7 +391,7 @@ class WidgetController(
             val (wRes, hRes) = when (builtInType(id)) {
                 BuiltInWidget.CALENDAR -> R.dimen.size_cal_min_width to R.dimen.size_cal_min_height
                 // Fixed at 2 × 2.
-                BuiltInWidget.WEATHER, BuiltInWidget.STICKY_NOTE -> builtInType(id).let { t ->
+                BuiltInWidget.WEATHER -> builtInType(id).let { t ->
                     return t.defaultCols.coerceAtMost(grid.cols) to t.defaultRows.coerceAtMost(grid.rows)
                 }
             }
