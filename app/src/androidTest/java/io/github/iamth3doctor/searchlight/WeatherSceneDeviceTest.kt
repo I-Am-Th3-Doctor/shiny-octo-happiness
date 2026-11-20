@@ -68,6 +68,7 @@ class WeatherSceneDeviceTest {
     private var savedFolded = emptyList<GridSpec>()
     private var savedUnfolded = emptyList<GridSpec>()
     private var savedTypes = emptyMap<Int, String>()
+    private var savedWeatherApp: String? = null
     private var savedWeather: WeatherData? = null
     private var savedPlace: GeoPlace? = null
     private var savedUnit = TempUnit.FAHRENHEIT
@@ -162,6 +163,7 @@ class WeatherSceneDeviceTest {
             savedFolded = app.prefs.widgetGrid
             savedUnfolded = app.prefs.widgetGridUnfolded
             savedTypes = app.prefs.builtInTypes
+            savedWeatherApp = app.prefs.weatherAppKey
             savedWeather = app.prefs.lastWeather
             savedPlace = app.prefs.manualPlace
             savedUnit = app.prefs.tempUnit
@@ -197,6 +199,7 @@ class WeatherSceneDeviceTest {
             app.prefs.widgetGrid = savedFolded
             app.prefs.widgetGridUnfolded = savedUnfolded
             app.prefs.builtInTypes = savedTypes
+            app.prefs.weatherAppKey = savedWeatherApp
             app.prefs.lastWeather = savedWeather
             app.prefs.manualPlace = savedPlace
             app.prefs.tempUnit = savedUnit
@@ -864,7 +867,32 @@ class WeatherSceneDeviceTest {
     private fun allViews(root: View): List<View> =
         listOf(root) + ((root as? ViewGroup)?.let { g -> (0 until g.childCount).flatMap { allViews(g.getChildAt(it)) } } ?: emptyList())
 
-    @Test fun theWeatherTileOpensTheConditionsNeverTheHero() = home { h ->
+    /** The package of the app on top of the screen. */
+    private fun topPackage(): String =
+        shell("dumpsys activity activities").lineSequence().firstOrNull { "topResumedActivity" in it || "mResumedActivity" in it }
+            ?.substringAfter(" u0 ", "")?.substringBefore('/')?.trim().orEmpty()
+
+    @Test fun theWeatherTileOpensTheChosenWeatherApp() = home { h ->
+        show(reading(3, 100, 0.0))
+        // The chosen app (a weather app on a phone; the Clock here, the emulator having none).
+        val chosen = onMain { app.apps.apps.firstOrNull { it.component.packageName == "com.google.android.deskclock" } ?: app.apps.apps.first { !it.isSelf } }
+        main { app.prefs.weatherAppKey = chosen.key }
+        tapTile(h)
+        waitFor("${chosen.component.packageName} opened", 15_000) { topPackage() == chosen.component.packageName }
+        assertNull("not Searchlight's weather screen", onMain { WeatherActivity.current })
+        shot("115-tile-opens-weather-app")
+        shell("input keyevent KEYCODE_HOME")
+    }
+
+    @Test fun withNoWeatherAppTheTileOpensTheConditionsNeverTheHero() = home { h ->
+        // None chosen, then one that's no longer installed (it can't be opened).
+        for (key in listOf(null, "gone.weather.app/gone.weather.app.Main#0")) {
+            main { app.prefs.weatherAppKey = key }
+            conditionsFromTheTile(h, shotName = if (key == null) "115-tile-opens-conditions" else null)
+        }
+    }
+
+    private fun conditionsFromTheTile(h: ActivityScenario<MainActivity>, shotName: String?) {
         show(reading(3, 100, 0.0))
         val monitor = instrumentation.addMonitor(WeatherActivity::class.java.name, null, false)
         try {
@@ -886,7 +914,7 @@ class WeatherSceneDeviceTest {
             // Only the conditions (and the places and alerts they open): no other screen in the window.
             val screens = onMain { allViews(opened!!.window.decorView).mapNotNull { (it.tag as? String)?.takeIf { t -> t.startsWith("weather_screen_") } } }
             assertEquals(listOf("weather_screen_data", "weather_screen_alert", "weather_screen_places"), screens.filter { it != "weather_screen_back" })
-            shot("115-tile-opens-conditions")
+            shotName?.let { shot(it) }
             // Back closes the weather: there's nothing under the conditions.
             main { opened!!.back() }
             waitFor("closed") { onMain { opened!!.isFinishing } }
