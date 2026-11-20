@@ -450,14 +450,9 @@
 
     <!-- Weather widget -->
     <string name="widget_weather">Weather</string>
-    <string name="widget_weather_3day">Weather · 3 days</string>
-    <string name="widget_weather_day">Weather · today</string>
-    <string name="weather_widget_now">NOW</string>
     <string name="weather_widget_feels">Feels %1$s</string>
     <string name="weather_widget_hi_lo">H %1$s · L %2$s</string>
     <string name="weather_widget_updated">Updated %1$s</string>
-    <string name="weather_widget_offline">offline — showing last update</string>
-    <string name="weather_widget_offline_short">offline</string>
     <string name="weather_widget_no_data">No weather yet</string>
     <string name="weather_widget_desc">Weather: %1$s, %2$s in %3$s. Tap for details.</string>
     <string name="weather_detail_now">Now</string>
@@ -524,7 +519,6 @@
     <string name="weather_alert_effective">Effective %1$s</string>
     <string name="weather_alert_expires">Expires %1$s</string>
     <string name="weather_alert_what_to_do">What to do</string>
-    <string name="weather_alert_glyph_desc">Severe weather alert. Tap for details.</string>
     <string name="weather_back">Back</string>
     <string name="weather_week_title">7 days</string>
     <string name="weather_week_hint">Hold a day to watch it play</string>

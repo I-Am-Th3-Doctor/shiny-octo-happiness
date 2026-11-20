@@ -257,6 +257,11 @@ class WeatherActivity : Activity() {
         render()
         // Opened from the widget's alert glyph: straight to the alert.
         if (intent.getBooleanExtra(EXTRA_ALERT, false)) showAlerts()
+        // Opened from the home screen's Weather widget: straight to the conditions (the details).
+        if (intent.getBooleanExtra(EXTRA_DETAILS, false) && savedInstanceState == null) {
+            openDetails()
+            screens.settle() // there already: no transition
+        }
         // Rebuilt in a new skin from the menu: back on the menu, the new skin checked.
         if (savedInstanceState?.getBoolean(STATE_MENU) == true) {
             screens.push(menuScreen)
@@ -1079,10 +1084,14 @@ class WeatherActivity : Activity() {
         /** Opens straight to the severe-weather alert's details. */
         const val EXTRA_ALERT = "alert"
 
-        fun open(context: Context, alert: Boolean = false) {
+        /** Opens straight to the conditions screen (the details: the day, precipitation, hourly, 7 days). */
+        const val EXTRA_DETAILS = "details"
+
+        fun open(context: Context, alert: Boolean = false, details: Boolean = false) {
             context.startActivity(Intent(context, WeatherActivity::class.java).apply {
                 if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 if (alert) putExtra(EXTRA_ALERT, true)
+                if (details) putExtra(EXTRA_DETAILS, true)
             })
         }
     }

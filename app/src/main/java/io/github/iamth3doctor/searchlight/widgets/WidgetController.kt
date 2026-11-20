@@ -85,6 +85,17 @@ class WidgetController(
         grid.listener = this
         host.onProvidersChanged = ::refreshProviders
         migrateFromStack()
+        migrateBuiltIns()
+    }
+
+    /** The 3-day and today Weather widgets (retired) become the one plain Weather widget, at 2 × 2. */
+    private fun migrateBuiltIns() {
+        val types = prefs.builtInTypes
+        val (t, folded) = BuiltInWidget.migrate(types, prefs.widgetGrid)
+        val (_, open) = BuiltInWidget.migrate(types, prefs.widgetGridUnfolded)
+        if (t != types) prefs.builtInTypes = t
+        if (folded != prefs.widgetGrid) prefs.widgetGrid = folded
+        if (open != prefs.widgetGridUnfolded) prefs.widgetGridUnfolded = open
     }
 
     /**
@@ -156,10 +167,7 @@ class WidgetController(
         BuiltInWidget.fromKey(prefs.builtInTypes[id]) ?: BuiltInWidget.CALENDAR
 
     /** Every built-in widget on the grid (frosted glass surfaces). */
-    fun builtInViews(): List<View> = views.values.filter { it is CalendarWidgetView || it is WeatherWidgetView || it is WeatherForecastWidgetView }
-
-    /** The 3-day and today Weather widgets on the grid, live. */
-    fun forecastViews(): List<WeatherForecastWidgetView> = views.values.filterIsInstance<WeatherForecastWidgetView>()
+    fun builtInViews(): List<View> = views.values.filter { it is CalendarWidgetView || it is WeatherWidgetView }
 
     /** The Weather widgets on the grid, live. */
     fun weatherViews(): List<WeatherWidgetView> = views.values.filterIsInstance<WeatherWidgetView>()
@@ -237,7 +245,6 @@ class WidgetController(
     /** The Calendar widget splits month | agenda from three cells wide; narrower, it stacks them. */
     private fun arrange(v: View, spec: GridSpec) {
         if (v is CalendarWidgetView) v.stacked = spec.colSpan < SPLIT_MIN_COLS
-        if (v is WeatherWidgetView) v.size = WeatherWidgetView.sizeFor(spec.colSpan, spec.rowSpan)
     }
 
     /** Add / details / edit / delete for Calendar widgets' events (set by the home screen). */
@@ -250,11 +257,10 @@ class WidgetController(
     private fun builtInView(id: Int): View = when (builtInType(id)) {
         BuiltInWidget.WEATHER -> WeatherWidgetView(activity, activity.searchlight.weather).also { v ->
             v.onLongPress = { grid.enterEditModeFromLongPress() }
-            v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity) }
-            v.onOpenAlert = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity, alert = true) }
+            // Straight to the conditions screen (the day, precipitation, hourly, 7 days).
+            v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity, details = true) }
+            decorate(v) // the glass's text shadow for the current Glass transparency, as the Calendar's
         }
-        BuiltInWidget.WEATHER_3DAY -> forecastView(WeatherForecastWidgetView.Style.THREE_DAYS)
-        BuiltInWidget.WEATHER_DAY -> forecastView(WeatherForecastWidgetView.Style.DAY)
         BuiltInWidget.CALENDAR -> calendarView()
         BuiltInWidget.STICKY_NOTE -> stickyNoteView(id)
     }
@@ -268,12 +274,6 @@ class WidgetController(
             v.onOpenToday = { now -> if (!grid.editMode) Actions.openCalendarAt(activity, now) }
             v.onOpenEvent = { e -> if (!grid.editMode) Actions.openEvent(activity, e.eventId, e.begin, e.end) }
             v.refresh()
-        }
-
-    private fun forecastView(style: WeatherForecastWidgetView.Style): View =
-        WeatherForecastWidgetView(activity, activity.searchlight.weather, style).also { v ->
-            v.onLongPress = { grid.enterEditModeFromLongPress() }
-            v.onOpen = { if (!grid.editMode) io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(activity) }
         }
 
     private fun calendarView(): View = CalendarWidgetView(activity, calendarEvents).also { v ->
@@ -415,13 +415,11 @@ class WidgetController(
     override fun minSpan(id: Int): Pair<Int, Int> {
         if (BuiltInWidget.isBuiltIn(id)) {
             val (wRes, hRes) = when (builtInType(id)) {
-                BuiltInWidget.WEATHER -> R.dimen.size_weather_min_width to R.dimen.size_weather_min_height
-                BuiltInWidget.WEATHER_3DAY -> R.dimen.size_weather_3day_min_width to R.dimen.size_weather_3day_min_height
-                BuiltInWidget.WEATHER_DAY -> R.dimen.size_weather_day_min_width to R.dimen.size_weather_day_min_height
                 BuiltInWidget.CALENDAR -> R.dimen.size_cal_min_width to R.dimen.size_cal_min_height
                 // Fixed at 2 × 2.
-                BuiltInWidget.STICKY_NOTE -> return BuiltInWidget.STICKY_NOTE.defaultCols.coerceAtMost(grid.cols) to
-                    BuiltInWidget.STICKY_NOTE.defaultRows.coerceAtMost(grid.rows)
+                BuiltInWidget.WEATHER, BuiltInWidget.STICKY_NOTE -> builtInType(id).let { t ->
+                    return t.defaultCols.coerceAtMost(grid.cols) to t.defaultRows.coerceAtMost(grid.rows)
+                }
             }
             return WidgetGrid.spanFor(activity.resources.getDimension(wRes) / density, grid.cellWidthDp, grid.cols) to
                 WidgetGrid.spanFor(activity.resources.getDimension(hRes) / density, grid.cellHeightDp, grid.rows)

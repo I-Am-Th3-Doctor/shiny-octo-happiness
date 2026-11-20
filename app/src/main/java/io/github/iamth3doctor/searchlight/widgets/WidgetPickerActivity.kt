@@ -53,10 +53,6 @@ class WidgetPickerActivity : Activity() {
             "${BuiltInWidget.CALENDAR.defaultCols} × ${BuiltInWidget.CALENDAR.defaultRows}", BuiltInWidget.CALENDAR),
         Row(null, getString(R.string.widget_builtin_app), getString(R.string.widget_weather),
             "${BuiltInWidget.WEATHER.defaultCols} × ${BuiltInWidget.WEATHER.defaultRows}", BuiltInWidget.WEATHER),
-        Row(null, getString(R.string.widget_builtin_app), getString(R.string.widget_weather_3day),
-            "${BuiltInWidget.WEATHER_3DAY.defaultCols} × ${BuiltInWidget.WEATHER_3DAY.defaultRows}", BuiltInWidget.WEATHER_3DAY),
-        Row(null, getString(R.string.widget_builtin_app), getString(R.string.widget_weather_day),
-            "${BuiltInWidget.WEATHER_DAY.defaultCols} × ${BuiltInWidget.WEATHER_DAY.defaultRows}", BuiltInWidget.WEATHER_DAY),
         Row(null, getString(R.string.widget_builtin_app), getString(R.string.widget_sticky_note),
             "${BuiltInWidget.STICKY_NOTE.defaultCols} × ${BuiltInWidget.STICKY_NOTE.defaultRows}", BuiltInWidget.STICKY_NOTE),
     )
@@ -207,8 +203,6 @@ class WidgetPickerActivity : Activity() {
                 h.b.preview.setImageResource(
                     when (row.builtIn) {
                         BuiltInWidget.WEATHER -> R.drawable.preview_weather_widget
-                        BuiltInWidget.WEATHER_3DAY -> R.drawable.preview_weather_3day_widget
-                        BuiltInWidget.WEATHER_DAY -> R.drawable.preview_weather_day_widget
                         BuiltInWidget.CALENDAR -> R.drawable.preview_calendar_widget
                         BuiltInWidget.STICKY_NOTE -> R.drawable.preview_sticky_note_widget
                     },
