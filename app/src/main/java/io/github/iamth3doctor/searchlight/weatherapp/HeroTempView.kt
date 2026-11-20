@@ -150,13 +150,13 @@ class HeroTempView(context: Context) : View(context) {
         val steps = max(4, (d / max(1f, density * 0.75f)).toInt())
         for (i in steps downTo 1) {
             val f = i / steps.toFloat()
-            side.color = SceneRenderer.mix(skin.accentDeep, 0xFF2A1208.toInt(), f * 0.55)
+            side.color = SceneRenderer.mix(skin.accentDeep, 0xFF111114.toInt(), f * 0.55)
             if (i == steps) side.setShadowLayer(size * 0.08f, d * 0.4f, d * 0.8f, 0x80000000.toInt()) else side.clearShadowLayer()
             canvas.drawText(text, x + d * f, baseline + d * f, side)
         }
         side.clearShadowLayer()
 
-        // A cartoon outline round the face, then the face, lit from above.
+        // A frosted white outline round the face, so it reads over any sky, then the face, lit from above.
         val top = baseline + fm.ascent * 0.78f
         stroke.textSize = size
         stroke.color = skin.outline
@@ -170,7 +170,7 @@ class HeroTempView(context: Context) : View(context) {
         // The unit, small, up by the degree.
         val ux = x + face.measureText(text) + size * 0.02f
         val uBase = top + unitPaint.textSize * 0.95f
-        unitPaint.color = SceneRenderer.mix(skin.accentDeep, 0xFF2A1208.toInt(), 0.3)
+        unitPaint.color = SceneRenderer.mix(skin.accentDeep, 0xFF111114.toInt(), 0.3)
         canvas.drawText("F", ux + d * 0.35f, uBase + d * 0.35f, unitPaint)
         unitPaint.color = faceMid()
         canvas.drawText("F", ux, uBase, unitPaint)

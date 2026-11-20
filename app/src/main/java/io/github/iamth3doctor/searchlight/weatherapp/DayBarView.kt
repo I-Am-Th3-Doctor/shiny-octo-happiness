@@ -80,7 +80,7 @@ class DayBarView(context: Context) : View(context) {
 
     private fun fg() = skin?.ink ?: if (light) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
     private fun dim() = skin?.inkDim ?: if (light) 0x991C1C21.toInt() else 0xB3FFFFFF.toInt()
-    private fun accent() = skin?.accent ?: context.color(if (light) R.color.accent else R.color.gold)
+    private fun accent() = skin?.accent ?: (if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface))
 
     private val zone get() = ZoneOffset.ofTotalSeconds(data?.detail?.utcOffsetSec ?: 0)
     private fun hourLabel(t: Long) = WeatherFormat.hour(context).format(Instant.ofEpochMilli(t).atOffset(zone))

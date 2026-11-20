@@ -1837,56 +1837,58 @@ class WeatherSceneDeviceTest {
     /** The screen without its status and navigation bars (the system's, not the app's). */
     private fun appArea(px: android.graphics.Bitmap) = android.graphics.Rect(0, px.height * 7 / 100, px.width, px.height * 93 / 100)
 
-    @Test fun noColorAnywhereFrostedGlass() = home { home ->
-        show(reading(95, 100, 6.0))
+    private fun isGray(c: Int): Boolean {
+        val r = c shr 16 and 0xFF
+        val g = c shr 8 and 0xFF
+        val b = c and 0xFF
+        return maxOf(r, g, b) - minOf(r, g, b) <= 12
+    }
+
+    @Test fun frostedChromeOverTheWeatherInItsNaturalColors() = home { home ->
+        // A clear day: blue sky, yellow sun.
+        show(reading(0, 5, 0.0))
         addWeather(home)
         addForecast(home, BuiltInWidget.WEATHER_3DAY)
         addForecast(home, BuiltInWidget.WEATHER_DAY)
         Thread.sleep(1500)
-        // On the home screen: the three Weather widgets each draw through the grayscale filter (their
-        // frosted cards are see-through, so the wallpaper's own color may show through the glass).
-        val widgets: List<View> = on(home) { it.widgetController.weatherViews() + it.widgetController.forecastViews() }
-        assertEquals(3, widgets.size)
-        for (w in widgets) assertEquals("$w drawn through its grayscale layer", View.LAYER_TYPE_HARDWARE, onMain { w.layerType })
-        // The live 2x2 is its own scene, opaque: its pixels are gray.
+        // On the home screen: the live widget's scene in its natural colors; the cards' text in grays.
         val live = on(home) { it.widgetController.weatherViews().single() }
         screenPixels().let { px ->
             val b = screenBox(live).apply { inset(width() / 8, height() / 8) }
-            assertEquals("the live widget's scene in grays", 0, colored(px, b))
+            assertTrue("the live widget's sky in color", colored(px, b) > 20)
             px.recycle()
         }
+        assertTrue("its text gray", isGray(on(home) { live.tempView.currentTextColor }))
+        for (f in on(home) { it.widgetController.forecastViews() }) {
+            assertTrue("the cards' text gray", isGray(on(home) { f.tempView.currentTextColor }) && isGray(on(home) { f.conditionView.currentTextColor }))
+        }
         shot("124-frost-widgets")
-        // The weather screen, from the widget: the scene (a thunderstorm, rain, lightning), the hero,
-        // the callouts, the pills, the bar: all gray.
-        on(home) { it.widgetController.exitEditMode(); it.widgetController.weatherViews().single().performClick() }
+        // The weather screen: the scene real and in color, not cartoon; the chrome monochrome frosted glass.
+        on(home) { it.widgetController.exitEditMode(); live.performClick() }
         waitFor("the weather screen open") { onMain { WeatherActivity.current?.let { !it.isFinishing && it.scene.width > 0 && it.scene.conditions != null } == true } }
         try {
             val a = onMain { WeatherActivity.current!! }
             assertEquals(WeatherSkin.FROST, onMain { a.skin })
-            assertTrue("light: dark text", onMain { WeatherSkin.luminance(a.heroCondition.currentTextColor) < 0.05 })
+            assertFalse("not the cartoon style", onMain { a.scene.renderer.cartoon })
             assertTrue("no skin button", onMain { a.window.decorView.findViewWithTag<View>("weather_skin_button") == null })
             Thread.sleep(1200)
-            screenPixels().let { px -> assertEquals("the weather screen in grays", 0, colored(px, appArea(px))); px.recycle() }
+            screenPixels().let { px -> assertTrue("the sky in color", colored(px, appArea(px)) > 200); px.recycle() }
+            // The chrome: dark gray text on frosted pads.
+            assertTrue(onMain { isGray(a.heroCondition.currentTextColor) && WeatherSkin.luminance(a.heroCondition.currentTextColor) < 0.05 })
+            for (c in onMain { a.heroBox.callouts.values }) assertTrue(onMain { isGray(c.lines[0].currentTextColor) })
+            assertTrue(onMain { isGray(a.placeButton.currentTextColor) })
             shot("125-frost-hero")
-            // The quick numbers on their frosted veil.
-            onMain { a.setQuick(true) }
-            Thread.sleep(800)
-            screenPixels().let { px -> assertEquals("the quick numbers in grays", 0, colored(px, appArea(px))); px.recycle() }
-            onMain { a.setQuick(false) }
-            // The data screen: frosted panels over the scene, dark text, the precip graph in grays.
+            // The data screen: frosted veil and panels, dark text.
             onMain { a.openDetails() }
             waitFor("data screen") { onMain { a.dataShown && !a.screens.moving } }
             Thread.sleep(800)
-            assertTrue(onMain { WeatherSkin.luminance(a.panel.nowTemp!!.currentTextColor) < 0.05 })
-            screenPixels().let { px -> assertEquals("the data screen in grays", 0, colored(px, appArea(px))); px.recycle() }
+            assertTrue(onMain { isGray(a.panel.nowTemp!!.currentTextColor) && WeatherSkin.luminance(a.panel.nowTemp!!.currentTextColor) < 0.05 })
             shot("126-frost-data")
             onMain { a.back() }
             waitFor("back") { onMain { !a.dataShown && !a.screens.moving } }
-            // The 7 days.
             onMain { a.openWeek() }
             waitFor("7 days") { onMain { a.weekShown && !a.screens.moving } }
             Thread.sleep(800)
-            screenPixels().let { px -> assertEquals("the 7 days in grays", 0, colored(px, appArea(px))); px.recycle() }
             shot("127-frost-week")
         } finally {
             runCatching { onMain { WeatherActivity.current?.finish() } }

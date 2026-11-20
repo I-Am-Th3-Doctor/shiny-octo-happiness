@@ -87,8 +87,6 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
     }
 
     init {
-        // No color: the widget (its scene and icons too) is drawn in grays.
-        io.github.iamth3doctor.searchlight.weatherapp.Monochrome.apply(this)
         isClickable = true
         isLongClickable = true
         isFocusable = true
@@ -173,7 +171,7 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
         for (t in listOf(tempView, hiLoView, placeView)) {
             if (skin.light) {
                 t.setTextColor(skin.ink)
-                t.setShadowLayer(shadow, 0f, 0f, 0x99FFFFFF.toInt())
+                t.setShadowLayer(shadow * 1.6f, 0f, 0f, 0xE6FFFFFF.toInt())
             } else {
                 t.setTextColor(skin.ink)
                 t.setShadowLayer(shadow, 0f, pxF(R.dimen.stroke_glass), context.color(R.color.scrim))

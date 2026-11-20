@@ -107,8 +107,6 @@ class WeatherForecastWidgetView(
     }
 
     init {
-        // No color: the widget (its scene and icons too) is drawn in grays.
-        io.github.iamth3doctor.searchlight.weatherapp.Monochrome.apply(this)
         isClickable = true
         isLongClickable = true
         isFocusable = true

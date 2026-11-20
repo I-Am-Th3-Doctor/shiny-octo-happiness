@@ -47,8 +47,6 @@ class WeatherCard(activity: Activity) : HomeCard(CardType.WEATHER, activity) {
 
     override fun bind(root: View) {
         emoji = root.findViewById(R.id.weatherEmoji)
-        // The weather in grays, like the weather screen and widgets.
-        io.github.iamth3doctor.searchlight.weatherapp.Monochrome.apply(emoji)
         line = root.findViewById(R.id.weatherLine)
         val card = root.findViewById<View>(R.id.card)
         card.setOnClickListener { v ->

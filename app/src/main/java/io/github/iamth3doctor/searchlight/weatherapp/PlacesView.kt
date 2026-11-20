@@ -41,7 +41,8 @@ class PlacesView(private val context: Context, private val light: Boolean, priva
     private fun px(t: Int) = context.px(t)
     private val fg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
     private val dim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
-    private val accent = context.color(if (light) R.color.accent else R.color.gold)
+    // No theme color: the chrome's marks are the text's own dark gray.
+    private val accent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
     private val inset = if (light) 0x14000000 else context.color(R.color.surface_inset)
 
     private val resultsLabel = label(R.string.weather_places_results)

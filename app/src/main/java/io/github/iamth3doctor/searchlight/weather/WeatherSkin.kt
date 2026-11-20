@@ -5,10 +5,10 @@ import kotlin.math.min
 import kotlin.math.pow
 
 /**
- * The weather's look: one skin, Frost (monochrome frosted glass; no color, no switching). It sets
- * the scene (sky, sun, moon, clouds, rain, hills, the cartoon outlines), the text over it, the
- * marks (the scrub bar's pin, pills, the big number) and the Weather widgets' cards, all in grays:
- * dark text over a pale scene.
+ * The weather's look: one skin, Frost (no switching). The chrome (text, pills, panels, the scrub
+ * bar's pin, the big number, the Weather widgets' cards) is monochrome frosted glass: dark text on
+ * translucent white. The weather itself, in [scene], keeps its natural colors and looks real: blue
+ * sky, yellow sunlight, white clouds, blue rain.
  *
  * Pure colors (ARGB ints); JVM-tested for contrast.
  */
@@ -43,15 +43,15 @@ enum class WeatherSkin(
     val scene: ScenePalette,
 ) {
     /**
-     * Frost: the only look. Monochrome frosted glass, no color: pale gray skies, white clouds,
-     * dark text on translucent white panels, like the launcher's frosted home card.
+     * Frost: the only look. Monochrome frosted glass chrome (dark text on translucent white panels,
+     * like the launcher's frosted home card) over the weather in its natural colors.
      */
     FROST(
         "frost", "Frost", light = true,
         ink = 0xFF1C1C21.toInt(), inkDim = 0xB31C1C21.toInt(),
         accent = 0xFF2A2A30.toInt(), onAccent = 0xFFFFFFFF.toInt(), accentDeep = 0xFF8A8E96.toInt(),
         numberTop = 0xFF2A2A30.toInt(), numberBottom = 0xFF111114.toInt(),
-        calloutBg = 0xC8FFFFFF.toInt(), outline = 0xFF1C1C21.toInt(), glass = 0xB8FFFFFF.toInt(),
+        calloutBg = 0xC8FFFFFF.toInt(), outline = 0xE6FFFFFF.toInt(), glass = 0xB8FFFFFF.toInt(),
         cardTop = 0xD9FFFFFF.toInt(), cardBottom = 0xCCF0F1F3.toInt(),
         daysCardTop = 0xD9FFFFFF.toInt(), daysCardBottom = 0xCCF0F1F3.toInt(),
         scene = ScenePalette.DEFAULT,
@@ -126,19 +126,19 @@ class ScenePalette(
 ) {
     companion object {
         /**
-         * Frosted monochrome: pale gray skies (a little darker at night), white clouds over grays,
-         * a soft gray sun and a white moon, gray rain and hills. No color.
+         * The weather as it looks: a deep blue night sky, blue by day, warm low on the horizon at
+         * dawn and dusk; yellow sunlight, a pale moon, white clouds graying under rain, blue rain,
+         * white snow, dark hills.
          */
         val DEFAULT = ScenePalette(
-            skyTop = intArrayOf(0xFFB9BCC2.toInt(), 0xFFC6C9CE.toInt(), 0xFFD6D8DC.toInt(), 0xFFE2E4E7.toInt(), 0xFFECEDEF.toInt(), 0xFFE6E8EB.toInt()),
-            skyBottom = intArrayOf(0xFFCDD0D4.toInt(), 0xFFD6D8DB.toInt(), 0xFFE4E5E7.toInt(), 0xFFEEEFF0.toInt(), 0xFFF5F5F6.toInt(), 0xFFF2F3F4.toInt()),
-            grayDay = 0xFFCFD2D6.toInt() to 0xFFE3E5E8.toInt(), grayNight = 0xFFB4B7BC.toInt() to 0xFFC8CBCF.toInt(),
-            sunCore = 0xFFFFFFFF.toInt() to 0xFFF4F4F4.toInt(), sunGlow = 0xFFFFFFFF.toInt() to 0xFFEDEDED.toInt(),
-            moon = 0xFFFFFFFF.toInt(), moonDark = 0xFFA9ADB3.toInt(), moonGlow = 0xFFFFFFFF.toInt(),
-            cloudClear = 0xFFFFFFFF.toInt(), cloudRain = 0xFFA4A8AE.toInt(), cloudNight = 0xFFD8DADD.toInt(), cloudDusk = 0xFFF2F2F2.toInt(),
-            rain = 0xFF5C5F64.toInt(), snow = 0xFF7E8186.toInt(), fog = 0xFFFFFFFF.toInt() to 0xFFE9EAEC.toInt(),
-            hillFar = 0xFFC3C6CB.toInt(), hillNear = 0xFFA9ADB3.toInt(), stars = 0xFF7E8186.toInt(), birds = 0xFF2A2A30.toInt() to 0xFF2A2A30.toInt(),
-            hillMix = 0.0,
+            skyTop = intArrayOf(0xFF050A1A.toInt(), 0xFF0C1736.toInt(), 0xFF22325E.toInt(), 0xFF3E62A0.toInt(), 0xFF3F7FCB.toInt(), 0xFF2F7AD8.toInt()),
+            skyBottom = intArrayOf(0xFF111C38.toInt(), 0xFF26305A.toInt(), 0xFFB86F6A.toInt(), 0xFFF2A46E.toInt(), 0xFFB9D5EE.toInt(), 0xFF9FCBF2.toInt()),
+            grayDay = 0xFF7E8894.toInt() to 0xFFB8C0C9.toInt(), grayNight = 0xFF12161D.toInt() to 0xFF232830.toInt(),
+            sunCore = 0xFFFFF8DC.toInt() to 0xFFFFC870.toInt(), sunGlow = 0xFFFFE680.toInt() to 0xFFFFA64D.toInt(),
+            moon = 0xFFF2F0E6.toInt(), moonDark = 0xFF2A3045.toInt(), moonGlow = 0xFFDDE5F5.toInt(),
+            cloudClear = 0xFFFDFDFE.toInt(), cloudRain = 0xFF6E7378.toInt(), cloudNight = 0xFF2B313D.toInt(), cloudDusk = 0xFFF4B48C.toInt(),
+            rain = 0xFF7FAEE0.toInt(), snow = 0xFFFFFFFF.toInt(), fog = 0xFFDADEE3.toInt() to 0xFF3A4049.toInt(),
+            hillFar = 0xFF101620.toInt(), hillNear = 0xFF090C12.toInt(), stars = 0xFFFFFFFF.toInt(), birds = 0xFF2A2F3A.toInt() to 0xFF101318.toInt(),
         )
     }
 }

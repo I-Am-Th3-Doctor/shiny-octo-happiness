@@ -198,8 +198,8 @@ class WidgetPickerActivity : Activity() {
             h.row = row
             h.b.title.text = row.label
             h.b.subtitle.text = getString(R.string.widget_picker_row, row.appLabel, row.size)
-            // The Weather widgets' previews in grays, like the widgets themselves (no color).
-            if (row.builtIn?.isWeather == true || row.builtIn == BuiltInWidget.STICKY_NOTE) {
+            // The Sticky note's preview in grays, like the note itself (no color).
+            if (row.builtIn == BuiltInWidget.STICKY_NOTE) {
                 h.b.preview.colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) })
             } else {
                 h.b.preview.clearColorFilter()

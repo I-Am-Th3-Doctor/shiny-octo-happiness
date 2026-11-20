@@ -210,7 +210,7 @@ class WeatherActivity : Activity() {
         val details = TextView(this).apply {
             type(Type.BODY)
             typeface = Typeface.create(typeface, 700, false)
-            setTextColor(color(if (light) R.color.accent else R.color.gold))
+            setTextColor(fg)
             text = getString(R.string.weather_details)
             gravity = Gravity.CENTER
             val p = px(R.dimen.space_s)
@@ -233,8 +233,6 @@ class WeatherActivity : Activity() {
         }
         screens = ScreenStack(heroScreen) { onScreen(it) }
 
-        // No color anywhere: everything on this screen, the living scene included, is drawn in grays.
-        root.setLayerType(View.LAYER_TYPE_HARDWARE, Monochrome.paint())
         setContentView(root)
         current = this
         updateSoundButton()
@@ -252,9 +250,9 @@ class WeatherActivity : Activity() {
 
     private fun buildHero(): SwipeFrame {
         val frame = SwipeFrame(this).apply { tag = "weather_screen_hero" }
-        // The scene, cartoon-style: flat, bold, outlined; a few clouds drift in front of the number.
+        // The scene, realistic: soft clouds, real sunlight, natural color; a few clouds drift in front of the number.
         scene = WeatherSceneView(this, mini = false).apply {
-            renderer.cartoon = true
+            renderer.cartoon = false
             setOnClickListener { toggleQuick() }
             renderer.onStrike = { main.post { onStrike() } }
         }
@@ -379,6 +377,7 @@ class WeatherActivity : Activity() {
             setPadding(p * 3, p, p * 3, p)
             contentDescription = getString(R.string.weather_week_open_desc)
             tag = "weather_week_handle"
+            background = GradientDrawable().apply { cornerRadius = 999f; setColor(glass()) }
             addView(ImageView(this@WeatherActivity).apply { setImageResource(R.drawable.ic_arrow_up); setColorFilter(handleInk) },
                 LinearLayout.LayoutParams(px(R.dimen.space_m), px(R.dimen.space_m)))
             addView(TextView(this@WeatherActivity).apply {
@@ -711,7 +710,7 @@ class WeatherActivity : Activity() {
         if (alerts.isEmpty()) return
         if (quickShown) setQuick(false)
         alertList.removeAllViews()
-        val accent = color(if (light) R.color.accent else R.color.gold)
+        val accent = fg
         val zone = java.time.ZoneOffset.ofTotalSeconds(data.detail?.utcOffsetSec ?: 0)
         val fmt = java.time.format.DateTimeFormatter.ofPattern(
             if (android.text.format.DateFormat.is24HourFormat(this)) "EEE HH:mm" else "EEE h:mm a", resources.configuration.locales[0])

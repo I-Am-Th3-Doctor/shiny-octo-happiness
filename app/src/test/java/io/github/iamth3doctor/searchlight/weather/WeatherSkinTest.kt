@@ -13,14 +13,17 @@ class WeatherSkinTest {
         skyTop.toList() + skyBottom.toList() + listOf(grayDay.first, grayDay.second, grayNight.first, grayNight.second)
     }
 
-    /** Every color the look uses (the skin's own and the scene's). */
-    private fun allColors(): List<Int> = with(frost) {
+    /** The chrome's colors: text, marks, panels, cards (not the weather). */
+    private fun chrome(): List<Int> = with(frost) {
         listOf(ink, inkDim, accent, onAccent, accentDeep, numberTop, numberBottom, calloutBg, outline, glass,
             cardTop, cardBottom, daysCardTop, daysCardBottom)
-    } + with(frost.scene) {
-        skies() + listOf(sunCore.first, sunCore.second, sunGlow.first, sunGlow.second, moon, moonDark, moonGlow,
-            cloudClear, cloudRain, cloudNight, cloudDusk, rain, snow, fog.first, fog.second, hillFar, hillNear, stars,
-            birds.first, birds.second)
+    }
+
+    private fun isGray(c: Int): Boolean {
+        val r = c shr 16 and 0xFF
+        val g = c shr 8 and 0xFF
+        val b = c and 0xFF
+        return maxOf(r, g, b) - minOf(r, g, b) <= 12
     }
 
     @Test fun oneLookFrostWhatever() {
@@ -31,34 +34,42 @@ class WeatherSkinTest {
         assertTrue(frost.scene === ScenePalette.DEFAULT)
     }
 
-    @Test fun noColorAnywhere() {
-        for (c in allColors()) {
-            val r = c shr 16 and 0xFF
-            val g = c shr 8 and 0xFF
-            val b = c and 0xFF
-            assertTrue("${Integer.toHexString(c)} is a gray", maxOf(r, g, b) - minOf(r, g, b) <= 12)
-        }
-    }
-
-    @Test fun frostedLightWithDarkText() {
+    @Test fun theChromeIsMonochromeFrostedGlass() {
+        for (c in chrome()) assertTrue("${Integer.toHexString(c)} is a gray", isGray(c))
         assertTrue(frost.light)
-        assertTrue("pale skies", skies().all { WeatherSkin.luminance(it) > 0.4 })
         assertTrue("dark text", WeatherSkin.luminance(frost.ink) < 0.02)
-        // The panels and pills are translucent white glass.
         for (c in listOf(frost.glass, frost.calloutBg, frost.cardTop, frost.cardBottom)) {
-            val a = c ushr 24
-            assertTrue("${Integer.toHexString(c)}: translucent", a in 0x80..0xF0)
+            assertTrue("${Integer.toHexString(c)}: translucent", (c ushr 24) in 0x80..0xF0)
             assertTrue("${Integer.toHexString(c)}: white", WeatherSkin.luminance(c or 0xFF000000.toInt()) > 0.8)
         }
     }
 
-    @Test fun textReadsOverEverySky() {
+    @Test fun theWeatherInItsNaturalColors() = with(frost.scene) {
+        fun r(c: Int) = c shr 16 and 0xFF
+        fun g(c: Int) = c shr 8 and 0xFF
+        fun b(c: Int) = c and 0xFF
+        // Yellow sunlight.
+        for (c in listOf(sunCore.second, sunGlow.first, sunGlow.second)) assertTrue("sun ${Integer.toHexString(c)}", r(c) > 230 && g(c) > 150 && b(c) < 160)
+        // White clouds (gray under rain).
+        assertTrue(r(cloudClear) > 245 && g(cloudClear) > 245 && b(cloudClear) > 245)
+        assertTrue("rain clouds gray", isGray(cloudRain) && WeatherSkin.luminance(cloudRain) < WeatherSkin.luminance(cloudClear))
+        // Blue rain, white snow.
+        assertTrue("rain blue", b(rain) > r(rain) + 60 && b(rain) > g(rain))
+        assertEquals(0xFFFFFFFF.toInt(), snow)
+        // A blue day sky, a dark blue night.
+        val day = skyTop.last()
+        assertTrue("day sky blue", b(day) > r(day) + 100)
+        val night = skyTop.first()
+        assertTrue("night dark blue", WeatherSkin.luminance(night) < 0.01 && b(night) > r(night))
+    }
+
+    @Test fun textReadsOverEverySkyOnItsFrostedPad() {
         for (sky in skies()) {
             val under = WeatherSkin.over(frost.calloutBg, sky)
             assertTrue("text on ${Integer.toHexString(sky)}", WeatherSkin.contrast(frost.ink, under) >= 4.5)
             assertTrue("label on ${Integer.toHexString(sky)}", WeatherSkin.contrast(frost.accent, under) >= 3.0)
-            // Straight on the sky (the big condition, the 7 DAYS handle): still reads.
-            assertTrue("ink straight on ${Integer.toHexString(sky)}", WeatherSkin.contrast(frost.ink, sky) >= 4.5)
+            val pill = WeatherSkin.over(frost.glass, sky)
+            assertTrue("pill text on ${Integer.toHexString(sky)}", WeatherSkin.contrast(frost.ink, pill) >= 4.5)
         }
     }
 

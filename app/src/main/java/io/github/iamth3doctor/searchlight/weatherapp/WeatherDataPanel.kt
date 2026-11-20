@@ -86,7 +86,8 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
 
     private val fg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
     private val dim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
-    private val accent = context.color(if (light) R.color.accent else R.color.gold)
+    // No theme color: the chrome's marks are the text's own dark gray.
+    private val accent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
     private val insetColor = if (light) 0x99FFFFFF.toInt() else context.color(R.color.surface_inset)
 
     private fun text(style: Int, dimmed: Boolean = false, bold: Boolean = false) = TextView(context).apply {

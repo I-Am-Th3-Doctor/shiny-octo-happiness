@@ -50,7 +50,8 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
     private fun px(token: Int) = context.px(token)
     private val fg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
     private val dim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
-    private val accent = context.color(if (light) R.color.accent else R.color.gold)
+    // No theme color: the controls are dark gray (the weather itself keeps its colors: blue rain, the sun).
+    private val accent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
 
     val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     val island = IslandView(context)
@@ -400,7 +401,8 @@ class PrecipGraphView(context: Context, private val light: Boolean) : View(conte
     private val path = Path()
     private val fg = if (light) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
     private val dim = if (light) 0x991C1C21.toInt() else 0x99FFFFFF.toInt()
-    private val accent = context.color(if (light) R.color.accent else R.color.gold)
+    // No theme color: the controls are dark gray (the weather itself keeps its colors: blue rain, the sun).
+    private val accent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
     private val drop = context.color(R.color.weather_drop)
 
     init {
