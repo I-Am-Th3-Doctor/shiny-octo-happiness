@@ -400,9 +400,10 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         row.addView(ConditionView(context, glow = false).apply { visual = ConditionVisual.of(day.code, true) }, LinearLayout.LayoutParams(big, big))
         val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         col.addView(text(Type.BODY, bold = true).apply { text = WeatherCodes.describe(day.code); tag = "weather_day_condition" })
-        col.addView(text(Type.GLANCE, bold = true).apply {
+        col.addView(text(Type.TILE_TITLE, bold = true).apply {
             text = context.getString(R.string.weather_widget_hi_lo, deg(day.highC), deg(day.lowC))
             tag = "weather_day_hi_lo"
+            maxLines = 1
         }, lp(px(R.dimen.space_xs)))
         row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(R.dimen.space_m) })
         inner.addView(row, lp(px(R.dimen.space_s)))
