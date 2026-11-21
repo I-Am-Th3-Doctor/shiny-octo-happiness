@@ -1679,11 +1679,11 @@ class WeatherSceneDeviceTest {
         android.graphics.Rect(o[0], o[1], o[0] + v.width, o[1] + v.height)
     }
 
-    @Test fun theHeroIsOneCartoonSceneWithTheDataRoundIt() = screen { h ->
+    @Test fun theHeroIsOneRealisticSceneWithTheDataRoundIt() = screen { h ->
         force(h, reading(80, 60, 1.2, windFrom = 250.0, wind = 14.0))
         val a = current()
-        // One scene, cartoon-style, filling the screen; the number inside it (clouds drift in front of it).
-        assertTrue(onMain { a.scene.renderer.cartoon && a.scene.renderer.layered })
+        // One scene, realistic (not the cartoon style), filling the screen; the number inside it (clouds drift in front of it).
+        assertTrue(onMain { !a.scene.renderer.cartoon && a.scene.renderer.layered })
         assertEquals(onMain { a.heroScreen.width to a.heroScreen.height }, onMain { a.scene.width to a.scene.height })
         assertTrue("the number is in the scene, not a header over it", onMain { a.hero.parent === a.heroBox })
         assertTrue(onMain { a.hero.isShown && a.hero.fits() })

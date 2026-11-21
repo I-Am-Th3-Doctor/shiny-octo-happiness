@@ -166,9 +166,14 @@ class StickyNoteDeviceTest {
     private fun time(h: ActivityScenario<MainActivity>, ms: Long): String = on(h) { android.text.format.DateFormat.getTimeFormat(it).format(ms) }
 
     /** The note as drawn. */
-    private fun pixels(v: View): Bitmap {
+    private fun pixels(v: View, grayscale: Boolean = false): Bitmap {
         val b = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888)
-        main { v.draw(Canvas(b)) }
+        main {
+            val c = Canvas(b)
+            if (grayscale) c.saveLayer(null, io.github.iamth3doctor.searchlight.weatherapp.Monochrome.paint())
+            v.draw(c)
+            if (grayscale) c.restore()
+        }
         return b
     }
 
@@ -242,8 +247,15 @@ class StickyNoteDeviceTest {
             android.graphics.Color.alpha(c) > 200 && android.graphics.Color.red(c) < 90
         }
         assertTrue("the next line in dark ink ($inked)", inked > 0)
+        // As the screen shows it: through the note's grayscale layer. Nearly clear edge pixels are left
+        // out, where un-premultiplying a 1-4 alpha rounds a gray to a tint.
+        val shown = pixels(v, grayscale = true)
         var colored = 0
-        for (y in 0 until px.height step 3) for (x in 0 until px.width step 3) if (!gray(px.getPixel(x, y))) colored++
+        for (y in 0 until shown.height step 3) for (x in 0 until shown.width step 3) {
+            val c = shown.getPixel(x, y)
+            if (android.graphics.Color.alpha(c) >= 32 && !gray(c)) colored++
+        }
+        shown.recycle()
         assertEquals("no color on the note", 0, colored)
         assertTrue("on screen, drawn through its grayscale layer", on(h) { v.layerType == android.view.View.LAYER_TYPE_HARDWARE })
         assertTrue("tilted", on(h) { v.tilt } != 0f && kotlin.math.abs(on(h) { v.tilt }) <= 2f)
