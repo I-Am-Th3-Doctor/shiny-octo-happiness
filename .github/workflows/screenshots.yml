@@ -66,7 +66,9 @@ jobs:
             adb push testiconpack/build/outputs/apk/debug/testiconpack-debug.apk /data/local/tmp/testiconpack.apk
             if [ -f arcticons.apk ]; then adb install -r arcticons.apk || echo "Arcticons didn't install"; else echo "No Arcticons download"; fi
             rm -f /tmp/device-tests-failed
+            adb logcat -b crash -c || true
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=folded || touch /tmp/device-tests-failed
+            adb logcat -d -b crash | tail -n 150 || true
             adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-*.txt' || true
             adb shell wm size 1840x2208
             adb shell wm density 420
@@ -76,7 +78,9 @@ jobs:
             adb shell input keyevent KEYCODE_HOME
             sleep 5
             adb shell wm size
+            adb logcat -b crash -c || true
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded || touch /tmp/device-tests-failed
+            adb logcat -d -b crash | tail -n 150 || true
             adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-unfolded-*.txt' || true
             adb shell wm size reset
             adb shell wm density reset
