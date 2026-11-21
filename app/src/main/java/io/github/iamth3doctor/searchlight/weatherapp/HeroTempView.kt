@@ -172,6 +172,10 @@ class HeroTempView(context: Context) : View(context) {
         val uBase = top + unitPaint.textSize * 0.95f
         unitPaint.color = SceneRenderer.mix(skin.accentDeep, 0xFF111114.toInt(), 0.3)
         canvas.drawText("F", ux + d * 0.35f, uBase + d * 0.35f, unitPaint)
+        // The same frosted outline as the number, so the F reads over a night sky too.
+        stroke.textSize = unitPaint.textSize
+        stroke.strokeWidth = unitPaint.textSize * 0.09f
+        canvas.drawText("F", ux, uBase, stroke)
         unitPaint.color = faceMid()
         canvas.drawText("F", ux, uBase, unitPaint)
     }

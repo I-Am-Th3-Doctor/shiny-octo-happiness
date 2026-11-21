@@ -123,7 +123,8 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
         placeView.includeFontPadding = false
         placeView.setShadowLayer(pxF(R.dimen.glass_text_shadow) * 1.5f, 0f, pxF(R.dimen.stroke_glass), context.color(R.color.scrim))
         placeView.visibility = GONE
-        val pp = px(R.dimen.space_s) + px(R.dimen.space_xs)
+        val pp = px(R.dimen.space_s)
+        placeView.setPadding(px(R.dimen.space_xs), px(R.dimen.space_xs) / 2, px(R.dimen.space_xs), px(R.dimen.space_xs) / 2)
         addView(placeView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
             topMargin = pp
             marginStart = pp
@@ -164,14 +165,20 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
 
     private val skinListener: () -> Unit = { applySkin() }
 
-    /** The skin in use ([Skins]): the scene follows it on its own; the text goes dark over a light skin's pale sky. */
+    /**
+     * The skin in use ([Skins]): the scene follows it on its own. The dark text sits on small frosted
+     * pads, so it reads over a night sky as well as a bright one.
+     */
     fun applySkin() {
         val skin = Skins.current
         val shadow = pxF(R.dimen.glass_text_shadow) * 1.5f
+        fun pad(radius: Float) = if (skin.light) GradientDrawable().apply { cornerRadius = radius; setColor(skin.calloutBg) } else null
+        textBox.background = pad(pxF(R.dimen.radius_card) * 0.6f)
+        placeView.background = pad(999f)
         for (t in listOf(tempView, hiLoView, placeView)) {
             if (skin.light) {
                 t.setTextColor(skin.ink)
-                t.setShadowLayer(shadow * 1.6f, 0f, 0f, 0xE6FFFFFF.toInt())
+                t.setShadowLayer(0f, 0f, 0f, 0)
             } else {
                 t.setTextColor(skin.ink)
                 t.setShadowLayer(shadow, 0f, pxF(R.dimen.stroke_glass), context.color(R.color.scrim))
@@ -183,6 +190,8 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
     private fun layoutText() {
         textBox.removeAllViews()
         val pad = px(R.dimen.space_s) + px(R.dimen.space_xs)
+        // The frosted pad's own margin from the widget's edge.
+        val edge = px(R.dimen.space_xs)
         val lp = textBox.layoutParams as? LayoutParams
         when (size) {
             Size.COMPACT -> {
@@ -190,7 +199,8 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
                 textBox.orientation = LinearLayout.VERTICAL
                 textBox.gravity = Gravity.START
                 lp?.gravity = Gravity.CENTER_VERTICAL or Gravity.START
-                textBox.setPadding(pad, 0, pad, 0)
+                lp?.setMargins(edge, 0, edge, 0)
+                textBox.setPadding(pad - edge, edge, pad - edge, edge)
                 tempView.setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(R.dimen.text_weather_temp_compact))
                 textBox.addView(tempView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 textBox.addView(hiLoView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -199,7 +209,8 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
                 textBox.orientation = LinearLayout.VERTICAL
                 textBox.gravity = Gravity.START
                 lp?.gravity = Gravity.BOTTOM or Gravity.START
-                textBox.setPadding(pad, pad, pad, px(R.dimen.space_s) + px(R.dimen.space_xs) / 2)
+                lp?.setMargins(edge, 0, edge, edge)
+                textBox.setPadding(pad - edge, pad - edge, pad - edge, px(R.dimen.space_s) + px(R.dimen.space_xs) / 2 - edge)
                 tempView.setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(if (size == Size.WIDE) R.dimen.text_weather_temp_wide else R.dimen.text_weather_temp))
                 // Each as wide as its own text (a vertical LinearLayout would stretch them to the box, clipping the wider one).
                 textBox.addView(tempView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -246,7 +257,7 @@ class WeatherWidgetView(context: Context, private val repo: WeatherRepository) :
         alertGlyph.visibility = if (io.github.iamth3doctor.searchlight.weather.NwsAlerts.active(data?.alerts, now).isNotEmpty()) VISIBLE else GONE
         // The place moves over for the alert glyph when there is one.
         (placeView.layoutParams as? LayoutParams)?.let { lp ->
-            val want = px(R.dimen.space_s) + px(R.dimen.space_xs) + if (alertGlyph.visibility == VISIBLE) px(R.dimen.space_m) + px(R.dimen.space_s) else 0
+            val want = px(R.dimen.space_s) + if (alertGlyph.visibility == VISIBLE) px(R.dimen.space_m) + px(R.dimen.space_s) else 0
             if (lp.marginStart != want) { lp.marginStart = want; placeView.layoutParams = lp }
         }
         contentDescription = if (data != null) {

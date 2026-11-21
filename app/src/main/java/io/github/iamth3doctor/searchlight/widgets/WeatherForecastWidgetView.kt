@@ -205,8 +205,16 @@ class WeatherForecastWidgetView(
         conditionView.style(Type.CAPTION, 700, skin.accent)
         conditionView.letterSpacing = 0.08f
         left.addView(tempView)
-        left.addView(placeView, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(R.dimen.space_xs) })
-        left.addView(conditionView, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(R.dimen.space_xs) / 2 })
+        // The place and the condition on one line, so neither is cut off at the bottom of a short widget;
+        // the condition gives way (ellipsized) to a long place name.
+        val words = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = true }
+        placeView.isSingleLine = true
+        placeView.ellipsize = TextUtils.TruncateAt.END
+        conditionView.isSingleLine = true
+        conditionView.ellipsize = TextUtils.TruncateAt.END
+        words.addView(placeView, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        words.addView(conditionView, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = px(R.dimen.space_s) })
+        left.addView(words, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(R.dimen.space_xs) })
         top.addView(left, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         top.addView(visual, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 0.6f))
         col.addView(top, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
@@ -323,7 +331,7 @@ class WeatherForecastWidgetView(
             invalidate()
         }
 
-        /** Where each hour mark's label went, and the high's and low's (tests). */
+        /** Each hour mark's label (one too close to the label before keeps only its tick), and the high's and low's (tests). */
         val markLabels = ArrayList<String>()
         var highLabel = ""
             private set
@@ -358,13 +366,18 @@ class WeatherForecastWidgetView(
             markLabels.clear()
             val fmt = WeatherFormat.hour(context)
             val baseline = height - 4 * density
+            var lastRight = Float.NEGATIVE_INFINITY
             for ((i, t) in c.marks.withIndex()) {
                 val x = xOf(t)
                 val text = if (i == 0) context.getString(R.string.weather_widget_now) else fmt.format(Instant.ofEpochMilli(t).atOffset(zone))
                 markLabels += text
                 val w = label.measureText(text)
                 canvas.drawLine(x, plotBottom() + 2 * density, x, plotBottom() + 4 * density, tick)
-                canvas.drawText(text, (x - w / 2).coerceIn(inset() / 2, width - w - inset() / 2), baseline, label)
+                val lx = (x - w / 2).coerceIn(inset() / 2, width - w - inset() / 2)
+                // An hour too close to the one before keeps its tick but not its words (NOW never overlapped).
+                if (lx < lastRight + 6 * density) continue
+                canvas.drawText(text, lx, baseline, label)
+                lastRight = lx + w
             }
             val path = Path()
             c.points.forEachIndexed { i, (t, temp) ->

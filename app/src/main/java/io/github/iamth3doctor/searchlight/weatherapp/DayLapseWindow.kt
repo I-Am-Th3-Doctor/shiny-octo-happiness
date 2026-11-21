@@ -104,22 +104,32 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
             if (bold) typeface = Typeface.create(typeface, 700, false)
             setTextColor(ink)
             includeFontPadding = false
-            setShadowLayer(shadow, 0f, 1f, if (skin.light) 0x99FFFFFF.toInt() else 0x99000000.toInt())
+            if (skin.light) {
+                // Dark text on its own small frosted pad: it reads over a night sky too.
+                setShadowLayer(0f, 0f, 0f, 0)
+                background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 999f; setColor(skin.calloutBg) }
+                val h = px(R.dimen.space_s)
+                val v = px(R.dimen.space_xs) / 2
+                setPadding(h, v, h, v)
+            } else {
+                setShadowLayer(shadow, 0f, 1f, 0x99000000.toInt())
+            }
         }
         val m = px(R.dimen.space_s) + px(R.dimen.space_xs)
         val top = lapseTop
         lapseTemp.glass(Type.GLANCE, bold = true)
         lapseTemp.tag = "weather_lapse_temp"
         lapseCondition.glass(Type.BODY, bold = true)
-        top.addView(lapseTemp)
-        top.addView(lapseCondition)
+        top.addView(lapseTemp, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        top.addView(lapseCondition, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = px(R.dimen.space_xs) })
         // Full screen, the details' own big number and condition play along instead.
         if (card) overlay.addView(top, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START)
             .apply { setMargins(m, m, m, m) })
         val bottom = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         readout.glass(Type.BODY, bold = true)
         readout.tag = "weather_lapse_readout"
-        bottom.addView(readout)
+        bottom.addView(readout, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         lapseBar.tag = "weather_lapse_bar"
         bottom.addView(lapseBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(R.dimen.space_m))
             .apply { topMargin = px(R.dimen.space_xs) })
