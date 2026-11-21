@@ -454,6 +454,14 @@
     <string name="weather_detail_now">Now</string>
     <string name="weather_detail_hourly">Hourly</string>
     <string name="weather_detail_daily">7 days</string>
+    <string name="weather_day_back">7 days</string>
+    <string name="weather_day_back_desc">Back to the 7 days</string>
+    <string name="weather_day_rain_chance">Chance of rain</string>
+    <string name="weather_day_precip">Precipitation</string>
+    <string name="weather_day_uv">UV max</string>
+    <string name="weather_day_wind">Wind up to</string>
+    <string name="weather_day_sunrise">Sunrise</string>
+    <string name="weather_day_sunset">Sunset</string>
     <string name="weather_detail_sun">Sun</string>
     <string name="weather_detail_moon">Moon</string>
     <string name="weather_detail_sunrise">Sunrise</string>

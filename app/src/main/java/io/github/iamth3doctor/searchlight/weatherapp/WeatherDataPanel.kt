@@ -50,14 +50,24 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     /** Now, in ms. */
     var clock: () -> Long = System::currentTimeMillis
 
-    /** Holding a day in the 7 DAYS list: play it ([onHoldDay] with its index) until let go ([onReleaseDay]). */
-    var onHoldDay: ((Int) -> Unit)? = null
-    var onReleaseDay: (() -> Unit)? = null
-    /** The day being held, or null. */
-    var heldDay: () -> Int? = { null }
-
-    /** The 7 DAYS rows (tests). */
+    /** The 7 DAYS rows (tests). Tap one and the box goes into that day ([openDay]). */
     val dayRows = ArrayList<View>()
+
+    /** The day open in the 7 DAYS box, or null (the list). Stays open when the details rebuild. */
+    var openDay: Int? = null
+        private set
+
+    /** The open day's view in the 7 DAYS box (tests), or null. */
+    var dayView: View? = null
+        private set
+
+    /** A day opened or closed (the screen counts it as a touch). */
+    var onDayChanged: ((Int?) -> Unit)? = null
+
+    /** The 7 DAYS box's inside: the list, or the open day in its place. */
+    private var dayStage: android.widget.FrameLayout? = null
+    private var dayList: View? = null
+    private var lastData: WeatherData? = null
 
     /** The big number and condition at the top (tests read them; a played day takes them over). */
     var nowTemp: TextView? = null
@@ -119,17 +129,16 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
 
     private fun deg(c: Double) = "${WeatherText.f(c)}°"
 
-    /** Marks day [i]'s row as the one playing (or not). */
-    fun highlightDay(i: Int, on: Boolean) {
-        (dayRows.getOrNull(i)?.background as? GradientDrawable)?.setColor(if (on) (if (light) 0x1A000000 else 0x26FFFFFF) else 0)
-    }
-
     fun render(state: WeatherRepository.State) {
         body.removeAllViews()
         sections.clear()
         nowTemp = null
         nowCondition = null
+        dayStage = null
+        dayList = null
+        dayView = null
         val data = state.data
+        lastData = data
         if (data == null) {
             section("now", text(Type.BODY, dimmed = true).apply {
                 text = context.getString(
@@ -205,23 +214,8 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         val fmt = WeatherFormat.hour(context)
         val hv = px(R.dimen.size_weather_visual_hour) + px(R.dimen.space_xs)
         hours.forEachIndexed { i, h ->
-            val cell = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                val p = px(R.dimen.space_s)
-                setPadding(p, p, p, p)
-                tag = "weather_hour"
-            }
-            cell.addView(text(Type.CAPTION, dimmed = true).apply {
-                text = if (i == 0 && h.time <= now) context.getString(R.string.weather_detail_now_hour) else fmt.format(Instant.ofEpochMilli(h.time).atOffset(zone))
-            })
-            cell.addView(ConditionView(context, glow = false).apply { visual = ConditionVisual.of(h.code, h.isDay) },
-                LinearLayout.LayoutParams(hv, hv).apply { topMargin = px(R.dimen.space_xs); bottomMargin = px(R.dimen.space_xs) })
-            cell.addView(text(Type.BODY, bold = true).apply { text = deg(h.tempC) })
-            h.precipProb?.takeIf { it >= 10 }?.let { p ->
-                cell.addView(text(Type.CAPTION).apply { text = "$p%"; setTextColor(context.color(R.color.weather_drop)) })
-            }
-            strip.addView(cell)
+            val name = if (i == 0 && h.time <= now) context.getString(R.string.weather_detail_now_hour) else fmt.format(Instant.ofEpochMilli(h.time).atOffset(zone))
+            strip.addView(hourCell(h, name, hv, "weather_hour"))
         }
         box.addView(HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
@@ -230,6 +224,23 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         }, lp(px(R.dimen.space_xs)))
         section("hourly", box)
     }
+
+    /** One hour in a strip: its time, the condition drawn, the temperature, the chance of rain (10% or more). */
+    private fun hourCell(h: io.github.iamth3doctor.searchlight.weather.HourPoint, name: String, size: Int, tag: String) =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            val p = px(R.dimen.space_s)
+            setPadding(p, p, p, p)
+            this.tag = tag
+            addView(text(Type.CAPTION, dimmed = true).apply { text = name })
+            addView(ConditionView(context, glow = false).apply { visual = ConditionVisual.of(h.code, h.isDay) },
+                LinearLayout.LayoutParams(size, size).apply { topMargin = px(R.dimen.space_xs); bottomMargin = px(R.dimen.space_xs) })
+            addView(text(Type.BODY, bold = true).apply { text = deg(h.tempC) })
+            h.precipProb?.takeIf { it >= 10 }?.let { pct ->
+                addView(text(Type.CAPTION).apply { text = "$pct%"; setTextColor(context.color(R.color.weather_drop)) })
+            }
+        }
 
     private fun daily(data: WeatherData) {
         val d = data.detail ?: return
@@ -268,17 +279,166 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
             row.addView(text(Type.BODY, bold = true).apply { text = deg(day.highC); gravity = Gravity.END },
                 LinearLayout.LayoutParams(col + px(R.dimen.space_s), ViewGroup.LayoutParams.WRAP_CONTENT))
             row.contentDescription = "$name, ${WeatherCodes.describe(day.code)}, high ${deg(day.highC)}, low ${deg(day.lowC)}" +
-                (day.precipPct?.let { ", $it% chance of precipitation" } ?: "") + ". Hold to preview."
-            // Hold a day: it plays as a time-lapse at the top of the screen until let go.
-            row.background = GradientDrawable().apply { cornerRadius = pxF(R.dimen.radius_card) / 3; setColor(0) }
-            DayLapseWindow.holdToPlay(row, isHeld = { heldDay() == i },
-                onHold = { onHoldDay?.invoke(i) },
-                onRelease = { onReleaseDay?.invoke() })
+                (day.precipPct?.let { ", $it% chance of precipitation" } ?: "")
+            // Tap a day: the box goes into it.
+            row.isClickable = true
+            row.isFocusable = true
+            row.background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(if (light) 0x1F000000 else 0x33FFFFFF),
+                null, GradientDrawable().apply { cornerRadius = pxF(R.dimen.radius_card) / 3; setColor(0xFF000000.toInt()) })
+            row.setOnClickListener { openDay(i) }
             dayRows += row
             list.addView(row, lp())
         }
-        box.addView(list, lp(px(R.dimen.space_xs)))
+        val stage = android.widget.FrameLayout(context).apply { tag = "weather_day_stage" }
+        stage.addView(list, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        dayStage = stage
+        dayList = list
+        box.addView(stage, lp(px(R.dimen.space_xs)))
         section("daily", box)
+        // A day left open stays open through a rebuild (a refresh, a new reading).
+        val open = openDay
+        if (open != null && (open >= d.daily.size.coerceAtMost(7) || !showDay(open, animate = false))) openDay = null
+    }
+
+    /** Tap day [i]: the 7 DAYS box goes into it, the list sliding away and the day sliding in. */
+    fun openDay(i: Int, animate: Boolean = true) {
+        if (openDay == i && dayView != null) return
+        if (showDay(i, animate)) onDayChanged?.invoke(i)
+    }
+
+    /** Back out of the open day to the list. False when no day was open. */
+    fun closeDay(animate: Boolean = true): Boolean {
+        if (openDay == null) return false
+        val stage = dayStage
+        val v = dayView
+        openDay = null
+        dayView = null
+        if (stage != null) {
+            if (animate) beginDayTransition(forward = false, entering = dayList, leaving = v)
+            v?.let { stage.removeView(it) }
+            dayList?.visibility = View.VISIBLE
+        }
+        onDayChanged?.invoke(null)
+        return true
+    }
+
+    private fun showDay(i: Int, animate: Boolean): Boolean {
+        val data = lastData ?: return false
+        val d = data.detail ?: return false
+        val day = d.daily.getOrNull(i) ?: return false
+        val stage = dayStage ?: return false
+        val v = buildDay(data, i, day)
+        val old = dayView
+        if (animate) beginDayTransition(forward = true, entering = v, leaving = old ?: dayList)
+        old?.let { stage.removeView(it) }
+        stage.addView(v, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        dayList?.visibility = View.GONE
+        openDay = i
+        dayView = v
+        return true
+    }
+
+    /** Tests: whether going into a day and back animates (null: as the system's animation setting says). */
+    var dayAnimateOverride: Boolean? = null
+
+    /** Into a day ([forward]) the day comes in from the end and the list goes out the start; back, the other way. */
+    private fun beginDayTransition(forward: Boolean, entering: View?, leaving: View?) {
+        val on = dayAnimateOverride ?: android.animation.ValueAnimator.areAnimatorsEnabled()
+        if (!on) return
+        val inEdge = if (forward) Gravity.END else Gravity.START
+        val outEdge = if (forward) Gravity.START else Gravity.END
+        val set = android.transition.TransitionSet().apply {
+            ordering = android.transition.TransitionSet.ORDERING_TOGETHER
+            entering?.let { addTransition(android.transition.Slide(inEdge).addTarget(it)); addTransition(android.transition.Fade().addTarget(it)) }
+            leaving?.let { addTransition(android.transition.Slide(outEdge).addTarget(it)); addTransition(android.transition.Fade().addTarget(it)) }
+            // The box and everything under it follow the new height.
+            addTransition(android.transition.ChangeBounds())
+            duration = OPEN_DAY_MS
+            interpolator = ease
+        }
+        android.transition.TransitionManager.beginDelayedTransition(body, set)
+    }
+
+    /**
+     * Day [i] in full, in the 7 DAYS box: back to the list, the day's name and date, the condition
+     * drawn large with its words and high and low, its hours, then the chance of rain and how much,
+     * the UV, the wind, and sunrise and sunset.
+     */
+    private fun buildDay(data: WeatherData, i: Int, day: io.github.iamth3doctor.searchlight.weather.DayPoint): View {
+        val d = data.detail!!
+        val zone = ZoneOffset.ofTotalSeconds(d.utcOffsetSec)
+        val locale = context.resources.configuration.locales[0]
+        val date = Instant.ofEpochMilli(day.date).atOffset(zone)
+        val inner = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = inset()
+            val p = px(R.dimen.space_s) + px(R.dimen.space_xs)
+            setPadding(p, px(R.dimen.space_s), p, p)
+            tag = "weather_day_view"
+        }
+        // Back to the 7 days.
+        val back = text(Type.CAPTION, bold = true).apply {
+            text = "‹  " + context.getString(R.string.weather_day_back).uppercase(locale)
+            setTextColor(accent)
+            letterSpacing = 0.08f
+            tag = "weather_day_back"
+            contentDescription = context.getString(R.string.weather_day_back_desc)
+            val v = px(R.dimen.space_s)
+            setPadding(0, v, v * 2, v)
+            setOnClickListener { closeDay() }
+        }
+        inner.addView(back, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val name = if (i == 0) context.getString(R.string.weather_detail_today) else date.dayOfWeek.getDisplayName(TextStyle.FULL, locale)
+        inner.addView(text(Type.TILE_TITLE, bold = true).apply { text = name; tag = "weather_day_name" }, lp(px(R.dimen.space_xs)))
+        inner.addView(text(Type.CAPTION, dimmed = true).apply {
+            text = java.time.format.DateTimeFormatter.ofPattern("MMMM d", locale).format(date)
+        })
+        // The condition drawn large, its words, the high and low.
+        val big = px(R.dimen.size_weather_visual_hour) * 2
+        val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        row.addView(ConditionView(context, glow = false).apply { visual = ConditionVisual.of(day.code, true) }, LinearLayout.LayoutParams(big, big))
+        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(text(Type.BODY, bold = true).apply { text = WeatherCodes.describe(day.code); tag = "weather_day_condition" })
+        col.addView(text(Type.GLANCE, bold = true).apply {
+            text = context.getString(R.string.weather_widget_hi_lo, deg(day.highC), deg(day.lowC))
+            tag = "weather_day_hi_lo"
+        }, lp(px(R.dimen.space_xs)))
+        row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(R.dimen.space_m) })
+        inner.addView(row, lp(px(R.dimen.space_s)))
+        // Its hours.
+        val hours = d.hourly.filter { it.time >= day.date && it.time < day.date + DAY_MS }
+        if (hours.isNotEmpty()) {
+            val fmt = WeatherFormat.hour(context)
+            val strip = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            val hv = px(R.dimen.size_weather_visual_hour) + px(R.dimen.space_xs)
+            for (h in hours) strip.addView(hourCell(h, fmt.format(Instant.ofEpochMilli(h.time).atOffset(zone)), hv, "weather_day_hour"))
+            inner.addView(HorizontalScrollView(context).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(strip)
+            }, lp(px(R.dimen.space_s)))
+        }
+        // The numbers.
+        val facts = ArrayList<Pair<String, String>>()
+        day.precipPct?.let { facts += context.getString(R.string.weather_day_rain_chance) to "$it%" }
+        day.precipMm?.let { facts += context.getString(R.string.weather_day_precip) to String.format(java.util.Locale.US, "%.2f in", it / 25.4) }
+        day.uvMax?.let { facts += context.getString(R.string.weather_day_uv) to "${it.roundToInt()} ${WeatherText.uvRating(it)}" }
+        hours.mapNotNull { it.windMph }.maxOrNull()?.let { facts += context.getString(R.string.weather_day_wind) to "${it.roundToInt()} mph" }
+        val tf = WeatherFormat.time(context)
+        day.sunrise?.let { facts += context.getString(R.string.weather_day_sunrise) to tf.format(Instant.ofEpochMilli(it).atOffset(zone)) }
+        day.sunset?.let { facts += context.getString(R.string.weather_day_sunset) to tf.format(Instant.ofEpochMilli(it).atOffset(zone)) }
+        for (pair in facts.chunked(2)) {
+            val line = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            for ((k, v) in pair) {
+                val cell = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; tag = "weather_day_fact" }
+                cell.addView(text(Type.CAPTION, dimmed = true).apply { text = k })
+                cell.addView(text(Type.BODY, bold = true).apply { text = v })
+                line.addView(cell, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            }
+            if (pair.size == 1) line.addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
+            inner.addView(line, lp(px(R.dimen.space_s)))
+        }
+        return inner
     }
 
     /** The open metric card ("sun", "moon", ...), or null. Stays open when the details rebuild. */
@@ -460,5 +620,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     private companion object {
         const val EXPAND_MS = 320L
         const val DAY_MS = 24 * 3_600_000L
+        /** Into a day and back out. */
+        const val OPEN_DAY_MS = 300L
     }
 }

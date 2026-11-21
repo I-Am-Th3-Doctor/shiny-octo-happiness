@@ -131,8 +131,6 @@ class WeatherActivity : Activity() {
     private val HOUR_MS = 3_600_000L
     lateinit var dataScroll: ScrollView
         private set
-    /** Where the details were scrolled to when a day was held: let go, they go back there. */
-    private var lapseReturnY: Int? = null
     private var lastScroll: ScrollView? = null
 
     private lateinit var quickScroll: ScrollView
@@ -183,9 +181,8 @@ class WeatherActivity : Activity() {
         panel = WeatherDataPanel(this, light = true).apply { clock = { this@WeatherActivity.clock() } }
         panel.precip.onScrub = { t -> if (t == null) bar.goLive() else bar.scrubTo(t) }
         panel.precip.onPicked = { armIdle() }
-        panel.onHoldDay = { i -> startDetailLapse(i) }
-        panel.onReleaseDay = { stopDetailLapse() }
-        panel.heldDay = { detailLapse.day }
+        // Tapping a day in the 7 DAYS (or backing out of it) is a touch: the count to now starts over.
+        panel.onDayChanged = { armIdle() }
         detailLapse = DayLapseWindow(this, card = false).apply {
             preview.tag = "weather_data_scene"
             // The details' own big number and condition play along with the day.
@@ -502,7 +499,7 @@ class WeatherActivity : Activity() {
             isAppearanceLightNavigationBars = true
         }
         if (v !== weekScreen) week.stopPreview()
-        if (v !== dataScreen) { stopDetailLapse(animate = false); endDetailScrub() }
+        if (v !== dataScreen) { panel.closeDay(animate = false); endDetailScrub() }
         armIdle()
     }
 
@@ -537,9 +534,10 @@ class WeatherActivity : Activity() {
         if (dataShown) back() else openDetails()
     }
 
-    /** Back: the quick numbers go first, then the screen on top, then the weather. */
+    /** Back: out of a day opened in the details' 7 DAYS first, then the quick numbers, then the screen on top, then the weather. */
     fun back() {
         when {
+            dataShown && panel.openDay != null -> panel.closeDay()
             screens.depth > 0 -> screens.pop()
             quickShown -> setQuick(false)
             else -> finish()
@@ -572,7 +570,6 @@ class WeatherActivity : Activity() {
         bar.cancelSlide()
         sound.stop()
         week.stopPreview()
-        stopDetailLapse(animate = false)
         super.onPause()
     }
 
@@ -746,42 +743,7 @@ class WeatherActivity : Activity() {
         if (alertShown) screens.pop()
     }
 
-    // ------------------------------------------------------------------ the details' time-lapse
-
-    private var lapseScroll: Runnable? = null
-    private val lapseEase = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
-
-    /**
-     * Holding day [i] in the details' 7 DAYS: up to the top of the details (the big number, the day,
-     * the precip card), and the day plays full-screen in the scene behind them, the number and
-     * condition following it.
-     */
-    fun startDetailLapse(i: Int) {
-        val data = repo.state.data ?: return
-        detailLapse.day?.let { panel.highlightDay(it, false) }
-        if (!detailLapse.play(data, i)) return
-        panel.highlightDay(i, true)
-        if (soundOn()) panel.dayRows.getOrNull(i)?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        disarmIdle()
-        detailScrubTime = null
-        if (lapseReturnY == null) lapseReturnY = dataScroll.scrollY
-        dataScrim.animate().alpha(LAPSE_SCRIM).setDuration(LAPSE_SCROLL_MS).start()
-        scrollDetails(0, animate = true)
-    }
-
-    /** Let go: the day stops, the scene eases back to now, and the details go back exactly as they were. */
-    fun stopDetailLapse(animate: Boolean = true) {
-        val i = detailLapse.day
-        val y = lapseReturnY
-        if (i == null && y == null) return
-        detailLapse.stop(repo.state.data, clock())
-        i?.let { panel.highlightDay(it, false) }
-        panel.showMoment(null, null)
-        dataScrim.animate().cancel()
-        if (animate) dataScrim.animate().alpha(1f).setDuration(LAPSE_SCROLL_MS).start() else dataScrim.alpha = 1f
-        lapseReturnY = null
-        if (y != null) scrollDetails(y, animate)
-    }
+    // ------------------------------------------------------------------ the details' scene, dragged through the hours
 
     /** A sideways drag [dx] on the data screen: the scene behind goes to that hour, the big number with it. */
     private fun scrubDetails(dx: Float) {
@@ -826,29 +788,6 @@ class WeatherActivity : Activity() {
             return v is ViewGroup && (0 until v.childCount).any { walk(v.getChildAt(it)) }
         }
         return walk(panel.body)
-    }
-
-    /** Whether the details are scrolling (into a held day, or back from one). */
-    val detailsScrolling: Boolean get() = lapseScroll != null
-
-    private fun scrollDetails(to: Int, animate: Boolean) {
-        lapseScroll?.let { dataScroll.removeCallbacks(it) }
-        lapseScroll = null
-        val from = dataScroll.scrollY
-        if (!animate || from == to || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
-            dataScroll.scrollTo(0, to)
-            return
-        }
-        val start = android.os.SystemClock.uptimeMillis()
-        val step = object : Runnable {
-            override fun run() {
-                val f = ((android.os.SystemClock.uptimeMillis() - start).toFloat() / LAPSE_SCROLL_MS).coerceIn(0f, 1f)
-                dataScroll.scrollTo(0, from + ((to - from) * lapseEase.getInterpolation(f)).roundToInt())
-                if (f < 1f) dataScroll.postOnAnimation(this) else lapseScroll = null
-            }
-        }
-        lapseScroll = step
-        dataScroll.postOnAnimation(step)
     }
 
     // ------------------------------------------------------------------ back to now on its own
@@ -963,9 +902,6 @@ class WeatherActivity : Activity() {
         private const val TICK_MS = 30_000L
         /** Left alone this long away from now, the screen goes back to now on its own. */
         const val IDLE_MS = 5_000L
-        private const val LAPSE_SCROLL_MS = 420L
-        /** How dim the scene is behind the details while a day plays (of the usual): a little clearer. */
-        private const val LAPSE_SCRIM = 0.7f
 
         /** Tests: how long before going back to now (null: [IDLE_MS]). */
         @Volatile var idleMsOverride: Long? = null

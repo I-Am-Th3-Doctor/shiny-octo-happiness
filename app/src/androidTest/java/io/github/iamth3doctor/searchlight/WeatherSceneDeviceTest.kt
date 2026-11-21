@@ -578,7 +578,7 @@ class WeatherSceneDeviceTest {
         assertNull("back on now: nothing counting", on(h) { it.idleReturnAt })
     }
 
-    @Test fun theDetailsSitOverTheLivingSceneAndAHeldDayPlaysFullScreen() = screen { h ->
+    @Test fun theDetailsSitOverTheLivingSceneAndATappedDayOpensInItsBox() = screen { h ->
         force(h, lapseReading())
         on(h) { it.openDetails() }
         settle(h)
@@ -612,74 +612,74 @@ class WeatherSceneDeviceTest {
         val beforeTops = panel.sections.mapValues { screenTop(it.value) }
         val beforeText = texts(on(h) { panel.sections["daily"]!! }).map { it.text.toString() }
 
-        // Hold tomorrow (on a clock the test drives).
-        val clock = java.util.concurrent.atomic.AtomicLong(1_000_000L)
-        main { lapse.playClock = { clock.get() } }
+        // Tap tomorrow: one tap, no hold, and the 7 DAYS box goes into that day.
         val (rx, ry) = screenAt(rows[1], 40f, 20f)
         val down = SystemClock.uptimeMillis()
         instrumentation.sendPointerSync(MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, rx, ry, 0))
-        waitFor("holding plays the day") { on(h) { lapse.day == 1 && lapse.preview.animating } }
-        // Up to the top of the details: the big number, the day, the precip card, the scene playing behind.
-        waitFor("up to the data") { on(h) { scroll.scrollY == 0 && !it.detailsScrolling } }
-        idle()
-        assertEquals("from midnight", 0.0, on(h) { lapse.progress }, 0.001)
-        assertNoBarOnTheData(h)
-        assertTrue("the scene a little clearer", on(h) { it.dataScrim.alpha } < 1f)
-        assertTrue(on(h) { panel.sections["now"]!!.isShown && panel.sections["precip"]!!.isShown })
-        assertNull("holding: no count", on(h) { it.idleReturnAt })
-        assertTrue(on(h) { it.dataShown })
-        val hf = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.hour(app)
-        val tomorrow = Moon.dayStart(System.currentTimeMillis(), off) + 24 * hour
-        fun hourText(k: Int) = hf.format(java.time.Instant.ofEpochMilli(tomorrow + k * hour).atOffset(java.time.ZoneOffset.ofTotalSeconds(off)))
-        assertEquals(listOf(15 / 24f to 18 / 24f), on(h) { lapse.lapseBar.windows })
-        fun at(hours: Double) {
-            clock.set(1_000_000L + (DayLapse.PLAY_MS * hours / 24).toLong())
-            waitFor("the playhead at $hours h") { abs(on(h) { lapse.progress } - hours / 24) < 0.002 }
+        instrumentation.sendPointerSync(MotionEvent.obtain(down, down + 60, MotionEvent.ACTION_UP, rx, ry, 0))
+        waitFor("into tomorrow") { on(h) { panel.openDay == 1 && panel.dayView?.isShown == true } }
+        waitFor("the list gone from the box") { on(h) { rows.none { it.isShown } } }
+        val day = on(h) { repo.state.data!!.detail!!.daily[1] }
+        val dayView = on(h) { panel.dayView!! }
+        assertTrue("in the 7 DAYS box", on(h) { generateSequence(dayView.parent) { it.parent }.any { it === panel.sections["daily"] } })
+        val shown = texts(dayView).map { it.text.toString() }
+        val tomorrowName = java.time.Instant.ofEpochMilli(day.date).atOffset(java.time.ZoneOffset.ofTotalSeconds(off)).dayOfWeek
+            .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+        assertTrue(shown.toString(), tomorrowName in shown)
+        assertTrue(shown.toString(), io.github.iamth3doctor.searchlight.weather.WeatherCodes.describe(day.code) in shown)
+        assertTrue(shown.toString(), "H ${WeatherText.f(day.highC)}° · L ${WeatherText.f(day.lowC)}°" in shown)
+        assertTrue(shown.toString(), "80%" in shown)
+        // Its 24 hours, rain 3 to 6.
+        val cells = ArrayList<View>()
+        main {
+            fun walk(v: View) {
+                if (v.tag == "weather_day_hour") cells += v
+                if (v is ViewGroup) for (k in 0 until v.childCount) walk(v.getChildAt(k))
+            }
+            walk(dayView)
         }
-        at(14.95)
-        assertEquals("${hourText(14)} · ${WeatherText.f(4.0 + 14 * 0.45)}° · 10% rain", on(h) { lapse.readout.text.toString() })
-        assertEquals("dry until 3", 0.0, on(h) { lapse.preview.conditions!!.rain }, 0.0)
-        // The details' own big number follows the played hour.
-        assertEquals("${WeatherText.f(on(h) { lapse.preview.conditions!!.tempC })}°F", on(h) { panel.nowTemp!!.text.toString() })
-        at(15.1)
-        assertEquals("${hourText(15)} · ${WeatherText.f(4.0 + 15 * 0.45)}° · 80% rain", on(h) { lapse.readout.text.toString() })
-        assertTrue("raining from 3", on(h) { lapse.preview.conditions!!.rain } > 0.4)
-        assertEquals("Rain", on(h) { panel.nowCondition!!.text.toString() })
-        assertEquals(on(h) { lapse.progress }.toFloat(), on(h) { lapse.lapseBar.progress }, 0.001f)
-        at(16.5)
-        waitFor("rain falls behind the data", 6_000) { on(h) { lapse.preview.renderer.dropCount } > 20 }
-        shot("113-details-hold")
-        at(18.2)
-        assertEquals("dry after 6", 0.0, on(h) { lapse.preview.conditions!!.rain }, 0.0)
-
-        // Let go: back to the details exactly as they were, over the weather now.
-        instrumentation.sendPointerSync(MotionEvent.obtain(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, rx, ry, 0))
+        assertEquals(24, cells.size)
+        val hf = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.hour(app)
+        val tf = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.time(app)
+        fun local(t: Long) = java.time.Instant.ofEpochMilli(t).atOffset(java.time.ZoneOffset.ofTotalSeconds(off))
+        assertEquals(hf.format(local(day.date)), texts(cells[0]).first().text.toString())
+        assertTrue("3 PM wet", texts(cells[15]).any { it.text.toString() == "80%" })
+        assertTrue("noon dry", texts(cells[12]).none { it.text.toString() == "80%" })
+        // Sunrise and sunset, the wind.
+        assertTrue(shown.toString(), tf.format(local(day.sunrise!!)) in shown && tf.format(local(day.sunset!!)) in shown)
+        assertTrue(shown.toString(), "7 mph" in shown)
+        // The scene behind stays on now: going into a day isn't a time-lapse.
         assertNull(on(h) { lapse.day })
-        assertTrue("back on now", on(h) { lapse.preview.conditions!!.live })
+        assertTrue(on(h) { lapse.preview.conditions!!.live })
         assertNoBarOnTheData(h)
         assertEquals(liveTemp, on(h) { panel.nowTemp!!.text.toString() })
-        assertEquals(liveCondition, on(h) { panel.nowCondition!!.text.toString() })
-        waitFor("back where they were") { on(h) { scroll.scrollY == beforeScroll && !it.detailsScrolling } }
-        idle()
-        assertEquals(beforeTops, panel.sections.mapValues { screenTop(it.value) })
-        assertEquals(beforeText, texts(on(h) { panel.sections["daily"]!! }).map { it.text.toString() })
-        waitFor("the scene dims as before") { on(h) { it.dataScrim.alpha == 1f } }
-        assertTrue("still alive", on(h) { lapse.preview.animating })
-        assertNull("nothing away from now", on(h) { it.idleReturnAt })
         assertTrue(on(h) { it.dataShown })
+        shot("113-details-day")
 
-        // A real hold, on the real clock: the whole day in about 9 s, and letting go stops it.
-        main { lapse.playClock = { SystemClock.uptimeMillis() } }
+        // Back out with the box's own back: the list again, everything where it was.
+        val back = on(h) { dayView.findViewWithTag<View>("weather_day_back") }
+        val (bx, by) = screenAt(back, 8f, 8f)
         val d2 = SystemClock.uptimeMillis()
-        instrumentation.sendPointerSync(MotionEvent.obtain(d2, d2, MotionEvent.ACTION_DOWN, rx, ry, 0))
-        waitFor("playing again") { on(h) { lapse.day == 1 } }
-        val began = on(h) { SystemClock.uptimeMillis() - (lapse.progress * DayLapse.PLAY_MS).toLong() }
-        waitFor("to the end of the day", 14_000) { on(h) { lapse.progress } >= 1.0 }
-        val took = SystemClock.uptimeMillis() - began
-        assertTrue("about 9 s: $took", took in 7_500L..11_500L)
-        instrumentation.sendPointerSync(MotionEvent.obtain(d2, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, rx, ry, 0))
-        waitFor("back") { on(h) { lapse.day == null && scroll.scrollY == beforeScroll && !it.detailsScrolling } }
-        assertNoBarOnTheData(h)
+        instrumentation.sendPointerSync(MotionEvent.obtain(d2, d2, MotionEvent.ACTION_DOWN, bx, by, 0))
+        instrumentation.sendPointerSync(MotionEvent.obtain(d2, d2 + 60, MotionEvent.ACTION_UP, bx, by, 0))
+        waitFor("back to the 7 days") { on(h) { panel.openDay == null && panel.dayView == null && rows.all { it.isShown } } }
+        waitFor("everything where it was") { panel.sections.mapValues { screenTop(it.value) } == beforeTops }
+        assertEquals(beforeScroll, on(h) { scroll.scrollY })
+        assertEquals(beforeText, texts(on(h) { panel.sections["daily"]!! }).map { it.text.toString() })
+
+        // A held finger is still just a tap: no time-lapse, the day opens when it lifts.
+        val d3 = SystemClock.uptimeMillis()
+        instrumentation.sendPointerSync(MotionEvent.obtain(d3, d3, MotionEvent.ACTION_DOWN, rx, ry, 0))
+        Thread.sleep(900)
+        assertNull("holding plays nothing", on(h) { lapse.day })
+        instrumentation.sendPointerSync(MotionEvent.obtain(d3, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, rx, ry, 0))
+        assertNull(on(h) { lapse.day })
+        // Another day straight from the list; Back comes out of the day before it leaves the screen.
+        main { panel.openDay(4) }
+        waitFor("into day 5") { on(h) { panel.openDay == 4 && panel.dayView?.isShown == true } }
+        on(h) { it.back() }
+        waitFor("Back: out of the day") { on(h) { panel.openDay == null && rows.all { r -> r.isShown } } }
+        assertTrue("still on the details", on(h) { it.dataShown })
     }
 
     /** No scrub bar or hour readout anywhere on the data screen: the scene alone shows the hour. */
