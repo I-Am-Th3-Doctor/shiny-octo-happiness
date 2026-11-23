@@ -342,26 +342,35 @@ class NewFeaturesDeviceTest {
             assertEquals("no access", on(h) { it.lastDoubleTap })
             assertFalse(on(h) { it.favoritesPopup.isShowing })
 
-            // And holding the magnifier still opens the same row.
-            h.onActivity { it.lastTripleTap = null }
-            val glass = on(h) { a ->
-                val v = a.findViewById<View>(R.id.searchIcon)
-                val l = IntArray(2)
-                v.getLocationOnScreen(l)
-                (l[0] + v.width / 2) to (l[1] + v.height / 2)
-            }
-            shell("input swipe ${glass.first} ${glass.second} ${glass.first} ${glass.second} 600")
-            Thread.sleep(600)
-            assertTrue("the magnifier still opens it", on(h) { it.favoritesPopup.isShowing })
-            assertNull(on(h) { it.lastTripleTap })
-            h.onActivity { it.favoritesPopup.dismiss() }
-
             // Long-press on empty space is still edit mode, not the top six.
             shell("input swipe ${spot.first} ${spot.second} ${spot.first} ${spot.second} 900")
             Thread.sleep(600)
             assertTrue("edit mode", on(h) { it.findViewById<WidgetGridView>(R.id.widgetGrid).editMode })
             assertFalse(on(h) { it.favoritesPopup.isShowing })
             @Suppress("DEPRECATION") h.onActivity { it.onBackPressed() }
+            Thread.sleep(800)
+
+            // And holding the magnifier still opens the same row.
+            // (Unfolded, the magnifier only shows once the rail's search is opened.)
+            h.onActivity { a ->
+                a.lastTripleTap = null
+                if (!a.findViewById<View>(R.id.searchIcon).isShown) a.findViewById<View>(R.id.railSearch)?.performClick()
+            }
+            Thread.sleep(1500)
+            val glass = on(h) { a ->
+                val v = a.findViewById<View>(R.id.searchIcon)
+                val l = IntArray(2)
+                v.getLocationOnScreen(l)
+                (l[0] + v.width / 2) to (l[1] + v.height / 2)
+            }
+            shell("input motionevent DOWN ${glass.first} ${glass.second}")
+            Thread.sleep(800) // past the 250ms hold
+            val held = on(h) { it.favoritesPopup.isShowing }
+            shell("input motionevent UP ${glass.first} ${glass.second}")
+            Thread.sleep(300)
+            assertTrue("the magnifier still opens it", held)
+            assertNull(on(h) { it.lastTripleTap })
+            h.onActivity { it.favoritesPopup.dismiss() }
         }
     }
 
