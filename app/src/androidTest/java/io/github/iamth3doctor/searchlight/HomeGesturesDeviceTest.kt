@@ -2,6 +2,9 @@ package io.github.iamth3doctor.searchlight
 
 import android.app.UiAutomation
 import android.graphics.Rect
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -13,7 +16,9 @@ import io.github.iamth3doctor.searchlight.gestures.GestureService
 import io.github.iamth3doctor.searchlight.gestures.HomeGesture
 import io.github.iamth3doctor.searchlight.widgets.WidgetGridView
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -106,6 +111,78 @@ class HomeGesturesDeviceTest {
         shell("settings delete secure enabled_accessibility_services")
         shell("cmd statusbar collapse")
         instrumentation.runOnMainSync { HomeGesture.entries.forEach { app.prefs.setGesture(it, it.default) } }
+    }
+
+    private fun taps(at: Pair<Int, Int>, n: Int) {
+        repeat(n) { i ->
+            if (i > 0) Thread.sleep(120)
+            val t = SystemClock.uptimeMillis()
+            for ((action, time) in listOf(MotionEvent.ACTION_DOWN to t, MotionEvent.ACTION_UP to t + 40)) {
+                val ev = MotionEvent.obtain(t, time, action, at.first.toFloat(), at.second.toFloat(), 0)
+                    .apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+                automation.injectInputEvent(ev, true)
+                ev.recycle()
+            }
+        }
+        Thread.sleep(800)
+        instrumentation.waitForIdleSync()
+    }
+
+    private fun topSixOpen(home: ActivityScenario<MainActivity>) = on(home) { it.favoritesPopup.isShowing }
+
+    @Test fun everyGestureCanBeReassigned() {
+        shell("cmd role add-role-holder --user 0 android.app.role.HOME $pkg")
+        shell("settings delete secure enabled_accessibility_services")
+
+        // Settings lists all seven, each with its action.
+        ActivityScenario.launch(SettingsActivity::class.java).use { s ->
+            Thread.sleep(1000)
+            var rows = 0
+            s.onActivity { rows = it.findViewById<ViewGroup>(R.id.gesturesList).childCount }
+            assertEquals("a row per gesture", HomeGesture.entries.size, rows)
+            assertEquals(7, rows)
+        }
+
+        // The same action on two gestures: both work. Long press and swipe up reassigned.
+        set(HomeGesture.DOUBLE_TAP, GestureAction.TOP_SIX)
+        set(HomeGesture.TRIPLE_TAP, GestureAction.TOP_SIX)
+        set(HomeGesture.LONG_PRESS, GestureAction.SEARCH)
+        set(HomeGesture.SWIPE_UP, GestureAction.NONE)
+        fresh { home, spot ->
+            taps(spot, 2)
+            waitFor("top six from a double tap", home) { topSixOpen(home) }
+            assertEquals("DOUBLE_TAP -> TOP_SIX", on(home) { it.lastHomeSwipe })
+            home.onActivity { it.favoritesPopup.dismiss() }
+            Thread.sleep(500)
+
+            taps(spot, 3)
+            waitFor("top six from a triple tap", home) { topSixOpen(home) }
+            assertEquals("top six", on(home) { it.lastTripleTap })
+            home.onActivity { it.favoritesPopup.dismiss() }
+            Thread.sleep(500)
+
+            shell("input swipe ${spot.first} ${spot.second} ${spot.first} ${spot.second} 900")
+            Thread.sleep(700)
+            waitFor("search from a long press", home) { on(home) { it.findViewById<EditText>(R.id.searchInput).isFocused } }
+            assertFalse("not edit mode", on(home) { it.findViewById<WidgetGridView>(R.id.widgetGrid).editMode })
+        }
+        fresh { home, spot ->
+            swipe(spot, 0, -300)
+            assertEquals("SWIPE_UP -> NONE", on(home) { it.lastHomeSwipe })
+            assertFalse("swipe up set to None", drawerOpen(home))
+        }
+
+        // Triple tap off: a double tap no longer waits for a third tap.
+        set(HomeGesture.TRIPLE_TAP, GestureAction.NONE)
+        fresh { home, _ ->
+            assertNull(on(home) { it.findViewById<WidgetGridView>(R.id.widgetGrid).onTripleTap })
+        }
+
+        // Saved by name: a fresh read of the settings gives the same choices.
+        val again = io.github.iamth3doctor.searchlight.data.Prefs(app)
+        assertEquals(GestureAction.TOP_SIX, again.gestureAction(HomeGesture.DOUBLE_TAP))
+        assertEquals(GestureAction.NONE, again.gestureAction(HomeGesture.TRIPLE_TAP))
+        assertEquals(GestureAction.SEARCH, again.gestureAction(HomeGesture.LONG_PRESS))
     }
 
     @Test fun swipesRunTheirActionsOnlyFromEmptySpace() {

@@ -240,6 +240,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         // Permissions may have been granted in Settings since last time.
         app.startSources()
         app.weather.refreshIfOlderThan(WEATHER_MAX_AGE_MS)
+        applyTripleTap() // the gestures may have changed in Settings
         app.shortcuts.refreshIfAccessChanged() // e.g. just made the default home: shortcuts become readable
         app.autoFavorites.refreshIfStale() // daily, and picks up usage access granted (or revoked) in Settings
         app.autoFavorites.refreshPrediction() // the predicted 6th favorite follows the time of day
@@ -620,16 +621,6 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     /** Debug/test hook: what the last triple tap on empty space did. */
     internal var lastTripleTap: String? = null
 
-    /** Three quick taps on empty home space: the top six, as from the magnifier (not over the app table or edit mode). */
-    private fun topSixFromTripleTap() {
-        if (binding.appTable.isVisible || binding.allApps.isVisible || binding.widgetGrid.editMode) {
-            lastTripleTap = "ignored"
-            return
-        }
-        lastTripleTap = "top six"
-        showTopSix()
-    }
-
     /** Edit mode (long-press a widget or empty space) shows a small bar: add, settings, done. */
     // ------------------------------------------------------------------ app table
 
@@ -650,9 +641,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         }
         list.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         list.adapter = appTable
-        // Unfolded, home is one at-a-glance screen: no page slides up over it (the rail's
-        // all-apps button opens the apps there). Folded, swipe up opens the app table as before.
-        binding.widgetGrid.onSwipeUp = { if (posture != Posture.UNFOLDED) openAppTable() }
+        // Swipe up is a home gesture like the others (setupHomeGestures): the app table by default.
 
         // Swipe down closes, but only from the top: otherwise it's an ordinary scroll back up.
         val distance = pxF(R.dimen.size_swipe)
@@ -904,27 +893,40 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     // ------------------------------------------------------------------ home gestures
 
     private var gestureToast: Toast? = null
-    /** What the last home swipe did, for the device tests. */
+    /** What the last home gesture did, for the device tests. */
     internal var lastHomeSwipe: String? = null
 
     /**
-     * Swipe down / left / right on empty home space runs the action chosen in Settings. Empty
+     * Every gesture on empty home space (four swipes, double and triple tap, long press) runs the
+     * action chosen for it in Settings ([runGesture]). Empty
      * space is the widget canvas (it reports its own swipes: a touch on a widget is the widget's)
      * plus any wallpaper outside it, e.g. beside the card when unfolded. Touches that start on the
      * card, the search row, the results, the edit bar or the rail are never gestures.
      */
-    @android.annotation.SuppressLint("ClickableViewAccessibility") // swipes only; taps fall through
+    @android.annotation.SuppressLint("ClickableViewAccessibility") // empty wallpaper: nothing to click
     private fun setupHomeGestures() {
-        binding.widgetGrid.onSwipe = ::onHomeSwipe
-        binding.widgetGrid.onDoubleTap = ::lockFromDoubleTap
-        binding.widgetGrid.onTripleTap = ::topSixFromTripleTap
+        val grid = binding.widgetGrid
+        grid.onSwipeUp = { runGesture(HomeGesture.SWIPE_UP) }
+        grid.onSwipe = { d -> HomeGesture.of(d)?.let(::runGesture) }
+        grid.onDoubleTap = { runGesture(HomeGesture.DOUBLE_TAP) }
+        grid.onLongPress = { runGesture(HomeGesture.LONG_PRESS) }
+        applyTripleTap()
         val tracker = SwipeTracker(pxF(R.dimen.size_swipe), pxF(R.dimen.size_gesture))
-        // Wallpaper outside the canvas (beside the card when unfolded): a triple tap there too.
+        // Wallpaper outside the canvas (beside the card when unfolded): the same gestures there.
         val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
+        val tapTimeout = android.view.ViewConfiguration.getDoubleTapTimeout().toLong()
         val taps = io.github.iamth3doctor.searchlight.ui.MultiTap(
-            android.view.ViewConfiguration.getDoubleTapTimeout().toLong(),
+            tapTimeout,
             android.view.ViewConfiguration.get(this).scaledDoubleTapSlop.toFloat(),
         )
+        val pendingDouble = Runnable { runGesture(HomeGesture.DOUBLE_TAP) }
+        var longPressed = false
+        val longPress = Runnable {
+            longPressed = true
+            taps.reset()
+            binding.root.removeCallbacks(pendingDouble)
+            if (runGesture(HomeGesture.LONG_PRESS)) binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        }
         var downX = 0f
         var downY = 0f
         var travelled = false
@@ -936,20 +938,49 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                     downX = e.x
                     downY = e.y
                     travelled = false
+                    longPressed = false
+                    binding.root.postDelayed(longPress, android.view.ViewConfiguration.getLongPressTimeout().toLong())
                 }
-                // Up stays the widget canvas's (the app table); out here only the home gestures.
                 MotionEvent.ACTION_MOVE -> {
-                    if (kotlin.math.abs(e.x - downX) > slop || kotlin.math.abs(e.y - downY) > slop) travelled = true
-                    tracker.move(e.x, e.y)?.takeIf { it != Swipe.Direction.UP }?.let(::onHomeSwipe)
+                    if (kotlin.math.abs(e.x - downX) > slop || kotlin.math.abs(e.y - downY) > slop) {
+                        travelled = true
+                        binding.root.removeCallbacks(longPress)
+                    }
+                    if (!longPressed) tracker.move(e.x, e.y)?.let { d -> HomeGesture.of(d)?.let(::runGesture) }
                 }
-                MotionEvent.ACTION_POINTER_DOWN -> travelled = true
-                MotionEvent.ACTION_UP -> {
-                    val tap = !travelled && e.eventTime - e.downTime < android.view.ViewConfiguration.getLongPressTimeout()
-                    if (!tap) taps.reset() else if (taps.tap(e.x, e.y, e.eventTime) == 3) topSixFromTripleTap()
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    travelled = true
+                    binding.root.removeCallbacks(longPress)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    binding.root.removeCallbacks(longPress)
+                    val tap = e.actionMasked == MotionEvent.ACTION_UP && !travelled && !longPressed &&
+                        e.eventTime - e.downTime < android.view.ViewConfiguration.getLongPressTimeout()
+                    if (!tap) taps.reset() else when (taps.tap(e.x, e.y, e.eventTime)) {
+                        // Two taps wait out the tap window while a triple tap is set, as on the canvas.
+                        2 -> if (tripleTapSet()) {
+                            binding.root.removeCallbacks(pendingDouble)
+                            binding.root.postDelayed(pendingDouble, tapTimeout + TRIPLE_TAP_GRACE_MS)
+                        } else runGesture(HomeGesture.DOUBLE_TAP)
+                        3 -> {
+                            binding.root.removeCallbacks(pendingDouble)
+                            runGesture(HomeGesture.TRIPLE_TAP)
+                        }
+                    }
                 }
             }
             true
         }
+    }
+
+    private fun tripleTapSet() = prefs.gestureAction(HomeGesture.TRIPLE_TAP) != GestureAction.NONE
+
+    /**
+     * The canvas listens for a triple tap only while one is set: then a double tap waits out the
+     * tap window first (so a third tap can win); with triple tap on None, a double tap is instant.
+     */
+    private fun applyTripleTap() {
+        binding.widgetGrid.onTripleTap = if (tripleTapSet()) ({ runGesture(HomeGesture.TRIPLE_TAP) }) else null
     }
 
     /** Does a touch at this screen point start on the card, results, edit bar, rail or a panel? */
@@ -964,26 +995,42 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             }
     }
 
-    private fun onHomeSwipe(direction: Swipe.Direction) {
-        val gesture = HomeGesture.of(direction) ?: return
-        // The app table and all-apps panel keep their own swipes; edit mode is for arranging.
+    /**
+     * Runs what [gesture] is set to in Settings (each gesture on its own, so two can share an
+     * action). Not over the app table or all-apps panel, which keep their own touches, nor in edit
+     * mode, which is for arranging. Returns whether it did anything.
+     */
+    private fun runGesture(gesture: HomeGesture): Boolean {
         if (binding.appTable.isVisible || binding.allApps.isVisible || binding.widgetGrid.editMode) {
             lastHomeSwipe = "$gesture ignored"
-            return
+            if (gesture == HomeGesture.TRIPLE_TAP) lastTripleTap = "ignored"
+            return false
         }
         val action = prefs.gestureAction(gesture)
         lastHomeSwipe = "$gesture -> $action"
+        if (gesture == HomeGesture.TRIPLE_TAP) lastTripleTap = if (action == GestureAction.TOP_SIX) "top six" else action.name
+        if (gesture == HomeGesture.DOUBLE_TAP && action != GestureAction.LOCK_SCREEN) lastDoubleTap = action.name
         when (action) {
-            GestureAction.NONE -> Unit
+            GestureAction.NONE -> return false
+            GestureAction.TOP_SIX -> showTopSix()
+            GestureAction.SEARCH -> showKeyboard()
+            // A tap or hold asks once for the access (as double tap always has); a swipe says so in a toast.
+            GestureAction.LOCK_SCREEN -> if (gesture.isSwipe) globalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) else lockScreen()
+            // Unfolded, home is one at-a-glance screen: swipe up slides no page over it (the
+            // rail's all-apps button opens the apps there), as before it could be set.
+            GestureAction.APP_DRAWER -> if (gesture == HomeGesture.SWIPE_UP && posture == Posture.UNFOLDED) return false else openAppTable()
+            GestureAction.WEATHER -> io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(this)
+            GestureAction.CALENDAR -> Actions.openCalendarAt(this, System.currentTimeMillis())
+            GestureAction.FOCUS -> prefs.focusMode = !prefs.focusMode
             GestureAction.NOTIFICATIONS -> globalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
             GestureAction.QUICK_SETTINGS -> globalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)
-            GestureAction.LOCK_SCREEN -> globalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
-            GestureAction.APP_DRAWER -> openAppTable()
-            GestureAction.SEARCH -> showKeyboard()
-            GestureAction.WIDGET_CENTER -> binding.widgetGrid.enterEditModeFromSwipe()
+            GestureAction.WIDGET_CENTER ->
+                if (gesture == HomeGesture.LONG_PRESS) return binding.widgetGrid.enterEditModeFromEmptyLongPress()
+                else binding.widgetGrid.enterEditModeFromSwipe()
             // Uninstalled since it was chosen: nothing to open (Settings says "App not installed").
-            GestureAction.LAUNCH_APP -> prefs.gestureApp(gesture)?.let(app.apps::findByPackage)?.let { launchApp(it, null) }
+            GestureAction.LAUNCH_APP -> prefs.gestureApp(gesture)?.let(app.apps::findByPackage)?.let { launchApp(it, null) } ?: return false
         }
+        return true
     }
 
     /** The last one-time prompt shown (badges, lock), for the device tests. */
@@ -993,12 +1040,10 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     internal var lastDoubleTap: String? = null
 
     /**
-     * Double tap on empty home space locks the screen, through our accessibility service (the
-     * only way an app may). Off: asked once to turn it on; after that the gesture does nothing
-     * until it's on.
+     * Lock the screen (double tap by default), through our accessibility service (the only way an
+     * app may). Off: asked once to turn it on; after that the gesture does nothing until it's on.
      */
-    private fun lockFromDoubleTap() {
-        if (binding.appTable.isVisible || binding.allApps.isVisible) return
+    private fun lockScreen() {
         if (GestureService.perform(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)) {
             lastDoubleTap = "locked"
             return
@@ -1520,5 +1565,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         /** The text shadow's opacity at the Clear end of the glass setting. */
         private const val GLASS_SHADOW_ALPHA = 0.6f
         private const val FAVORITES_HOLD_MS = 250L
+        /** Past the double-tap window, so a third tap right at its edge still makes a triple. */
+        private const val TRIPLE_TAP_GRACE_MS = 40L
     }
 }

@@ -44,9 +44,9 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     var listener: Listener? = null
 
-    /** A swipe up on empty space (outside edit mode): opens the app table. */
+    /** A swipe up on empty space (outside edit mode). */
     var onSwipeUp: (() -> Unit)? = null
-    /** A swipe down, left or right on empty space (outside edit mode): the home gestures. */
+    /** A swipe down, left or right on empty space (outside edit mode). */
     var onSwipe: ((Swipe.Direction) -> Unit)? = null
     /** Two quick taps on empty space (outside edit mode). */
     var onDoubleTap: (() -> Unit)? = null
@@ -114,10 +114,9 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
         isLongClickable = true
         setOnLongClickListener {
             doubleTap.reset()
-            if (widgetsHidden) return@setOnLongClickListener false // Focus: no widgets to arrange
-            setEditMode(true)
-            enteredThisGesture = true
-            true
+            removeCallbacks(pendingDoubleTap)
+            onLongPress?.let { return@setOnLongClickListener it() }
+            enterEditModeFromEmptyLongPress()
         }
     }
 
@@ -145,6 +144,20 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
         }
         requestLayout()
         invalidate()
+    }
+
+    /**
+     * Long-press on empty space (outside edit mode): what it does instead of edit mode; returns
+     * whether it did anything (for the long-press feedback).
+     */
+    var onLongPress: (() -> Boolean)? = null
+
+    /** Long-press on empty space, as it was: edit mode (not in Focus, which has no widgets to arrange). */
+    fun enterEditModeFromEmptyLongPress(): Boolean {
+        if (widgetsHidden) return false
+        setEditMode(true)
+        enteredThisGesture = true
+        return true
     }
 
     /** A widget was long-pressed: enter edit mode and let that same finger carry on into a drag. */
@@ -337,8 +350,8 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     /**
      * Empty space only: a touch that starts on a widget is the widget's. One swipe per touch:
-     * up opens the app table, down/left/right are the home gestures. Long-press still enters
-     * edit mode.
+     * up, down, left and right are the home gestures (MainActivity runs what each is set to). Long-press:
+     * [onLongPress] (edit mode by default).
      */
     private fun detectSwipe(ev: MotionEvent) {
         when (ev.actionMasked) {

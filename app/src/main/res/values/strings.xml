@@ -345,16 +345,24 @@
 
     <!-- Home gestures -->
     <string name="settings_section_gestures">Gestures</string>
-    <string name="settings_gestures_help">Swipe on empty home-screen space (not on the card or a widget). Swipe up always opens the app drawer. Notifications, Quick Settings and Lock screen need accessibility access; if Android calls it a restricted setting, first open App info → ⋮ → Allow restricted settings.</string>
+    <string name="settings_gestures_help">Gestures on empty home-screen space (not on the card or a widget). Tap one to choose what it does; two gestures can share an action. Notifications, Quick Settings and Lock screen need accessibility access; if Android calls it a restricted setting, first open App info → ⋮ → Allow restricted settings.</string>
+    <string name="gesture_swipe_up">Swipe up</string>
     <string name="gesture_swipe_down">Swipe down</string>
     <string name="gesture_swipe_left">Swipe left</string>
     <string name="gesture_swipe_right">Swipe right</string>
+    <string name="gesture_double_tap">Double tap</string>
+    <string name="gesture_triple_tap">Triple tap</string>
+    <string name="gesture_long_press">Long press</string>
+    <string name="gesture_action_top_six">Top Six</string>
+    <string name="gesture_action_weather">Weather</string>
+    <string name="gesture_action_calendar">Calendar</string>
+    <string name="gesture_action_focus">Focus Mode (on/off)</string>
     <string name="gesture_action_none">None</string>
     <string name="gesture_action_notifications">Notifications</string>
     <string name="gesture_action_quick_settings">Quick Settings</string>
     <string name="gesture_action_app_drawer">App Drawer</string>
     <string name="gesture_action_search">Search</string>
-    <string name="gesture_action_widget_center">Widget Center</string>
+    <string name="gesture_action_widget_center">Edit Home Screen</string>
     <string name="gesture_action_lock_screen">Lock Screen</string>
     <string name="gesture_action_launch_app">Launch App…</string>
     <string name="gesture_launch_named">Launch %1$s</string>
