@@ -137,6 +137,19 @@ class WeatherActivity : Activity() {
     private lateinit var alertList: LinearLayout
     private lateinit var dataTitle: TextView
 
+    /** The data screen's header: when the reading was fetched, and a note when a refresh asked for failed. */
+    lateinit var dataUpdated: TextView
+    lateinit var refreshNote: TextView
+
+    /** The data screen's refresh button: its arrow, or a spinner while a refresh asked for runs. */
+    lateinit var refreshButton: FrameLayout
+    lateinit var refreshIcon: ImageView
+    lateinit var refreshSpinner: android.widget.ProgressBar
+
+    /** The reading when the refresh button was tapped; null when no tapped refresh is running. */
+    private var refreshFrom: WeatherRepository.State? = null
+    val manualRefreshing: Boolean get() = refreshFrom != null
+
     val sound = WeatherSound()
 
     /** Now, in ms (tests may pin it). */
@@ -189,7 +202,7 @@ class WeatherActivity : Activity() {
             onFrame = { c, r -> panel.showMoment(c.tempC, WeatherCodes.describe(r.code)) }
         }
         dataTitle = title("")
-        dataScreen = screen(dataTitle, null, panel.body, "weather_screen_data", backdrop = detailLapse)
+        dataScreen = screen(dataHeader(), buildRefreshButton(), panel.body, "weather_screen_data", backdrop = detailLapse)
         dataScroll = lastScroll!!
         // Drag sideways across the data screen: the scene behind goes through the hours (the hourly
         // strip and the precip card keep their own sideways drags).
@@ -437,7 +450,7 @@ class WeatherActivity : Activity() {
      * A screen of its own: opaque, a header (back, [titleView], [action]), then [content] scrolling under it.
      * With a [backdrop], the content scrolls over its living scene (dimmed), light-on-dark.
      */
-    private fun screen(titleView: TextView, action: View?, content: View, tag: String, backdrop: DayLapseWindow? = null): SwipeFrame {
+    private fun screen(titleView: View, action: View?, content: View, tag: String, backdrop: DayLapseWindow? = null): SwipeFrame {
         val frame = SwipeFrame(this).apply {
             this.tag = tag
             isClickable = true
@@ -489,6 +502,100 @@ class WeatherActivity : Activity() {
         frame.onSwipeDown = { back() }
         frame.canSwipeDown = { !scroll.canScrollVertically(-1) }
         return frame
+    }
+
+    /** The data screen's title: the place, when it was fetched, and (after a failed refresh) a short note. */
+    private fun dataHeader(): View {
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(dataTitle)
+        dataUpdated = TextView(this).apply {
+            type(Type.CAPTION)
+            setTextColor(dim)
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
+            tag = "weather_updated"
+        }
+        col.addView(dataUpdated)
+        refreshNote = TextView(this).apply {
+            type(Type.CAPTION)
+            setTextColor(fg)
+            text = getString(R.string.weather_refresh_failed)
+            visibility = View.GONE
+            tag = "weather_refresh_note"
+        }
+        col.addView(refreshNote)
+        return col
+    }
+
+    /** Round frosted glass like the scene's buttons: the refresh arrow, a spinner in its place while fetching. */
+    private fun buildRefreshButton(): View {
+        val size = px(R.dimen.size_cal_chevron) + px(R.dimen.space_xs)
+        refreshButton = FrameLayout(this).apply {
+            background = chip()
+            tag = "weather_refresh"
+            contentDescription = getString(R.string.weather_refresh)
+            setOnClickListener { refreshNow() }
+        }
+        val p = px(R.dimen.space_s)
+        refreshIcon = ImageView(this).apply {
+            setImageResource(R.drawable.ic_refresh)
+            setColorFilter(fg)
+            setPadding(p, p, p, p)
+        }
+        refreshButton.addView(refreshIcon, match())
+        refreshSpinner = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleSmall).apply {
+            isIndeterminate = true
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(fg)
+            visibility = View.GONE
+        }
+        val inner = size - 2 * p
+        refreshButton.addView(refreshSpinner, FrameLayout.LayoutParams(inner, inner, Gravity.CENTER))
+        return FrameLayout(this).apply {
+            addView(refreshButton, FrameLayout.LayoutParams(size, size, Gravity.CENTER))
+            setPadding(px(R.dimen.space_xs), 0, px(R.dimen.space_xs), 0)
+        }
+    }
+
+    /**
+     * The refresh button: fetch everything again now (conditions, hours, days, precipitation, alerts).
+     * The screen keeps what it shows meanwhile; the automatic refreshes carry on as before.
+     */
+    fun refreshNow() {
+        if (refreshFrom != null) return
+        refreshNote.visibility = View.GONE
+        // Already fetching on its own: the spinner waits for that answer.
+        repo.refresh()
+        refreshFrom = repo.state
+        showRefreshing(true)
+        armIdle()
+    }
+
+    private fun showRefreshing(on: Boolean) {
+        val (inV, outV) = if (on) refreshSpinner to refreshIcon else refreshIcon to refreshSpinner
+        refreshButton.contentDescription = getString(if (on) R.string.weather_refreshing else R.string.weather_refresh)
+        outV.animate().cancel()
+        inV.animate().cancel()
+        inV.alpha = 0f
+        inV.visibility = View.VISIBLE
+        inV.animate().alpha(1f).setDuration(REFRESH_FADE_MS).start()
+        outV.animate().alpha(0f).setDuration(REFRESH_FADE_MS).withEndAction { outV.visibility = View.GONE }.start()
+    }
+
+    /** The header follows the reading: its time, and the tapped refresh's spinner and note. */
+    private fun renderRefresh(state: WeatherRepository.State) {
+        val data = state.data
+        dataUpdated.text = if (data != null) getString(R.string.weather_updated, WeatherFormat.time(this).format(
+            java.time.Instant.ofEpochMilli(data.fetchedAt).atZone(java.time.ZoneId.systemDefault()))) else ""
+        dataUpdated.visibility = if (data != null) View.VISIBLE else View.GONE
+        val from = refreshFrom
+        if (from != null && state !== from && !state.loading) {
+            // The answer landed: a new reading (and its time), or the last one kept with a note.
+            refreshFrom = null
+            showRefreshing(false)
+            refreshNote.visibility = if (state.problem != null && data != null) View.VISIBLE else View.GONE
+        } else if (from == null && state.problem == null && !state.loading) {
+            refreshNote.visibility = View.GONE
+        }
     }
 
     /** A screen came in: status bar icons to suit it; anything left playing on the way out stops. */
@@ -655,6 +762,7 @@ class WeatherActivity : Activity() {
         }
 
         if (quickShown) quick.render(data, c)
+        renderRefresh(state)
         // The details and 7 days rebuild when the reading changes; scrubbing only moves the precip card along.
         if (dataShown && state !== panelState) {
             panel.render(state)
@@ -900,6 +1008,7 @@ class WeatherActivity : Activity() {
 
     companion object {
         private const val TICK_MS = 30_000L
+        private const val REFRESH_FADE_MS = 150L
         /** Left alone this long away from now, the screen goes back to now on its own. */
         const val IDLE_MS = 5_000L
 

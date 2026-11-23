@@ -861,7 +861,8 @@ class WeatherSceneDeviceTest {
         }
         fun section(k: String) = texts(on(h) { panel.sections[k]!! }).joinToString(" | ") { it.text.toString() }
         val now = section("now")
-        assertTrue(now, now.contains("52°F") && now.contains("Feels 45°") && now.contains("H 52° · L 39°") && now.contains("Updated "))
+        assertTrue(now, now.contains("52°F") && now.contains("Feels 45°") && now.contains("H 52° · L 39°"))
+        assertTrue("when it was fetched, in the header", on(h) { it.dataUpdated.isShown && it.dataUpdated.text.startsWith("Updated ") })
         assertTrue(section("visibility"), section("visibility").contains("15 mi") && section("visibility").contains("Good"))
         assertTrue(section("pressure"), section("pressure").contains("30.02 inHg"))
         assertTrue(section("aqi"), section("aqi").contains("42") && section("aqi").contains("Good"))
@@ -1507,7 +1508,7 @@ class WeatherSceneDeviceTest {
             on(s) { it.openDetails() }
             settle(s)
             val now = texts(on(s) { it.panel.sections["now"]!! }).map { it.text.toString() }
-            assertTrue(now.toString(), "52°F" in now && now.any { it.startsWith("Updated ") })
+            assertTrue(now.toString(), "52°F" in now && on(s) { it.dataUpdated.text.startsWith("Updated ") })
             // The last good precip: this hour's rows and the rain coming.
             val card = on(s) { it.panel.precip }
             assertEquals("0.00 IN", on(s) { card.rateValue.text.toString() })
@@ -1517,6 +1518,63 @@ class WeatherSceneDeviceTest {
             assertEquals("80%", on(s) { card.chanceValue.text.toString() })
         }
         shell("cmd connectivity airplane-mode disable")
+    }
+
+    @Test fun theRefreshButtonFetchesNowAndKeepsTheLastDataWhenItFails() = screen { h ->
+        val old = reading(2, 40, 0.0).let { it.copy(fetchedAt = it.fetchedAt - 25 * 60_000L) }
+        force(h, old)
+        on(h) { it.openDetails() }
+        settle(h)
+        val tf = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.time(app)
+        fun stamp(t: Long) = "Updated " + tf.format(java.time.Instant.ofEpochMilli(t).atZone(java.time.ZoneId.systemDefault()))
+        val button = on(h) { it.refreshButton }
+        val updated = on(h) { it.dataUpdated }
+        assertEquals(stamp(old.fetchedAt), on(h) { updated.text.toString() })
+        // In the header: round, beside the place and its time, at the right.
+        assertTrue(on(h) { button.isShown && button.width == button.height && button.background != null })
+        val b = rect(button)
+        val t = rect(on(h) { it.dataScreen.findViewWithTag<View>("weather_updated") })
+        assertTrue("beside the time: $b $t", b.left >= t.left && b.top < t.bottom && b.bottom > rect(on(h) { updated.parent as View }).top)
+        assertFalse(on(h) { it.refreshNote.isShown })
+
+        // A tap fetches now, once, with a spinner meanwhile; the screen keeps what it shows.
+        val asked = onMain { repo.refreshRequests }
+        val beforeSections = on(h) { it.panel.sections.keys.toList() }
+        touch(button, on(h) { button.width / 2f }, on(h) { button.height / 2f })
+        assertEquals(asked + 1, onMain { repo.refreshRequests })
+        idle(600)
+        assertTrue("spinning", on(h) { it.manualRefreshing && it.refreshSpinner.isShown && !it.refreshIcon.isShown })
+        on(h) { it.refreshNow() }
+        assertEquals("one fetch at a time", asked + 1, onMain { repo.refreshRequests })
+        assertEquals(beforeSections, on(h) { it.panel.sections.keys.toList() })
+        shot("128-refreshing")
+
+        // It lands: the new reading, and the time it was fetched.
+        val fresh = reading(2, 40, 0.0)
+        show(fresh)
+        idle(600)
+        assertFalse(on(h) { it.manualRefreshing })
+        assertTrue("the arrow back", on(h) { it.refreshIcon.isShown && !it.refreshSpinner.isShown })
+        assertEquals(stamp(fresh.fetchedAt), on(h) { updated.text.toString() })
+        assertFalse(on(h) { it.refreshNote.isShown })
+
+        // It fails: the last reading stays, everything on screen with it, and a short note says so.
+        touch(button, on(h) { button.width / 2f }, on(h) { button.height / 2f })
+        assertTrue(on(h) { it.manualRefreshing })
+        show(fresh, offline = true)
+        idle(600)
+        assertFalse(on(h) { it.manualRefreshing })
+        assertTrue(on(h) { it.refreshNote.isShown })
+        assertEquals("Couldn't refresh — showing last data", on(h) { it.refreshNote.text.toString() })
+        assertEquals(stamp(fresh.fetchedAt), on(h) { updated.text.toString() })
+        assertEquals(beforeSections, on(h) { it.panel.sections.keys.toList() })
+        assertTrue(texts(on(h) { it.panel.sections["now"]!! }).any { it.text.toString() == "52°F" })
+        shot("129-refresh-failed")
+
+        // The next good reading clears the note.
+        show(reading(2, 40, 0.0))
+        idle(300)
+        assertFalse(on(h) { it.refreshNote.isShown })
     }
 
     // ---- phase 2: the hero, the precip card, severe alerts ----

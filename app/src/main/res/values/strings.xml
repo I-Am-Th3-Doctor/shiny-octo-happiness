@@ -80,6 +80,8 @@
 
     <string name="weather_hi_lo">H %1$s L %2$s</string>
     <string name="weather_updated">Updated %1$s</string>
+    <string name="weather_refreshing">Refreshing</string>
+    <string name="weather_refresh_failed">Couldn\'t refresh — showing last data</string>
     <string name="weather_updating">Updating… (last %1$s)</string>
     <string name="weather_stale">Offline · last %1$s</string>
     <string name="weather_loading">Loading weather…</string>

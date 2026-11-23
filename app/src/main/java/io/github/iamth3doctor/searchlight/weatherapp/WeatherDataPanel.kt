@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
-import android.text.format.DateFormat
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -28,7 +27,6 @@ import io.github.iamth3doctor.searchlight.widgets.ConditionView
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.TextStyle
-import java.util.Date
 import io.github.iamth3doctor.searchlight.weather.MetricArt
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -186,10 +184,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         col.addView(text(Type.BODY, dimmed = true).apply { text = context.getString(R.string.weather_widget_hi_lo, deg(data.highC), deg(data.lowC)) })
         row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(R.dimen.space_m) })
         box.addView(row, lp(px(R.dimen.space_xs)))
-        box.addView(text(Type.CAPTION, dimmed = true).apply {
-            text = context.getString(R.string.weather_widget_updated, DateFormat.getTimeFormat(context).format(Date(data.fetchedAt)))
-            tag = "weather_updated"
-        }, lp(px(R.dimen.space_xs)))
+        // When it was fetched sits in the screen's header, by the place and the refresh button.
         section("now", box, top = 0)
     }
 
