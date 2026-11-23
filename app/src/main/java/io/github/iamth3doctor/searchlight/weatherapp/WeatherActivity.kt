@@ -144,7 +144,7 @@ class WeatherActivity : Activity() {
     /** The data screen's refresh button: its arrow, or a spinner while a refresh asked for runs. */
     lateinit var refreshButton: FrameLayout
     lateinit var refreshIcon: ImageView
-    lateinit var refreshSpinner: android.widget.ProgressBar
+    lateinit var refreshSpinner: SpinnerView
 
     /** The reading when the refresh button was tapped; null when no tapped refresh is running. */
     private var refreshFrom: WeatherRepository.State? = null
@@ -543,16 +543,18 @@ class WeatherActivity : Activity() {
             setPadding(p, p, p, p)
         }
         refreshButton.addView(refreshIcon, match())
-        refreshSpinner = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleSmall).apply {
-            isIndeterminate = true
-            indeterminateTintList = android.content.res.ColorStateList.valueOf(fg)
+        refreshSpinner = SpinnerView(this).apply {
+            color = fg
             visibility = View.GONE
+            tag = "weather_refresh_spinner"
         }
-        val inner = size - 2 * p
+        val inner = size - 2 * p - px(R.dimen.space_xs)
         refreshButton.addView(refreshSpinner, FrameLayout.LayoutParams(inner, inner, Gravity.CENTER))
         return FrameLayout(this).apply {
             addView(refreshButton, FrameLayout.LayoutParams(size, size, Gravity.CENTER))
             setPadding(px(R.dimen.space_xs), 0, px(R.dimen.space_xs), 0)
+            // At the top, by the place: it stays put when the note shows under the time.
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.TOP }
         }
     }
 
@@ -570,15 +572,11 @@ class WeatherActivity : Activity() {
         armIdle()
     }
 
+    /** The spinner in the arrow's place while fetching; the arrow back when the answer lands. */
     private fun showRefreshing(on: Boolean) {
-        val (inV, outV) = if (on) refreshSpinner to refreshIcon else refreshIcon to refreshSpinner
         refreshButton.contentDescription = getString(if (on) R.string.weather_refreshing else R.string.weather_refresh)
-        outV.animate().cancel()
-        inV.animate().cancel()
-        inV.alpha = 0f
-        inV.visibility = View.VISIBLE
-        inV.animate().alpha(1f).setDuration(REFRESH_FADE_MS).start()
-        outV.animate().alpha(0f).setDuration(REFRESH_FADE_MS).withEndAction { outV.visibility = View.GONE }.start()
+        refreshSpinner.visibility = if (on) View.VISIBLE else View.GONE
+        refreshIcon.visibility = if (on) View.GONE else View.VISIBLE
     }
 
     /** The header follows the reading: its time, and the tapped refresh's spinner and note. */
@@ -1008,7 +1006,6 @@ class WeatherActivity : Activity() {
 
     companion object {
         private const val TICK_MS = 30_000L
-        private const val REFRESH_FADE_MS = 150L
         /** Left alone this long away from now, the screen goes back to now on its own. */
         const val IDLE_MS = 5_000L
 

@@ -1548,6 +1548,7 @@ class WeatherSceneDeviceTest {
         assertEquals("one fetch at a time", asked + 1, onMain { repo.refreshRequests })
         assertEquals(beforeSections, on(h) { it.panel.sections.keys.toList() })
         shot("128-refreshing")
+        assertTrue("still spinning through the shot", on(h) { it.manualRefreshing && it.refreshSpinner.isShown && !it.refreshIcon.isShown })
 
         // It lands: the new reading, and the time it was fetched.
         val fresh = reading(2, 40, 0.0)
