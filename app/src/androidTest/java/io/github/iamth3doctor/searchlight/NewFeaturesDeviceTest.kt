@@ -301,7 +301,10 @@ class NewFeaturesDeviceTest {
     }
 
     /** Two real taps 120ms apart, injected with exact timing (shell taps are too slow for a double tap). */
-    private fun doubleTap(x: Int, y: Int) {
+    private fun doubleTap(x: Int, y: Int) = taps(x, y, 2)
+
+    /** [n] real taps 120ms apart, injected with exact timing, then a pause for what they do. */
+    private fun taps(x: Int, y: Int, n: Int) {
         fun tap() {
             val t = SystemClock.uptimeMillis()
             for ((action, at) in listOf(MotionEvent.ACTION_DOWN to t, MotionEvent.ACTION_UP to t + 40)) {
@@ -310,10 +313,56 @@ class NewFeaturesDeviceTest {
                 ev.recycle()
             }
         }
-        tap()
-        Thread.sleep(120)
-        tap()
+        repeat(n) { i ->
+            if (i > 0) Thread.sleep(120)
+            tap()
+        }
         Thread.sleep(800)
+    }
+
+    @Test fun tripleTapEmptySpaceOpensTheTopSix() {
+        // Without the lock service, and already asked: a double tap would only record "no access".
+        shell("settings delete secure enabled_accessibility_services")
+        sp.edit().putBoolean(Prefs.KEY_LOCK_ASKED, true).commit()
+        home { h ->
+            val spot = on(h) { emptySpot(it) }
+            h.onActivity { it.lastDoubleTap = null; it.lastTripleTap = null }
+            taps(spot.first, spot.second, 3)
+            assertEquals("top six", on(h) { it.lastTripleTap })
+            assertTrue("the top six open", on(h) { it.favoritesPopup.isShowing })
+            assertEquals("its six cells", 6, on(h) { it.favoritesPopup.cells.size })
+            assertNull("a triple tap is not a double tap", on(h) { it.lastDoubleTap })
+            Thread.sleep(600)
+            shell("screencap -p $dir/${prefix}_font1.0_130-top-six-triple-tap.png")
+            h.onActivity { it.favoritesPopup.dismiss() }
+            Thread.sleep(500)
+
+            // A double tap is still the lock (it waits out the tap window first).
+            doubleTap(spot.first, spot.second)
+            assertEquals("no access", on(h) { it.lastDoubleTap })
+            assertFalse(on(h) { it.favoritesPopup.isShowing })
+
+            // And holding the magnifier still opens the same row.
+            h.onActivity { it.lastTripleTap = null }
+            val glass = on(h) { a ->
+                val v = a.findViewById<View>(R.id.searchIcon)
+                val l = IntArray(2)
+                v.getLocationOnScreen(l)
+                (l[0] + v.width / 2) to (l[1] + v.height / 2)
+            }
+            shell("input swipe ${glass.first} ${glass.second} ${glass.first} ${glass.second} 600")
+            Thread.sleep(600)
+            assertTrue("the magnifier still opens it", on(h) { it.favoritesPopup.isShowing })
+            assertNull(on(h) { it.lastTripleTap })
+            h.onActivity { it.favoritesPopup.dismiss() }
+
+            // Long-press on empty space is still edit mode, not the top six.
+            shell("input swipe ${spot.first} ${spot.second} ${spot.first} ${spot.second} 900")
+            Thread.sleep(600)
+            assertTrue("edit mode", on(h) { it.findViewById<WidgetGridView>(R.id.widgetGrid).editMode })
+            assertFalse(on(h) { it.favoritesPopup.isShowing })
+            @Suppress("DEPRECATION") h.onActivity { it.onBackPressed() }
+        }
     }
 
     @Test fun doubleTapEmptySpaceLocks() {

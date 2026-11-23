@@ -11,7 +11,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import io.github.iamth3doctor.searchlight.R
-import io.github.iamth3doctor.searchlight.ui.DoubleTap
+import io.github.iamth3doctor.searchlight.ui.MultiTap
 import io.github.iamth3doctor.searchlight.ui.Swipe
 import io.github.iamth3doctor.searchlight.ui.SwipeTracker
 import io.github.iamth3doctor.searchlight.ui.color
@@ -50,7 +50,14 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     var onSwipe: ((Swipe.Direction) -> Unit)? = null
     /** Two quick taps on empty space (outside edit mode). */
     var onDoubleTap: (() -> Unit)? = null
-    private val doubleTap = DoubleTap(ViewConfiguration.getDoubleTapTimeout().toLong(), ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat())
+    /**
+     * Three quick taps on empty space (outside edit mode). While set, a double tap waits out the
+     * tap timeout first, so a third tap can make it a triple instead.
+     */
+    var onTripleTap: (() -> Unit)? = null
+    private val tapTimeout = ViewConfiguration.getDoubleTapTimeout().toLong()
+    private val doubleTap = MultiTap(tapTimeout, ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat())
+    private val pendingDoubleTap = Runnable { onDoubleTap?.invoke() }
     private var tapDownTime = 0L
     private var travelled = false
     private var swiped = false
@@ -361,10 +368,18 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
                 travelled = true
             }
             MotionEvent.ACTION_UP -> {
-                // A tap: no travel, no swipe, shorter than a long press. Two of them: double tap.
+                // A tap: no travel, no swipe, shorter than a long press. Two of them: double tap; three: triple.
                 val tap = !travelled && !swiped && ev.eventTime - tapDownTime < ViewConfiguration.getLongPressTimeout()
                 if (!tap) doubleTap.reset()
-                else if (doubleTap.tap(ev.x, ev.y, ev.eventTime)) onDoubleTap?.invoke()
+                else when (doubleTap.tap(ev.x, ev.y, ev.eventTime)) {
+                    2 -> if (onTripleTap == null) onDoubleTap?.invoke()
+                        // A little past the timeout, so a third tap right at its edge still wins.
+                        else { removeCallbacks(pendingDoubleTap); postDelayed(pendingDoubleTap, tapTimeout + TRIPLE_GRACE_MS) }
+                    3 -> {
+                        removeCallbacks(pendingDoubleTap)
+                        onTripleTap?.invoke()
+                    }
+                }
             }
         }
     }
@@ -468,5 +483,14 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
         target = null
         preview = null
         invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(pendingDoubleTap)
+        super.onDetachedFromWindow()
+    }
+
+    private companion object {
+        const val TRIPLE_GRACE_MS = 40L
     }
 }

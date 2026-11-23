@@ -604,14 +604,30 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         // Hold the magnifier: the favorites row; keep the finger down and slide along it to launch.
         binding.searchIcon.setOnHoldListener(
             FAVORITES_HOLD_MS,
-            onHold = {
-                app.autoFavorites.refreshIfStale()
-                app.autoFavorites.refreshPrediction()
-                favoritesPopup.show(binding.homeCard)
-            },
+            onHold = { showTopSix() },
             onHeldMove = favoritesPopup::slideMove,
             onHeldEnd = favoritesPopup::slideEnd,
         )
+    }
+
+    /** The top six over the home card: from holding the magnifier, or a triple tap on empty home space. */
+    private fun showTopSix() {
+        app.autoFavorites.refreshIfStale()
+        app.autoFavorites.refreshPrediction()
+        favoritesPopup.show(binding.homeCard)
+    }
+
+    /** Debug/test hook: what the last triple tap on empty space did. */
+    internal var lastTripleTap: String? = null
+
+    /** Three quick taps on empty home space: the top six, as from the magnifier (not over the app table or edit mode). */
+    private fun topSixFromTripleTap() {
+        if (binding.appTable.isVisible || binding.allApps.isVisible || binding.widgetGrid.editMode) {
+            lastTripleTap = "ignored"
+            return
+        }
+        lastTripleTap = "top six"
+        showTopSix()
     }
 
     /** Edit mode (long-press a widget or empty space) shows a small bar: add, settings, done. */
@@ -901,15 +917,36 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     private fun setupHomeGestures() {
         binding.widgetGrid.onSwipe = ::onHomeSwipe
         binding.widgetGrid.onDoubleTap = ::lockFromDoubleTap
+        binding.widgetGrid.onTripleTap = ::topSixFromTripleTap
         val tracker = SwipeTracker(pxF(R.dimen.size_swipe), pxF(R.dimen.size_gesture))
+        // Wallpaper outside the canvas (beside the card when unfolded): a triple tap there too.
+        val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
+        val taps = io.github.iamth3doctor.searchlight.ui.MultiTap(
+            android.view.ViewConfiguration.getDoubleTapTimeout().toLong(),
+            android.view.ViewConfiguration.get(this).scaledDoubleTapSlop.toFloat(),
+        )
+        var downX = 0f
+        var downY = 0f
+        var travelled = false
         binding.root.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     if (onHomeChrome(e.rawX, e.rawY)) return@setOnTouchListener false
                     tracker.down(e.x, e.y)
+                    downX = e.x
+                    downY = e.y
+                    travelled = false
                 }
                 // Up stays the widget canvas's (the app table); out here only the home gestures.
-                MotionEvent.ACTION_MOVE -> tracker.move(e.x, e.y)?.takeIf { it != Swipe.Direction.UP }?.let(::onHomeSwipe)
+                MotionEvent.ACTION_MOVE -> {
+                    if (kotlin.math.abs(e.x - downX) > slop || kotlin.math.abs(e.y - downY) > slop) travelled = true
+                    tracker.move(e.x, e.y)?.takeIf { it != Swipe.Direction.UP }?.let(::onHomeSwipe)
+                }
+                MotionEvent.ACTION_POINTER_DOWN -> travelled = true
+                MotionEvent.ACTION_UP -> {
+                    val tap = !travelled && e.eventTime - e.downTime < android.view.ViewConfiguration.getLongPressTimeout()
+                    if (!tap) taps.reset() else if (taps.tap(e.x, e.y, e.eventTime) == 3) topSixFromTripleTap()
+                }
             }
             true
         }
