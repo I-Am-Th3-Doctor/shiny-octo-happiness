@@ -51,7 +51,7 @@ import kotlin.math.roundToInt
  * rain, snow, lightning, fog, birds, all moving with the wind), the temperature as a giant number,
  * the day along the bottom to scrub through like a timelapse. Drag the bar, or the number itself,
  * and the scene, number, condition and sound all follow the hour. Tap the scene for the quick
- * numbers over it; swipe up for the 7 days; the precipitation opens the full details; the place
+ * numbers over it; swipe up for the 7 days, and again for the details; the precipitation opens the full details; the place
  * name opens locations.
  *
  * Every other view (7 days, details, an alert, locations) is a screen of its own, opaque, that
@@ -131,7 +131,8 @@ class WeatherActivity : Activity() {
     private val HOUR_MS = 3_600_000L
     lateinit var dataScroll: ScrollView
         private set
-    private var lastScroll: ScrollView? = null
+    private var lastScroll: TopScrollView? = null
+    lateinit var weekScroll: TopScrollView
 
     private lateinit var quickScroll: ScrollView
     private lateinit var alertList: LinearLayout
@@ -229,6 +230,12 @@ class WeatherActivity : Activity() {
             setOnClickListener { openDetails() }
         }
         weekScreen = screen(title(getString(R.string.weather_week_title)), details, week.root, "weather_screen_week")
+        // One vertical stack: hero, swipe up to the 7 days, swipe up again (once the list is at its
+        // bottom) to the details; swipe down steps back the same way.
+        weekScroll = lastScroll!!
+        weekScroll.leaveUpAtBottom = true
+        weekScreen.onSwipeUp = { openDetails() }
+        weekScreen.canSwipeUp = { !weekScroll.canScrollVertically(1) && week.previewDay == null }
 
         alertList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         alertScreen = screen(title(getString(R.string.weather_alert_title)), null, alertList, "weather_screen_alert")

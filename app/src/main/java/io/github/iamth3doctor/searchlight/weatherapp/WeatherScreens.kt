@@ -195,23 +195,28 @@ class ScreenStack(private val home: View, private val onChange: (View) -> Unit) 
 
 /**
  * A scroll view that, scrolled to the top, leaves a downward drag to its parent (a [SwipeFrame]'s
- * "swipe down to go back") instead of claiming it for an overscroll.
+ * "swipe down to go back") instead of claiming it for an overscroll. With [leaveUpAtBottom], the
+ * same at the bottom for an upward drag (the 7 days' "swipe up for the details").
  */
 class TopScrollView(context: Context) : ScrollView(context) {
     private var downY = 0f
 
+    var leaveUpAtBottom = false
+
     private fun pullingDownAtTop(e: MotionEvent) = !canScrollVertically(-1) && e.y - downY > 0
+    private fun pullingUpAtBottom(e: MotionEvent) = leaveUpAtBottom && !canScrollVertically(1) && e.y - downY < 0
+    private fun leftToParent(e: MotionEvent) = pullingDownAtTop(e) || pullingUpAtBottom(e)
 
     override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
         if (e.actionMasked == MotionEvent.ACTION_DOWN) downY = e.y
-        if (e.actionMasked == MotionEvent.ACTION_MOVE && pullingDownAtTop(e)) return false
+        if (e.actionMasked == MotionEvent.ACTION_MOVE && leftToParent(e)) return false
         return super.onInterceptTouchEvent(e)
     }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (e.actionMasked == MotionEvent.ACTION_DOWN) downY = e.y
-        if (e.actionMasked == MotionEvent.ACTION_MOVE && pullingDownAtTop(e)) return true
+        if (e.actionMasked == MotionEvent.ACTION_MOVE && leftToParent(e)) return true
         return super.onTouchEvent(e)
     }
 }

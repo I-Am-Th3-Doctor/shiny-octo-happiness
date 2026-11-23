@@ -1030,6 +1030,38 @@ class WeatherSceneDeviceTest {
         }
         assertEquals(emptyList<String>(), seen)
         settle(h)
+
+        // One vertical stack: swipe up again (with the list at its bottom) for the details, and
+        // swipe down from the details back to the 7 days.
+        fun swipe(v: View, up: Boolean) {
+            val dp = app.resources.displayMetrics.density
+            val sx = on(h) { v.width / 2f }
+            val sy = on(h) { v.height * (if (up) 0.7f else 0.3f) }
+            val step = (if (up) -30 else 30) * dp
+            val t = SystemClock.uptimeMillis()
+            main {
+                v.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, sx, sy, 0))
+                for (k in 1..10) v.dispatchTouchEvent(MotionEvent.obtain(t, t + k * 16, MotionEvent.ACTION_MOVE, sx, sy + k * step, 0))
+                v.dispatchTouchEvent(MotionEvent.obtain(t, t + 200, MotionEvent.ACTION_UP, sx, sy + 10 * step, 0))
+            }
+            settle(h)
+        }
+        val wk = on(h) { it.weekScreen }
+        if (on(h) { it.weekScroll.canScrollVertically(1) }) {
+            // Not at the bottom yet: a swipe up just scrolls the list.
+            swipe(wk, up = true)
+            assertTrue("scrolled, still the 7 days", on(h) { it.weekShown && !it.dataShown })
+        }
+        h.onActivity { it.weekScroll.fullScroll(View.FOCUS_DOWN) }
+        Thread.sleep(400)
+        swipe(wk, up = true)
+        assertTrue("swiped up to the details", on(h) { it.dataShown })
+        assertEquals("over the 7 days", 2, on(h) { it.screens.depth })
+        swipe(on(h) { it.dataScreen }, up = false)
+        assertTrue("swiped down to the 7 days", on(h) { it.weekShown && !it.dataShown })
+        h.onActivity { it.weekScroll.scrollTo(0, 0) }
+        Thread.sleep(300)
+
         // Swipe down: back to the scene.
         val ws = on(h) { it.weekScreen }
         val sx = on(h) { ws.width / 2f }
