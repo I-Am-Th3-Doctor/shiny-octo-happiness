@@ -36,7 +36,7 @@ jobs:
         continue-on-error: true
         env:
           OPEN_METEO_LIVE: "1"
-        run: ./gradlew testDebugUnitTest --tests '*OpenMeteoLiveTest' --rerun -i | grep -E "ZIP|Chicago|PASSED|FAILED|SKIPPED|BUILD"
+        run: ./gradlew testDebugUnitTest --tests '*OpenMeteoLiveTest' --rerun -i | grep -E "ZIP|Chicago|MODELS|PASSED|FAILED|SKIPPED|BUILD"
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace

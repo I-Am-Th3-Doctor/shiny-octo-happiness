@@ -65,6 +65,24 @@ class OpenMeteoLiveTest {
         println("Chicago AQI: $aqi")
         assertTrue(aqi != null && aqi in 0..500)
 
+        // Which values each model actually gives, hour by hour and day by day, for the two places
+        // the phone shows (prints only: what Open-Meteo publishes per model can change).
+        for ((name, lat, lon) in listOf(Triple("Tacoma", 47.25, -122.44), Triple("Renton", 47.48, -122.22))) {
+            val r = org.json.JSONObject(get(OpenMeteo.forecastUrl(lat, lon)))
+            val now = System.currentTimeMillis() / 1000
+            for (section in listOf("hourly", "daily")) {
+                val o = r.getJSONObject(section)
+                val time = o.getJSONArray("time")
+                for (k in o.keys().asSequence().filter { it != "time" }.sorted()) {
+                    val a = o.optJSONArray(k) ?: continue
+                    val have = (0 until a.length()).filter { !a.isNull(it) }
+                    val ahead = have.map { ((time.getLong(it) - now) / 3600.0).toInt() }
+                    println("MODELS $name $section $k: ${have.size}/${a.length()}" +
+                        (if (have.isEmpty()) "" else " hours ahead ${ahead.first()}..${ahead.last()}"))
+                }
+            }
+        }
+
         // National Weather Service alerts for Tacoma: any number (often none), parsed.
         val c = URL(NwsAlerts.url(47.25, -122.44)).openConnection() as HttpURLConnection
         c.setRequestProperty("User-Agent", "Searchlight-Launcher")
