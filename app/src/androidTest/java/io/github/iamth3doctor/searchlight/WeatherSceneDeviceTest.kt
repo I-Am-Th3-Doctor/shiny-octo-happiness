@@ -1610,6 +1610,123 @@ class WeatherSceneDeviceTest {
         assertFalse(on(h) { it.refreshNote.isShown })
     }
 
+    @Test fun theHeroHasTheSameRefreshButton() = screen { h ->
+        val old = reading(2, 40, 0.0).let { it.copy(fetchedAt = it.fetchedAt - 25 * 60_000L) }
+        force(h, old)
+        val tf = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.time(app)
+        fun stamp(t: Long) = "Updated " + tf.format(java.time.Instant.ofEpochMilli(t).atZone(java.time.ZoneId.systemDefault()))
+        val chip = on(h) { it.heroRefresh }
+        val button = chip.button
+        val note = on(h) { it.heroRefreshNote }
+        // In the hero's top row: round frosted glass, between the place and the sound button, overlapping neither.
+        assertTrue(on(h) { button.isShown && button.width == button.height && button.background != null })
+        val b = rect(button)
+        val place = rect(on(h) { it.placeButton })
+        val mute = rect(on(h) { it.muteButton })
+        assertTrue("in the top row, left of the sound button: $b $mute", b.right <= mute.left && b.top == mute.top)
+        assertFalse("clear of the place: $b $place", android.graphics.Rect.intersects(b, place))
+        assertFalse(on(h) { note.isShown })
+
+        // A tap fetches now, once, with a spinner in the arrow's place; the hero keeps what it shows.
+        val asked = onMain { repo.refreshRequests }
+        touch(button, on(h) { button.width / 2f }, on(h) { button.height / 2f })
+        assertEquals(asked + 1, onMain { repo.refreshRequests })
+        idle(600)
+        assertTrue("spinning", on(h) { it.manualRefreshing && chip.spinner.isShown && !chip.icon.isShown })
+        assertEquals("52", on(h) { it.hero.number })
+        shot("131-hero-refreshing")
+
+        // It lands: the arrow back, and the new time shown for a moment, under the top row.
+        val fresh = reading(2, 40, 0.0)
+        show(fresh)
+        idle(600)
+        assertFalse(on(h) { it.manualRefreshing })
+        assertTrue("the arrow back", on(h) { chip.icon.isShown && !chip.spinner.isShown })
+        assertTrue(on(h) { note.isShown })
+        assertEquals(stamp(fresh.fetchedAt), on(h) { note.text.toString() })
+        assertTrue("under the top row", rect(note).top >= b.bottom)
+        waitFor("the time goes", 8_000) { on(h) { !note.isShown } }
+
+        // It fails: the last reading stays, and the note says so.
+        touch(button, on(h) { button.width / 2f }, on(h) { button.height / 2f })
+        assertTrue(on(h) { it.manualRefreshing })
+        show(fresh, offline = true)
+        idle(600)
+        assertFalse(on(h) { it.manualRefreshing })
+        assertTrue(on(h) { note.isShown })
+        assertEquals("Couldn't refresh — showing last data", on(h) { note.text.toString() })
+        assertEquals("52", on(h) { it.hero.number })
+        shot("132-hero-refresh-failed")
+
+        // The next good reading clears it.
+        show(reading(2, 40, 0.0))
+        idle(300)
+        assertFalse(on(h) { note.isShown })
+    }
+
+    /** No line of [v] starts with an AM/PM left behind by its time. */
+    private fun assertNoDanglingAmPm(v: TextView) {
+        val lines = onMain {
+            val l = v.layout
+            if (l == null) emptyList() else (0 until l.lineCount).map { k -> v.text.subSequence(l.getLineStart(k), l.getLineEnd(k)).toString().trim() }
+        }
+        for (line in lines.drop(1)) assertFalse("$lines splits a time", line.startsWith("AM") || line.startsWith("PM"))
+    }
+
+    /** None of the words [art] drew last overlaps another. */
+    private fun assertLabelsClear(art: io.github.iamth3doctor.searchlight.weatherapp.MetricArtView, atLeast: Int) {
+        val labels = onMain { art.drawnLabels.map { it.first to android.graphics.RectF(it.second) } }
+        assertTrue("labels drawn: $labels", labels.size >= atLeast)
+        for (i in labels.indices) for (j in i + 1 until labels.size) {
+            assertFalse("${labels[i]} overlaps ${labels[j]}", android.graphics.RectF.intersects(labels[i].second, labels[j].second))
+        }
+        val width = onMain { art.width }
+        assertTrue("inside the card: $labels", labels.all { it.second.left >= 0 && it.second.right <= width })
+    }
+
+    @Test fun weatherTimesNeverWrapOrOverlap() = screen { h ->
+        // Rain a sure thing every day: "100%" in the 7 days.
+        val base = reading(2, 40, 0.0)
+        val w = base.copy(detail = base.detail!!.copy(daily = base.detail!!.daily.map { it.copy(precipPct = 100) }))
+        force(h, w)
+        on(h) { it.openDetails() }
+        settle(h)
+        val panel = on(h) { it.panel }
+        // The 7 DAYS: "100%" on one line.
+        val dayRows = onMain { panel.sections["daily"]!!.let { root -> ArrayList<View>().also { root.findViewsWithText(it, "100%", View.FIND_VIEWS_WITH_TEXT) } } }
+        assertEquals(7, dayRows.size)
+        for (v in dayRows) assertEquals("\"100%\" on one line", 1, onMain { (v as TextView).lineCount })
+        // Every time on the details: whole, its AM/PM never on a line of its own.
+        for (t in texts(on(h) { it.dataScroll })) assertNoDanglingAmPm(t)
+
+        // The sun: sunrise under the left end of the arc, sunset under the right, apart.
+        on(h) { panel.toggle("sun") }
+        idle(1500)
+        val sun = on(h) { (panel.sections["sun"] as io.github.iamth3doctor.searchlight.weatherapp.MetricTile).art }
+        assertLabelsClear(sun, 2)
+        val (rise, set) = onMain { sun.drawnLabels.take(2).map { android.graphics.RectF(it.second) } }
+        val half = onMain { sun.width / 2f }
+        assertTrue("sunrise left, sunset right: $rise $set", rise.left < half && set.right > half && rise.right < set.left)
+        shot("133-sun-times")
+
+        // The moon: its hours spaced, never one on another; its rise and set each whole.
+        on(h) { panel.toggle("moon") }
+        idle(1500)
+        val moonTile = on(h) { panel.sections["moon"]!! }
+        on(h) { moonTile.requestRectangleOnScreen(android.graphics.Rect(0, 0, moonTile.width, moonTile.height), true) }
+        idle(600)
+        assertLabelsClear(on(h) { (moonTile as io.github.iamth3doctor.searchlight.weatherapp.MetricTile).art }, 2)
+        for (t in texts(moonTile)) assertNoDanglingAmPm(t)
+        shot("134-moon-times")
+
+        // The 7-day page: "100%" on one line there too.
+        on(h) { it.screens.pop(); it.openWeek() }
+        settle(h)
+        val weekRain = on(h) { a -> ArrayList<View>().also { a.week.root.findViewsWithText(it, "100%", View.FIND_VIEWS_WITH_TEXT) } }
+        assertEquals(7, weekRain.size)
+        for (v in weekRain) assertEquals("\"100%\" on one line", 1, onMain { (v as TextView).lineCount })
+    }
+
     // ---- phase 2: the hero, the precip card, severe alerts ----
 
     @Test fun heroNumbersStandOverTheSceneInBothThemes() {

@@ -181,7 +181,7 @@ object MetricArt {
     fun uvAdvice(uv: Double): String = when {
         uv < 3 -> "no protection needed"
         uv < 6 -> "sunscreen and shade at midday"
-        uv < 8 -> "cover up; shade 10 AM to 4 PM"
+        uv < 8 -> "cover up; shade 10\u00A0AM to 4\u00A0PM"
         uv < 11 -> "extra care; avoid midday sun"
         else -> "avoid the sun at midday"
     }

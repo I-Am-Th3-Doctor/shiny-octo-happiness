@@ -378,10 +378,16 @@ class DayBarView(context: Context) : View(context) {
 }
 
 /** Time formats for the weather screen, at the place's own time. */
+/**
+ * The weather app's times. A time never splits from its AM/PM: a non-breaking space joins them
+ * ("8:04 AM" stays on one line wherever it's shown).
+ */
 object WeatherFormat {
+    const val NBSP = '\u00A0'
+
     fun hour(context: Context): DateTimeFormatter = DateTimeFormatter.ofPattern(
-        if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h a", context.resources.configuration.locales[0])
+        if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h${NBSP}a", context.resources.configuration.locales[0])
 
     fun time(context: Context): DateTimeFormatter = DateTimeFormatter.ofPattern(
-        if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a", context.resources.configuration.locales[0])
+        if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm${NBSP}a", context.resources.configuration.locales[0])
 }

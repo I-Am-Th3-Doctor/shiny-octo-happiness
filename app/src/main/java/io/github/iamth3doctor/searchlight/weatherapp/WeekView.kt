@@ -130,10 +130,14 @@ class WeekView(private val context: Context, private val light: Boolean) {
             val name = dayName(i, day, zone, locale)
             row.addView(text(Type.BODY, fg, bold = i == 0).apply { text = name }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(ConditionView(context, glow = false).apply { visual = ConditionVisual.of(day.code, true) }, LinearLayout.LayoutParams(hv, hv))
-            row.addView(text(Type.CAPTION, context.color(R.color.weather_drop)).apply {
+            val rain = text(Type.CAPTION, context.color(R.color.weather_drop)).apply {
                 text = day.precipPct?.let { "$it%" } ?: ""
                 gravity = Gravity.END
-            }, LinearLayout.LayoutParams(col, ViewGroup.LayoutParams.WRAP_CONTENT))
+                isSingleLine = true
+            }
+            // Room for "100%" on one line.
+            val rainW = maxOf(col, kotlin.math.ceil(rain.paint.measureText("100%")).toInt() + px(R.dimen.space_xs) / 2)
+            row.addView(rain, LinearLayout.LayoutParams(rainW, ViewGroup.LayoutParams.WRAP_CONTENT))
             row.addView(text(Type.BODY, dim).apply { text = deg(day.lowC); gravity = Gravity.END },
                 LinearLayout.LayoutParams(col + px(R.dimen.space_s), ViewGroup.LayoutParams.WRAP_CONTENT))
             row.addView(text(Type.BODY, fg, bold = true).apply { text = deg(day.highC); gravity = Gravity.END },

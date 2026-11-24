@@ -147,6 +147,13 @@ class WeatherActivity : Activity() {
     lateinit var refreshIcon: ImageView
     lateinit var refreshSpinner: SpinnerView
 
+    /** The hero's refresh button (the same as the data screen's), and its note under the top row. */
+    lateinit var heroRefresh: RefreshChip
+    lateinit var heroRefreshNote: TextView
+    /** The running tapped refresh was asked for on the hero: it answers there. */
+    private var refreshFromHero = false
+    private val hideHeroNote = Runnable { heroRefreshNote.visibility = View.GONE }
+
     /** The reading when the refresh button was tapped; null when no tapped refresh is running. */
     private var refreshFrom: WeatherRepository.State? = null
     val manualRefreshing: Boolean get() = refreshFrom != null
@@ -331,7 +338,26 @@ class WeatherActivity : Activity() {
             setOnClickListener { toggleSound() }
         }
         top.addView(muteButton, FrameLayout.LayoutParams(button, button, Gravity.END or Gravity.CENTER_VERTICAL))
+        // Refresh, by the sound button: the data screen's button, here too.
+        heroRefresh = refreshChip("weather_hero_refresh", px(R.dimen.space_s) + px(R.dimen.space_xs) / 2, button) { refreshNow(fromHero = true) }
+        top.addView(heroRefresh.button, FrameLayout.LayoutParams(button, button, Gravity.END or Gravity.CENTER_VERTICAL)
+            .apply { marginEnd = button + px(R.dimen.space_s) })
         column.addView(top, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, button))
+        // What the hero's refresh came to: the new time for a moment, or that the last data stays.
+        heroRefreshNote = TextView(this).apply {
+            type(Type.CAPTION)
+            setTextColor(fg)
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER
+            val p = px(R.dimen.space_s)
+            setPadding(p * 2, p / 2, p * 2, p / 2)
+            background = GradientDrawable().apply { cornerRadius = 999f; setColor(glass()) }
+            visibility = View.GONE
+            tag = "weather_hero_refresh_note"
+        }
+        column.addView(heroRefreshNote, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = px(R.dimen.space_s) })
 
         // A severe-weather alert, when there is one: a bold pill on its own row.
         alertPill = TextView(this).apply {
@@ -534,29 +560,39 @@ class WeatherActivity : Activity() {
         return col
     }
 
+    /** A refresh button: its frosted chip, the arrow, and the spinner that takes the arrow's place. */
+    class RefreshChip(val button: FrameLayout, val icon: ImageView, val spinner: SpinnerView)
+
     /** Round frosted glass like the scene's buttons: the refresh arrow, a spinner in its place while fetching. */
-    private fun buildRefreshButton(): View {
-        val size = px(R.dimen.size_cal_chevron) + px(R.dimen.space_xs)
-        refreshButton = FrameLayout(this).apply {
+    private fun refreshChip(tag: String, pad: Int, size: Int, onTap: () -> Unit): RefreshChip {
+        val button = FrameLayout(this).apply {
             background = chip()
-            tag = "weather_refresh"
+            this.tag = tag
             contentDescription = getString(R.string.weather_refresh)
-            setOnClickListener { refreshNow() }
+            setOnClickListener { onTap() }
         }
-        val p = px(R.dimen.space_s)
-        refreshIcon = ImageView(this).apply {
+        val icon = ImageView(this).apply {
             setImageResource(R.drawable.ic_refresh)
             setColorFilter(fg)
-            setPadding(p, p, p, p)
+            setPadding(pad, pad, pad, pad)
         }
-        refreshButton.addView(refreshIcon, match())
-        refreshSpinner = SpinnerView(this).apply {
+        button.addView(icon, match())
+        val spinner = SpinnerView(this).apply {
             color = fg
             visibility = View.GONE
-            tag = "weather_refresh_spinner"
+            this.tag = "${tag}_spinner"
         }
-        val inner = size - 2 * p - px(R.dimen.space_xs)
-        refreshButton.addView(refreshSpinner, FrameLayout.LayoutParams(inner, inner, Gravity.CENTER))
+        val inner = size - 2 * px(R.dimen.space_s) - px(R.dimen.space_xs)
+        button.addView(spinner, FrameLayout.LayoutParams(inner, inner, Gravity.CENTER))
+        return RefreshChip(button, icon, spinner)
+    }
+
+    private fun buildRefreshButton(): View {
+        val size = px(R.dimen.size_cal_chevron) + px(R.dimen.space_xs)
+        val c = refreshChip("weather_refresh", px(R.dimen.space_s), size) { refreshNow() }
+        refreshButton = c.button
+        refreshIcon = c.icon
+        refreshSpinner = c.spinner
         return FrameLayout(this).apply {
             addView(refreshButton, FrameLayout.LayoutParams(size, size, Gravity.CENTER))
             setPadding(px(R.dimen.space_xs), 0, px(R.dimen.space_xs), 0)
@@ -569,9 +605,12 @@ class WeatherActivity : Activity() {
      * The refresh button: fetch everything again now (conditions, hours, days, precipitation, alerts).
      * The screen keeps what it shows meanwhile; the automatic refreshes carry on as before.
      */
-    fun refreshNow() {
+    fun refreshNow(fromHero: Boolean = false) {
         if (refreshFrom != null) return
         refreshNote.visibility = View.GONE
+        main.removeCallbacks(hideHeroNote)
+        heroRefreshNote.visibility = View.GONE
+        refreshFromHero = fromHero
         // Already fetching on its own: the spinner waits for that answer.
         repo.refresh()
         refreshFrom = repo.state
@@ -581,9 +620,11 @@ class WeatherActivity : Activity() {
 
     /** The spinner in the arrow's place while fetching; the arrow back when the answer lands. */
     private fun showRefreshing(on: Boolean) {
-        refreshButton.contentDescription = getString(if (on) R.string.weather_refreshing else R.string.weather_refresh)
-        refreshSpinner.visibility = if (on) View.VISIBLE else View.GONE
-        refreshIcon.visibility = if (on) View.GONE else View.VISIBLE
+        for (c in listOf(RefreshChip(refreshButton, refreshIcon, refreshSpinner), heroRefresh)) {
+            c.button.contentDescription = getString(if (on) R.string.weather_refreshing else R.string.weather_refresh)
+            c.spinner.visibility = if (on) View.VISIBLE else View.GONE
+            c.icon.visibility = if (on) View.GONE else View.VISIBLE
+        }
     }
 
     /** The header follows the reading: its time, and the tapped refresh's spinner and note. */
@@ -598,8 +639,20 @@ class WeatherActivity : Activity() {
             refreshFrom = null
             showRefreshing(false)
             refreshNote.visibility = if (state.problem != null && data != null) View.VISIBLE else View.GONE
+            if (refreshFromHero) {
+                refreshFromHero = false
+                val failed = state.problem != null && data != null
+                when {
+                    failed -> heroRefreshNote.text = getString(R.string.weather_refresh_failed)
+                    data != null -> heroRefreshNote.text = dataUpdated.text
+                }
+                heroRefreshNote.visibility = if (failed || data != null) View.VISIBLE else View.GONE
+                // The new time shows for a moment; the note that the last data stays, until a refresh works.
+                if (!failed) main.postDelayed(hideHeroNote, HERO_NOTE_MS)
+            }
         } else if (from == null && state.problem == null && !state.loading) {
             refreshNote.visibility = View.GONE
+            if (heroRefreshNote.text.toString() == getString(R.string.weather_refresh_failed)) heroRefreshNote.visibility = View.GONE
         }
     }
 
@@ -693,6 +746,7 @@ class WeatherActivity : Activity() {
 
     override fun onDestroy() {
         week.stop()
+        main.removeCallbacks(hideHeroNote)
         if (current === this) current = null
         super.onDestroy()
     }
@@ -823,7 +877,7 @@ class WeatherActivity : Activity() {
         val accent = fg
         val zone = java.time.ZoneOffset.ofTotalSeconds(data.detail?.utcOffsetSec ?: 0)
         val fmt = java.time.format.DateTimeFormatter.ofPattern(
-            if (android.text.format.DateFormat.is24HourFormat(this)) "EEE HH:mm" else "EEE h:mm a", resources.configuration.locales[0])
+            if (android.text.format.DateFormat.is24HourFormat(this)) "EEE HH:mm" else "EEE h:mm${WeatherFormat.NBSP}a", resources.configuration.locales[0])
         fun at(ms: Long?) = ms?.let { fmt.format(java.time.Instant.ofEpochMilli(it).atOffset(zone)) }
         fun text(style: Int, color: Int, weight: Int = 400, value: CharSequence) = TextView(this).apply {
             type(style)
@@ -1013,6 +1067,8 @@ class WeatherActivity : Activity() {
 
     companion object {
         private const val TICK_MS = 30_000L
+        /** How long the hero shows a refresh's new time. */
+        private const val HERO_NOTE_MS = 4_000L
         /** Left alone this long away from now, the screen goes back to now on its own. */
         const val IDLE_MS = 5_000L
 

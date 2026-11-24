@@ -237,6 +237,10 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
             }
         }
 
+    /** A chance-of-rain column: at least [min] wide, and wide enough for "100%" on one line. */
+    private fun pctColumn(t: TextView, min: Int): Int =
+        maxOf(min, kotlin.math.ceil(t.paint.measureText("100%")).toInt() + t.paddingLeft + t.paddingRight + px(R.dimen.space_xs) / 2)
+
     private fun daily(data: WeatherData) {
         val d = data.detail ?: return
         if (d.daily.isEmpty()) return
@@ -264,11 +268,14 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
                 else Instant.ofEpochMilli(day.date).atOffset(zone).dayOfWeek.getDisplayName(TextStyle.SHORT, locale)
             row.addView(text(Type.BODY, bold = i == 0).apply { text = name }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(ConditionView(context, glow = false).apply { visual = ConditionVisual.of(day.code, true) }, LinearLayout.LayoutParams(hv, hv))
-            row.addView(text(Type.CAPTION).apply {
+            val rain = text(Type.CAPTION).apply {
                 text = day.precipPct?.let { "$it%" } ?: ""
                 setTextColor(context.color(R.color.weather_drop))
                 gravity = Gravity.END
-            }, LinearLayout.LayoutParams(col, ViewGroup.LayoutParams.WRAP_CONTENT))
+                isSingleLine = true
+            }
+            // Room for "100%" on one line.
+            row.addView(rain, LinearLayout.LayoutParams(pctColumn(rain, col), ViewGroup.LayoutParams.WRAP_CONTENT))
             row.addView(text(Type.BODY, dimmed = true).apply { text = deg(day.lowC); gravity = Gravity.END },
                 LinearLayout.LayoutParams(col + px(R.dimen.space_s), ViewGroup.LayoutParams.WRAP_CONTENT))
             row.addView(text(Type.BODY, bold = true).apply { text = deg(day.highC); gravity = Gravity.END },
@@ -531,6 +538,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         val tf = WeatherFormat.time(context)
         fun at(ms: Long?) = ms?.let { tf.format(Instant.ofEpochMilli(it).atOffset(zone)) }
         val none = context.getString(R.string.weather_detail_none)
+        val NB = WeatherFormat.NBSP
         val today = d.daily.firstOrNull()
         val now = clock()
         val dayStart = Moon.dayStart(now, d.utcOffsetSec)
@@ -554,6 +562,11 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         val moonDay = MetricArt.moonDay(dayStart, data.latitude, data.longitude)
         val hf = WeatherFormat.hour(context)
         val ticks = (0 until 4).map { hf.format(Instant.ofEpochMilli(dayStart + it * 6 * 3_600_000L).atOffset(zone)) }
+        val shortTicks = (0 until 4).map { k ->
+            val h = k * 6
+            if (android.text.format.DateFormat.is24HourFormat(context)) h.toString().padStart(2, '0')
+            else "${if (h % 12 == 0) 12 else h % 12}${if (h < 12) "a" else "p"}"
+        }
         val lit = (Moon.illumination(now) * 100).roundToInt()
         val firstDark = moonDay.visible.indexOfFirst { it }
         val moonNote = Moon.phase(now).label + " · " + context.getString(R.string.weather_detail_lit, lit) + "\n" + when {
@@ -567,7 +580,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
             }
         }
         val moonArt = ArtInfo("moon", illumination = Moon.illumination(now), waxing = MetricArt.waxing(now), moonDay = moonDay,
-            nowF = nowF, ticks = ticks)
+            nowF = nowF, ticks = ticks, shortTicks = shortTicks)
 
         val humNote = d.dewPointC?.let { dew ->
             context.getString(R.string.weather_metric_dew, deg(dew), MetricArt.humidityNote(data.temperatureC, dew))
@@ -586,9 +599,10 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         } ?: none
 
         val list = listOf(
-            tile("sun", R.string.weather_detail_sun, "↑ ${at(today?.sunrise) ?: none}", "↓ ${at(today?.sunset) ?: none}", sunArt, sunNote),
+            // Each time whole on its line: the arrow, the time and its AM/PM held together.
+            tile("sun", R.string.weather_detail_sun, "↑$NB${at(today?.sunrise) ?: none}", "↓$NB${at(today?.sunset) ?: none}", sunArt, sunNote),
             tile("moon", R.string.weather_detail_moon, Moon.phase(now).label,
-                "↑ ${at(moon.rise) ?: context.getString(R.string.weather_detail_no_rise)}   ↓ ${at(moon.set) ?: context.getString(R.string.weather_detail_no_set)}" +
+                "↑$NB${at(moon.rise) ?: context.getString(R.string.weather_detail_no_rise)}   ↓$NB${at(moon.set) ?: context.getString(R.string.weather_detail_no_set)}" +
                     "\n" + context.getString(R.string.weather_detail_lit, lit), moonArt, moonNote),
             tile("humidity", R.string.weather_detail_humidity, d.humidity?.let { "$it%" } ?: none,
                 d.dewPointC?.let { context.getString(R.string.weather_detail_dew, deg(it)) },

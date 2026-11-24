@@ -44,6 +44,8 @@ data class ArtInfo(
     /** Now, as a share of the day since local midnight. */
     val nowF: Double = 0.0,
     val ticks: List<String> = emptyList(),
+    /** The same hours, short ("12a"), for when the full ones don't fit. */
+    val shortTicks: List<String> = emptyList(),
     // humidity (0..1)
     val humidity: Double = 0.0,
     // visibility (miles)
@@ -104,7 +106,11 @@ class MetricArtView(context: Context, private val light: Boolean) : View(context
         return 1 - (1 - x) * (1 - x) * (1 - x)
     }
 
+    /** Where the last frame put its words (for the tests: none may overlap another). */
+    val drawnLabels = ArrayList<Pair<String, RectF>>()
+
     override fun onDraw(canvas: Canvas) {
+        drawnLabels.clear()
         val i = info ?: return
         val t = seconds()
         when (i.kind) {
@@ -132,6 +138,9 @@ class MetricArtView(context: Context, private val light: Boolean) : View(context
         text.color = color
         text.textAlign = align
         canvas.drawText(s, x, y, text)
+        val w = text.measureText(s)
+        val left = when (align) { Paint.Align.LEFT -> x; Paint.Align.CENTER -> x - w / 2; else -> x - w }
+        drawnLabels += s to RectF(left, y + text.ascent(), left + w, y + text.descent())
     }
 
     // ------------------------------------------------------------------ sun
@@ -172,8 +181,16 @@ class MetricArtView(context: Context, private val light: Boolean) : View(context
         paint.color = dim
         c.drawCircle(x0, base, 3 * d, paint)
         c.drawCircle(x1, base, 3 * d, paint)
-        i.riseText?.let { label(c, "↑ $it", x0, base + 16 * d, Paint.Align.LEFT) }
-        i.setText?.let { label(c, "↓ $it", x1, base + 16 * d, Paint.Align.RIGHT) }
+        // Sunrise under the left end of the arc, sunset under the right: one line each, never
+        // meeting in the middle (both shrink together if the card is too narrow for them).
+        val riseLabel = i.riseText?.let { "↑${WeatherFormat.NBSP}$it" }
+        val setLabel = i.setText?.let { "↓${WeatherFormat.NBSP}$it" }
+        val size = text.textSize
+        val need = (riseLabel?.let(text::measureText) ?: 0f) + (setLabel?.let(text::measureText) ?: 0f) + LABEL_GAP_DP * d
+        if (need > x1 - x0) text.textSize = size * (x1 - x0) / need
+        riseLabel?.let { label(c, it, x0, base + 16 * d, Paint.Align.LEFT) }
+        setLabel?.let { label(c, it, x1, base + 16 * d, Paint.Align.RIGHT) }
+        text.textSize = size
         if (up) {
             val sx = x(shown)
             val sy = y(shown)
@@ -256,10 +273,33 @@ class MetricArtView(context: Context, private val light: Boolean) : View(context
         val nx = pad + w * i.nowF.toFloat()
         paint.color = if (light) 0xFFB8860B.toInt() else 0xFFFFD27A.toInt()
         c.drawRect(nx - 1 * d, top - 4 * d, nx + 1 * d, top + bh + 4 * d, paint)
-        i.ticks.forEachIndexed { k, s ->
-            val x = pad + w * k / i.ticks.size
-            label(c, s, x, top + bh + 14 * d, if (k == 0) Paint.Align.LEFT else Paint.Align.CENTER)
+        // The hours under it: full ("12 AM"), else short ("12a"), else every other one, whichever
+        // first leaves clear space between each label. Never two on top of each other.
+        val n0 = i.ticks.size
+        val choice = sequenceOf(i.ticks to 1, i.shortTicks to 1, i.shortTicks to 2)
+            .filter { it.first.size == n0 && n0 > 0 }
+            .firstOrNull { (labels, every) -> ticksFit(labels, every, pad, w) }
+            ?: ((i.shortTicks.takeIf { it.size == n0 } ?: i.ticks) to n0.coerceAtLeast(1))
+        val (labels, every) = choice
+        labels.forEachIndexed { k, s ->
+            if (k % every != 0) return@forEachIndexed
+            label(c, s, pad + w * k / n0, top + bh + 14 * d, if (k == 0) Paint.Align.LEFT else Paint.Align.CENTER)
         }
+    }
+
+    /** Whether every [every]th of [labels], spread across [w] from [pad] as the moon's hours are, leaves a clear gap. */
+    private fun ticksFit(labels: List<String>, every: Int, pad: Float, w: Float): Boolean {
+        var lastRight = Float.NEGATIVE_INFINITY
+        labels.forEachIndexed { k, s ->
+            if (k % every != 0) return@forEachIndexed
+            val x = pad + w * k / labels.size
+            val tw = text.measureText(s)
+            val left = if (k == 0) x else x - tw / 2
+            val right = left + tw
+            if (left - lastRight < LABEL_GAP_DP * d || right > width) return false
+            lastRight = right
+        }
+        return true
     }
 
     // ------------------------------------------------------------------ humidity
@@ -588,6 +628,9 @@ class MetricArtView(context: Context, private val light: Boolean) : View(context
 
     private companion object {
         const val FRAME_MS = 33L
+
+        /** The least clear space between two labels side by side, in dp. */
+        const val LABEL_GAP_DP = 10f
     }
 }
 
