@@ -408,6 +408,9 @@ class NewFeaturesDeviceTest {
                 doubleTap(card.first, card.second)
                 assertNull(on(h) { it.lastDoubleTap })
                 assertTrue(app.getSystemService(PowerManager::class.java).isInteractive)
+                // Tapping the card opens search; close it so empty space is reachable again.
+                @Suppress("DEPRECATION") h.onActivity { it.onBackPressed() }
+                Thread.sleep(600)
 
                 // Long-press on empty space still opens widget edit mode.
                 val spot = on(h) { emptySpot(it) }
