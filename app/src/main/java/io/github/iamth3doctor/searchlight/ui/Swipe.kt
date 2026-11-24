@@ -43,7 +43,11 @@ object Swipe {
  * [upDistance]); down, left and right are the configurable gestures ([Swipe.dominant] over
  * [distance]). Pure; JVM-tested.
  */
-class SwipeTracker(private val upDistance: Float, private val distance: Float) {
+class SwipeTracker(upDistance: Float, distance: Float) {
+    /** In pixels: re-set when the display changes (fold/unfold can change its density). */
+    var upDistance = upDistance
+    var distance = distance
+
     private var startX = 0f
     private var startY = 0f
     private var done = false

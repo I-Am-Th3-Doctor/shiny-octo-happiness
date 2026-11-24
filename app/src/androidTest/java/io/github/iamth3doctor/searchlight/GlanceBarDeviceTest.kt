@@ -22,9 +22,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Unfolded, home is one at-a-glance screen: nothing on it scrolls or slides up, and the bottom
- * bar shows the temperature (°F), the time, the battery %, and the four toggles, each whole.
- * Folded, swipe up still opens the app drawer. (The suite runs folded, then unfolded.)
+ * Unfolded, home is one at-a-glance screen: nothing on it scrolls, and the bottom bar shows the
+ * temperature (°F), the time, the battery %, and the four toggles, each whole. Folded and
+ * unfolded alike, swipe up opens the app drawer. (The suite runs folded, then unfolded.)
  */
 @RunWith(AndroidJUnit4::class)
 class GlanceBarDeviceTest {
@@ -117,15 +117,14 @@ class GlanceBarDeviceTest {
             Thread.sleep(900)
             val drawer = on(home) { it.findViewById<View>(R.id.appTable).isShown }
 
-            if (!unfolded) {
-                // Folded: as before, swipe up opens the drawer.
-                assertTrue("folded: swipe up should open the drawer", drawer)
-                @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() }
-                return@use
-            }
+            // Swipe up opens the drawer, folded and unfolded alike.
+            assertTrue("${if (unfolded) "unfolded" else "folded"}: swipe up should open the drawer", drawer)
+            @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() }
+            Thread.sleep(900)
+            assertFalse("Back closes it", on(home) { it.findViewById<View>(R.id.appTable).isShown })
+            if (!unfolded) return@use
 
-            // Unfolded: nothing slid up, and nothing on home scrolls vertically.
-            assertFalse("unfolded: swipe up opened the drawer", drawer)
+            // Unfolded: nothing on home scrolls vertically.
             home.onActivity { a ->
                 val scrollers = shown(a.findViewById(R.id.root)).filter { it.canScrollVertically(1) || it.canScrollVertically(-1) }
                 assertTrue("vertically scrollable on home: $scrollers", scrollers.isEmpty())

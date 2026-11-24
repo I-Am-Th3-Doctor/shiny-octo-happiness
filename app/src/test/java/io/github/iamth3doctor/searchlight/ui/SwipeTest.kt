@@ -50,4 +50,17 @@ class SwipeTest {
         t.down(0f, 0f)
         assertEquals(Swipe.Direction.UP, t.move(5f, -70f))
     }
+
+    @Test fun trackerFollowsNewDistancesAfterAFoldChange() {
+        // Folded density: 64px up. Unfolded, a denser display: the same 64dp is more pixels.
+        val t = SwipeTracker(upDistance = 64f, distance = 56f)
+        t.upDistance = 96f
+        t.distance = 84f
+        t.down(0f, 0f)
+        assertNull(t.move(0f, -70f)) // enough before, short now
+        assertEquals(Swipe.Direction.UP, t.move(0f, -100f))
+        t.down(0f, 0f)
+        assertNull(t.move(60f, 0f))
+        assertEquals(Swipe.Direction.RIGHT, t.move(90f, 0f))
+    }
 }

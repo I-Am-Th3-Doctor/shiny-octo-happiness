@@ -62,6 +62,18 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
     private var travelled = false
     private var swiped = false
     private val swipe = SwipeTracker(context.pxF(R.dimen.size_swipe), context.pxF(R.dimen.size_gesture))
+    private var slop = ViewConfiguration.get(context).scaledTouchSlop
+
+    /**
+     * The home activity lives on across fold/unfold, so this view does too: re-measure the swipe
+     * distances and touch slop for the display it's on now (its density may differ).
+     */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration?) {
+        super.onConfigurationChanged(newConfig)
+        swipe.upDistance = context.pxF(R.dimen.size_swipe)
+        swipe.distance = context.pxF(R.dimen.size_gesture)
+        slop = ViewConfiguration.get(context).scaledTouchSlop
+    }
     private var swipeDownX = 0f
     private var swipeDownY = 0f
 
@@ -287,7 +299,6 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     private enum class Gesture { NONE, DRAG, RESIZE, REMOVE, EMPTY }
 
-    private val slop = ViewConfiguration.get(context).scaledTouchSlop
     private var gesture = Gesture.NONE
     private var target: View? = null
     private var downX = 0f

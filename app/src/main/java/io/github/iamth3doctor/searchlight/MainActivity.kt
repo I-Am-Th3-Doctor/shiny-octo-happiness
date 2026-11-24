@@ -293,6 +293,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         super.onConfigurationChanged(newConfig)
         // Fold/unfold: views re-measure themselves; popups are anchored to stale coordinates.
         dismissPopups()
+        measureHomeSwipe()
         applyPosture(Posture.of(newConfig))
     }
 
@@ -911,9 +912,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         grid.onDoubleTap = { runGesture(HomeGesture.DOUBLE_TAP) }
         grid.onLongPress = { runGesture(HomeGesture.LONG_PRESS) }
         applyTripleTap()
-        val tracker = SwipeTracker(pxF(R.dimen.size_swipe), pxF(R.dimen.size_gesture))
+        val tracker = homeSwipe
         // Wallpaper outside the canvas (beside the card when unfolded): the same gestures there.
-        val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
         val tapTimeout = android.view.ViewConfiguration.getDoubleTapTimeout().toLong()
         val taps = io.github.iamth3doctor.searchlight.ui.MultiTap(
             tapTimeout,
@@ -942,6 +942,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                     binding.root.postDelayed(longPress, android.view.ViewConfiguration.getLongPressTimeout().toLong())
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop // this display's
                     if (kotlin.math.abs(e.x - downX) > slop || kotlin.math.abs(e.y - downY) > slop) {
                         travelled = true
                         binding.root.removeCallbacks(longPress)
@@ -971,6 +972,15 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             }
             true
         }
+    }
+
+    /** Swipes on wallpaper outside the canvas; its distances follow the display ([measureHomeSwipe]). */
+    private val homeSwipe by lazy { SwipeTracker(pxF(R.dimen.size_swipe), pxF(R.dimen.size_gesture)) }
+
+    /** Fold/unfold keeps this activity: the swipe distances, in pixels, for the display it's on now. */
+    private fun measureHomeSwipe() {
+        homeSwipe.upDistance = pxF(R.dimen.size_swipe)
+        homeSwipe.distance = pxF(R.dimen.size_gesture)
     }
 
     private fun tripleTapSet() = prefs.gestureAction(HomeGesture.TRIPLE_TAP) != GestureAction.NONE
@@ -1016,9 +1026,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             GestureAction.SEARCH -> showKeyboard()
             // A tap or hold asks once for the access (as double tap always has); a swipe says so in a toast.
             GestureAction.LOCK_SCREEN -> if (gesture.isSwipe) globalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) else lockScreen()
-            // Unfolded, home is one at-a-glance screen: swipe up slides no page over it (the
-            // rail's all-apps button opens the apps there), as before it could be set.
-            GestureAction.APP_DRAWER -> if (gesture == HomeGesture.SWIPE_UP && posture == Posture.UNFOLDED) return false else openAppTable()
+            // Folded or unfolded alike.
+            GestureAction.APP_DRAWER -> openAppTable()
             GestureAction.WEATHER -> io.github.iamth3doctor.searchlight.weatherapp.WeatherActivity.open(this)
             GestureAction.CALENDAR -> Actions.openCalendarAt(this, System.currentTimeMillis())
             GestureAction.FOCUS -> prefs.focusMode = !prefs.focusMode
