@@ -408,15 +408,27 @@ class NewFeaturesDeviceTest {
                 doubleTap(card.first, card.second)
                 assertNull(on(h) { it.lastDoubleTap })
                 assertTrue(app.getSystemService(PowerManager::class.java).isInteractive)
-                // Tapping the card opens search; close it so empty space is reachable again.
+                // Tapping the card opens search and the keyboard; close both so empty space
+                // is reachable again (unfolded, the keyboard can cover it).
                 @Suppress("DEPRECATION") h.onActivity { it.onBackPressed() }
-                Thread.sleep(600)
+                h.onActivity {
+                    it.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                        .hideSoftInputFromWindow(it.window.decorView.windowToken, 0)
+                    it.lastHomeSwipe = null
+                }
+                Thread.sleep(1000)
 
                 // Long-press on empty space still opens widget edit mode.
                 val spot = on(h) { emptySpot(it) }
                 shell("input swipe ${spot.first} ${spot.second} ${spot.first} ${spot.second} 900")
                 Thread.sleep(600)
-                assertTrue("edit mode", on(h) { it.findViewById<WidgetGridView>(R.id.widgetGrid).editMode })
+                val why = on(h) { a ->
+                    val g = a.findViewById<WidgetGridView>(R.id.widgetGrid)
+                    val ime = androidx.core.view.ViewCompat.getRootWindowInsets(a.window.decorView)
+                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())
+                    "spot=$spot gesture=${a.lastHomeSwipe} hidden=${g.widgetsHidden} ime=$ime"
+                }
+                assertTrue("edit mode ($why)", on(h) { it.findViewById<WidgetGridView>(R.id.widgetGrid).editMode })
                 @Suppress("DEPRECATION") h.onActivity { it.onBackPressed() }
                 Thread.sleep(600)
 
