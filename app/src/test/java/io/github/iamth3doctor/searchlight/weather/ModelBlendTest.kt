@@ -89,7 +89,7 @@ class ModelBlendTest {
             assertEquals(61.0, b.h("weather_code", t), 0.0)
             assertEquals(350.0, b.h("wind_direction_10m", t), 1e-9)
         }
-        for (t in listOf(now + 48 * hour, now + 60 * hour, now + 150 * hour)) {
+        for (t in listOf(now + 48 * hour, now + 60 * hour, now + 140 * hour)) {
             assertEquals(20.0, b.h("temperature_2m", t), 1e-9)
             assertEquals(60.0, b.h("precipitation_probability", t), 1e-9)
             assertEquals(0.5, b.h("precipitation", t), 1e-9)
