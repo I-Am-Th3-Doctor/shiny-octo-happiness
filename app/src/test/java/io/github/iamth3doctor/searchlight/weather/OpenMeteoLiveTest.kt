@@ -65,22 +65,60 @@ class OpenMeteoLiveTest {
         println("Chicago AQI: $aqi")
         assertTrue(aqi != null && aqi in 0..500)
 
-        // Which values each model actually gives, hour by hour and day by day, for the two places
-        // the phone shows (prints only: what Open-Meteo publishes per model can change).
+        // The model split, checked against each model on its own (as open-meteo.com shows it with
+        // that model picked), for the two places the phone shows.
         for ((name, lat, lon) in listOf(Triple("Tacoma", 47.25, -122.44), Triple("Renton", 47.48, -122.22))) {
-            val r = org.json.JSONObject(get(OpenMeteo.forecastUrl(lat, lon)))
-            val now = System.currentTimeMillis() / 1000
-            for (section in listOf("hourly", "daily")) {
-                val o = r.getJSONObject(section)
-                val time = o.getJSONArray("time")
-                for (k in o.keys().asSequence().filter { it != "time" }.sorted()) {
-                    val a = o.optJSONArray(k) ?: continue
-                    val have = (0 until a.length()).filter { !a.isNull(it) }
-                    val ahead = have.map { ((time.getLong(it) - now) / 3600.0).toInt() }
-                    println("MODELS $name $section $k: ${have.size}/${a.length()}" +
-                        (if (have.isEmpty()) "" else " hours ahead ${ahead.first()}..${ahead.last()}"))
-                }
+            val url = OpenMeteo.forecastUrl(lat, lon)
+            val now = System.currentTimeMillis()
+            val app = OpenMeteo.parseForecast(get(url), name, lat, lon, now).detail!!
+            val only = { m: String -> org.json.JSONObject(get(url.replace(Regex("&models=[^&]*"), "&models=$m"))) }
+            val hrrr = only(ModelBlend.SHORT)
+            val ecmwf = only(ModelBlend.LONG)
+
+            // Next hours: the app's hours are HRRR's, temperature, rain chance and rain together.
+            val hh = hrrr.getJSONObject("hourly")
+            val ht = hh.getJSONArray("time")
+            var lastHrrr = 0.0
+            var checked = 0
+            for (i in 0 until ht.length()) {
+                val t = ht.getLong(i) * 1000
+                val ahead = (t - now) / 3_600_000.0
+                if (ahead < 0 || ahead > 48 || hh.getJSONArray("temperature_2m").isNull(i)) continue
+                lastHrrr = ahead
             }
+            for (i in 0 until ht.length()) {
+                val t = ht.getLong(i) * 1000
+                val ahead = (t - now) / 3_600_000.0
+                if (ahead < 0 || ahead > lastHrrr - ModelBlend.BLEND_H) continue
+                val mine = app.hourly.firstOrNull { it.time == t } ?: continue
+                val temp = hh.getJSONArray("temperature_2m").getDouble(i)
+                val prob = hh.getJSONArray("precipitation_probability").optInt(i, -1)
+                val rain = hh.getJSONArray("precipitation").getDouble(i)
+                assertTrue("$name +${ahead.toInt()} h: app ${mine.tempC} vs HRRR $temp", kotlin.math.abs(mine.tempC - temp) < 0.05)
+                assertTrue("$name +${ahead.toInt()} h: app rain chance ${mine.precipProb} vs HRRR $prob", mine.precipProb == prob)
+                assertTrue("$name +${ahead.toInt()} h: app rain ${mine.precipMm} vs HRRR $rain", kotlin.math.abs((mine.precipMm ?: -1.0) - rain) < 0.005)
+                checked++
+            }
+            println("SPLIT $name: $checked hours match HRRR (its run reaches +${lastHrrr.toInt()} h)")
+            assertTrue("$name: too few HRRR hours checked ($checked)", checked >= 24)
+
+            // Days 3 to 7: ECMWF IFS's own highs and lows.
+            val ed = ecmwf.getJSONObject("daily")
+            for (i in 2 until 7) {
+                val hi = ed.getJSONArray("temperature_2m_max").getDouble(i)
+                val lo = ed.getJSONArray("temperature_2m_min").getDouble(i)
+                assertTrue("$name day ${i + 1}: app ${app.daily[i].highC}/${app.daily[i].lowC} vs ECMWF $hi/$lo",
+                    kotlin.math.abs(app.daily[i].highC - hi) < 0.05 && kotlin.math.abs(app.daily[i].lowC - lo) < 0.05)
+            }
+            println("SPLIT $name: days 3-7 match ECMWF IFS " +
+                (2 until 7).joinToString { "${Temperature.format(app.daily[it].highC, TempUnit.FAHRENHEIT)}/${Temperature.format(app.daily[it].lowC, TempUnit.FAHRENHEIT)}" })
+
+            // The hand-over: hour to hour, no step bigger than the weather's own across 36-54 h.
+            val span = app.hourly.filter { val a = (it.time - now) / 3_600_000.0; a in 36.0..54.0 }
+            val steps = span.zipWithNext { a, b -> kotlin.math.abs(b.tempC - a.tempC) * 9 / 5 }
+            val probSteps = span.zipWithNext { a, b -> kotlin.math.abs((b.precipProb ?: 0) - (a.precipProb ?: 0)) }
+            println("SPLIT $name: hand-over steps ${steps.map { "%.1f".format(it) }} °F, rain chance ${probSteps}")
+            assertTrue("$name: a ${steps.maxOrNull()} °F jump at the hand-over", (steps.maxOrNull() ?: 0.0) <= 5.0)
         }
 
         // National Weather Service alerts for Tacoma: any number (often none), parsed.

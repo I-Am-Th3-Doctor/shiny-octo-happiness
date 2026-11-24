@@ -22,41 +22,49 @@ class ModelBlendTest {
     private fun arr(vs: List<Any?>) = JSONArray().apply { vs.forEach { put(it ?: JSONObject.NULL) } }
 
     /**
-     * Three models as Open-Meteo names them: HRRR 10 °C until 48 h out (then nothing; one hole at
-     * +5 h), ECMWF 20 °C, best_match 15 °C. HRRR gives no rain chance or UV; only best_match has
-     * visibility.
+     * Three models as Open-Meteo names them: HRRR 10 °C until [hrrrEndH] hours out (then nothing; one
+     * hole at +5 h), ECMWF 20 °C, best_match 15 °C. Each model gives a rain chance (HRRR 80, ECMWF 60,
+     * best_match 30), as Open-Meteo does; only best_match has daily UV.
      */
-    private fun multi(): JSONObject {
-        val hrrrT = times.map { t -> if (t > now + 48 * hour || t == now + 5 * hour) null else 10.0 }
+    private fun multi(hrrrEndH: Int = 48): JSONObject {
+        val hrrr = { t: Long, v: Any -> if (t > now + hrrrEndH * hour || t == now + 5 * hour) null else v }
         val hourly = JSONObject().put("time", arr(times.map { it / 1000 }))
-            .put("temperature_2m_gfs_hrrr", arr(hrrrT))
+            .put("temperature_2m_gfs_hrrr", arr(times.map { hrrr(it, 10.0) }))
             .put("temperature_2m_ecmwf_ifs", arr(times.map { 20.0 }))
             .put("temperature_2m_best_match", arr(times.map { 15.0 }))
-            .put("precipitation_probability_gfs_hrrr", arr(times.map { null }))
+            .put("precipitation_probability_gfs_hrrr", arr(times.map { 80 }))
             .put("precipitation_probability_ecmwf_ifs", arr(times.map { 60 }))
             .put("precipitation_probability_best_match", arr(times.map { 30 }))
-            .put("weather_code_gfs_hrrr", arr(times.map { 61 }))
+            .put("weather_code_gfs_hrrr", arr(times.map { hrrr(it, 61) }))
             .put("weather_code_ecmwf_ifs", arr(times.map { 3 }))
             .put("weather_code_best_match", arr(times.map { 2 }))
-            .put("wind_direction_10m_gfs_hrrr", arr(times.map { 350 }))
+            .put("is_day_gfs_hrrr", arr(times.map { 1 }))
+            .put("is_day_ecmwf_ifs", arr(times.map { 1 }))
+            .put("is_day_best_match", arr(times.map { 1 }))
+            .put("wind_direction_10m_gfs_hrrr", arr(times.map { hrrr(it, 350) }))
             .put("wind_direction_10m_ecmwf_ifs", arr(times.map { 10 }))
             .put("wind_direction_10m_best_match", arr(times.map { 0 }))
-            .put("precipitation_gfs_hrrr", arr(times.map { 0.0 }))
+            .put("precipitation_gfs_hrrr", arr(times.map { hrrr(it, 0.0) }))
             .put("precipitation_ecmwf_ifs", arr(times.map { 0.5 }))
             .put("precipitation_best_match", arr(times.map { 0.2 }))
         val daily = JSONObject().put("time", arr(days.map { it / 1000 }))
-            .put("temperature_2m_max_gfs_hrrr", arr(days.map { 99.0 }))
-            .put("temperature_2m_max_ecmwf_ifs", arr(days.map { 99.0 }))
-            .put("temperature_2m_max_best_match", arr(days.map { 99.0 }))
-            .put("temperature_2m_min_ecmwf_ifs", arr(days.map { -99.0 }))
-            .put("temperature_2m_min_best_match", arr(days.map { -99.0 }))
-            .put("weather_code_gfs_hrrr", arr(days.map { 61 }))
+            .put("temperature_2m_max_gfs_hrrr", arr(days.mapIndexed { i, _ -> if (i < 2) 99.0 else null }))
+            .put("temperature_2m_max_ecmwf_ifs", arr(days.map { 21.0 }))
+            .put("temperature_2m_max_best_match", arr(days.map { 16.0 }))
+            .put("temperature_2m_min_gfs_hrrr", arr(days.mapIndexed { i, _ -> if (i < 2) -99.0 else null }))
+            .put("temperature_2m_min_ecmwf_ifs", arr(days.map { 19.0 }))
+            .put("temperature_2m_min_best_match", arr(days.map { 14.0 }))
+            .put("weather_code_gfs_hrrr", arr(days.mapIndexed { i, _ -> if (i < 2) 61 else null }))
             .put("weather_code_ecmwf_ifs", arr(days.map { 3 }))
             .put("weather_code_best_match", arr(days.map { 2 }))
+            .put("precipitation_probability_max_gfs_hrrr", arr(days.map { 80 }))
             .put("precipitation_probability_max_ecmwf_ifs", arr(days.map { 60 }))
             .put("precipitation_probability_max_best_match", arr(days.map { 30 }))
-            .put("precipitation_sum_best_match", arr(days.map { 0.0 }))
-            .put("uv_index_max_ecmwf_ifs", arr(days.map { 4.0 }))
+            .put("precipitation_sum_gfs_hrrr", arr(days.mapIndexed { i, _ -> if (i < 2) 0.0 else null }))
+            .put("precipitation_sum_ecmwf_ifs", arr(days.map { 12.0 }))
+            .put("precipitation_sum_best_match", arr(days.map { 4.8 }))
+            .put("uv_index_max_gfs_hrrr", arr(days.map { null }))
+            .put("uv_index_max_ecmwf_ifs", arr(days.map { null }))
             .put("uv_index_max_best_match", arr(days.map { 2.0 }))
             .put("sunrise_best_match", arr(days.map { it / 1000 + 7 * 3600 }))
             .put("sunset_best_match", arr(days.map { it / 1000 + 16 * 3600 }))
@@ -74,38 +82,70 @@ class ModelBlendTest {
 
     @Test fun theNext48HoursAreHrrrAndLaterDaysAreEcmwf() {
         val b = ModelBlend.blend(multi(), now)
-        assertEquals(10.0, b.h("temperature_2m", now + 10 * hour), 1e-9)
-        assertEquals(10.0, b.h("temperature_2m", now - 6 * hour), 1e-9)
-        assertEquals(61.0, b.h("weather_code", now + 10 * hour), 0.0)
-        assertEquals(350.0, b.h("wind_direction_10m", now + 10 * hour), 1e-9)
-        assertEquals(20.0, b.h("temperature_2m", now + 60 * hour), 1e-9)
-        assertEquals(20.0, b.h("temperature_2m", now + 48 * hour), 1e-9)
-        assertEquals(3.0, b.h("weather_code", now + 60 * hour), 0.0)
-        assertEquals(60.0, b.h("precipitation_probability", now + 60 * hour), 1e-9)
+        for (t in listOf(now - 6 * hour, now + 10 * hour, now + 42 * hour)) {
+            assertEquals(10.0, b.h("temperature_2m", t), 1e-9)
+            assertEquals(80.0, b.h("precipitation_probability", t), 1e-9)
+            assertEquals(0.0, b.h("precipitation", t), 1e-9)
+            assertEquals(61.0, b.h("weather_code", t), 0.0)
+            assertEquals(350.0, b.h("wind_direction_10m", t), 1e-9)
+        }
+        for (t in listOf(now + 48 * hour, now + 60 * hour, now + 150 * hour)) {
+            assertEquals(20.0, b.h("temperature_2m", t), 1e-9)
+            assertEquals(60.0, b.h("precipitation_probability", t), 1e-9)
+            assertEquals(0.5, b.h("precipitation", t), 1e-9)
+            assertEquals(3.0, b.h("weather_code", t), 0.0)
+        }
     }
 
-    @Test fun theHandOverIsGradual() {
+    @Test fun theHandOverIsGradualOverHours42To48() {
         val b = ModelBlend.blend(multi(), now)
-        // Half way through the cross-fade: half of each.
-        assertEquals(15.0, b.h("temperature_2m", now + 44 * hour), 1e-9)
-        assertEquals(45.0, b.h("precipitation_probability", now + 44 * hour), 1e-9)
+        // Half way through the cross-fade: half of each, temperature and rain chance alike.
+        assertEquals(15.0, b.h("temperature_2m", now + 45 * hour), 1e-9)
+        assertEquals(70.0, b.h("precipitation_probability", now + 45 * hour), 1e-9)
+        assertEquals(0.25, b.h("precipitation", now + 45 * hour), 1e-9)
+        assertEquals(10.0 + 10.0 / 6, b.h("temperature_2m", now + 43 * hour), 1e-9)
         // 350° and 10° meet at north, not south.
-        val dir = b.h("wind_direction_10m", now + 44 * hour)
+        val dir = b.h("wind_direction_10m", now + 45 * hour)
         assertTrue("$dir", min(dir, 360 - dir) < 1e-6)
-        // No jump anywhere between the models (the one HRRR hole falls back to best_match, 5° off).
-        val temps = b.getJSONObject("hourly").getJSONArray("temperature_2m")
-        val steps = (1 until temps.length()).map { abs(temps.getDouble(it) - temps.getDouble(it - 1)) }
-        val fade = (1 until temps.length()).filter { times[it] > now + 40 * hour && times[it] <= now + 48 * hour }
-        for (i in fade) assertTrue("step ${steps[i - 1]} at ${i}", steps[i - 1] <= 10.0 / 8 + 1e-9)
-        assertEquals(10.0 / 8, fade.maxOf { steps[it - 1] }, 1e-9)
+        assertNoJump(b, from = now + 30 * hour, to = now + 60 * hour)
     }
 
-    @Test fun aMissingValueComesFromBestMatchAlone() {
+    /** No hour-to-hour step in temperature or rain chance bigger than an even 6-hour cross-fade's. */
+    private fun assertNoJump(b: JSONObject, from: Long, to: Long) {
+        for (key in listOf("temperature_2m", "precipitation_probability")) {
+            val a = b.getJSONObject("hourly").getJSONArray(key)
+            val gap = abs(a.getDouble(at(from)) - a.getDouble(at(to)))
+            for (i in (at(from) + 1)..at(to)) {
+                val step = abs(a.getDouble(i) - a.getDouble(i - 1))
+                assertTrue("$key step $step at ${(times[i] - now) / hour} h", step <= gap / 6 + 1e-9)
+            }
+        }
+    }
+
+    @Test fun whenHrrrsRunEndsEarlyTheHandOverEndsWithIt() {
+        // HRRR's latest run reaches 43 h: its last 6 hours fade into ECMWF, no jump at 43.
+        val b = ModelBlend.blend(multi(hrrrEndH = 43), now)
+        assertEquals(10.0, b.h("temperature_2m", now + 37 * hour), 1e-9)
+        assertEquals(15.0, b.h("temperature_2m", now + 40 * hour), 1e-9)
+        assertEquals(70.0, b.h("precipitation_probability", now + 40 * hour), 1e-9)
+        assertEquals(20.0, b.h("temperature_2m", now + 43 * hour), 1e-9)
+        assertEquals(20.0, b.h("temperature_2m", now + 46 * hour), 1e-9)
+        assertNoJump(b, from = now + 30 * hour, to = now + 50 * hour)
+    }
+
+    @Test fun anHourAModelLacksIsBestMatchWhole() {
         val b = ModelBlend.blend(multi(), now)
-        // HRRR's hole: best_match's 15, not ECMWF's 20.
-        assertEquals(15.0, b.h("temperature_2m", now + 5 * hour), 1e-9)
-        // HRRR gives no rain chance: best_match's, for that value only (the temperature is still HRRR's).
-        assertEquals(30.0, b.h("precipitation_probability", now + 10 * hour), 1e-9)
+        // HRRR's hole at +5 h: every value of that hour is best_match's (not HRRR's rain chance
+        // with best_match's temperature, nor ECMWF's).
+        val t = now + 5 * hour
+        assertEquals(15.0, b.h("temperature_2m", t), 1e-9)
+        assertEquals(30.0, b.h("precipitation_probability", t), 1e-9)
+        assertEquals(0.2, b.h("precipitation", t), 1e-9)
+        assertEquals(2.0, b.h("weather_code", t), 0.0)
+        assertEquals(0.0, b.h("wind_direction_10m", t), 1e-9)
+        // The hours either side are HRRR's whole.
+        assertEquals(80.0, b.h("precipitation_probability", t - hour), 1e-9)
+        assertEquals(80.0, b.h("precipitation_probability", t + hour), 1e-9)
         val c = b.getJSONObject("current")
         assertEquals(11.0, c.getDouble("temperature_2m"), 1e-9)
         assertEquals(61, c.getInt("weather_code"))
@@ -113,29 +153,62 @@ class ModelBlendTest {
         assertEquals(24000.0, c.getDouble("visibility"), 1e-9)
     }
 
-    @Test fun daysFollowTheirHours() {
+    @Test fun noHrrrHereMeansBestMatchForTheFirst48Hours() {
+        // A place outside HRRR's map: best_match stands in for it, hour by hour, still fading into ECMWF at 42-48.
+        val m = multi()
+        val h = m.getJSONObject("hourly")
+        for (k in h.keys().asSequence().filter { it.endsWith("_gfs_hrrr") && !it.startsWith("is_day") && !it.startsWith("precipitation_probability") }.toList()) {
+            h.put(k, arr(times.map { null }))
+        }
+        val b = ModelBlend.blend(m, now)
+        assertEquals(15.0, b.h("temperature_2m", now + 10 * hour), 1e-9)
+        assertEquals(30.0, b.h("precipitation_probability", now + 10 * hour), 1e-9)
+        assertEquals(17.5, b.h("temperature_2m", now + 45 * hour), 1e-9)
+        assertEquals(20.0, b.h("temperature_2m", now + 60 * hour), 1e-9)
+    }
+
+    @Test fun todayAndTomorrowFollowTheirHoursAndDay3OnIsEcmwf() {
         val b = ModelBlend.blend(multi(), now)
-        // Today and tomorrow: HRRR's hours (10°; tomorrow's one hole, 1 AM, at best_match's 15).
+        // Today and tomorrow: the strip's own hours (10°; tomorrow's one hole, 1 AM, best_match's 15).
         assertEquals(10.0, b.d("temperature_2m_max", 0), 1e-9)
         assertEquals(10.0, b.d("temperature_2m_min", 0), 1e-9)
         assertEquals(0.0, b.d("precipitation_sum", 0), 1e-9)
+        assertEquals(80.0, b.d("precipitation_probability_max", 0), 1e-9)
         assertEquals(15.0, b.d("temperature_2m_max", 1), 1e-9)
         assertEquals(10.0, b.d("temperature_2m_min", 1), 1e-9)
         assertEquals(61.0, b.d("weather_code", 1), 0.0)
         assertEquals(2.0, b.d("uv_index_max", 0), 1e-9)
-        // The hand-over day spans both.
-        assertEquals(20.0, b.d("temperature_2m_max", 2), 1e-9)
-        assertEquals(10.0, b.d("temperature_2m_min", 2), 1e-9)
-        // Days 3 to 7: ECMWF.
-        for (i in 3..6) {
-            assertEquals(20.0, b.d("temperature_2m_max", i), 1e-9)
-            assertEquals(20.0, b.d("temperature_2m_min", i), 1e-9)
+        // Day 3 on: ECMWF IFS's own days, the hand-over day included.
+        for (i in 2..6) {
+            assertEquals(21.0, b.d("temperature_2m_max", i), 1e-9)
+            assertEquals(19.0, b.d("temperature_2m_min", i), 1e-9)
             assertEquals(60.0, b.d("precipitation_probability_max", i), 1e-9)
             assertEquals(12.0, b.d("precipitation_sum", i), 1e-9)
             assertEquals(3.0, b.d("weather_code", i), 0.0)
-            assertEquals(4.0, b.d("uv_index_max", i), 1e-9)
+            // ECMWF publishes no UV: best_match's.
+            assertEquals(2.0, b.d("uv_index_max", i), 1e-9)
         }
         assertEquals(days[4] / 1000 + 7 * 3600, b.getJSONObject("daily").getJSONArray("sunrise").getLong(4))
+    }
+
+    @Test fun aDayEcmwfLacksIsBestMatchWhole() {
+        val m = multi()
+        m.getJSONObject("daily").getJSONArray("temperature_2m_max_ecmwf_ifs").put(5, JSONObject.NULL)
+        val b = ModelBlend.blend(m, now)
+        assertEquals(16.0, b.d("temperature_2m_max", 5), 1e-9)
+        assertEquals(14.0, b.d("temperature_2m_min", 5), 1e-9)
+        assertEquals(30.0, b.d("precipitation_probability_max", 5), 1e-9)
+        assertEquals(2.0, b.d("weather_code", 5), 0.0)
+        assertEquals(21.0, b.d("temperature_2m_max", 4), 1e-9)
+    }
+
+    @Test fun eachPlaceGetsItsOwnSplit() {
+        // Two places in one session, HRRR's runs ending at different hours: each answer is split on its own.
+        val tacoma = ModelBlend.blend(multi(hrrrEndH = 48), now)
+        val renton = ModelBlend.blend(multi(hrrrEndH = 43), now)
+        assertEquals(10.0, tacoma.h("temperature_2m", now + 42 * hour), 1e-9)
+        assertEquals(20.0, renton.h("temperature_2m", now + 43 * hour), 1e-9)
+        assertEquals(10.0, ModelBlend.blend(multi(hrrrEndH = 48), now).h("temperature_2m", now + 42 * hour), 1e-9)
     }
 
     @Test fun theAppReadsTheBlend() {
@@ -144,11 +217,14 @@ class ModelBlendTest {
         assertEquals(WeatherCodes.describe(61), w.condition)
         val d = w.detail!!
         assertEquals(7, d.daily.size)
-        assertEquals(20.0, d.daily[5].highC, 1e-9)
+        assertEquals(21.0, d.daily[5].highC, 1e-9)
+        assertEquals(19.0, d.daily[2].lowC, 1e-9)
         assertEquals(60, d.daily[5].precipPct)
-        assertEquals(10.0, d.hourly.first { it.time == now + 10 * hour }.tempC, 1e-9)
+        val h10 = d.hourly.first { it.time == now + 10 * hour }
+        assertEquals(10.0, h10.tempC, 1e-9)
+        assertEquals(80, h10.precipProb)
+        assertEquals(0.0, h10.precipMm!!, 1e-9)
         assertEquals(20.0, d.hourly.first { it.time == now + 60 * hour }.tempC, 1e-9)
-        assertEquals(30, d.hourly.first { it.time == now + 10 * hour }.precipProb)
         assertEquals(1.5, d.uvIndex!!, 1e-9)
     }
 

@@ -9,21 +9,24 @@ import kotlin.math.sin
 /**
  * Picks the best Open-Meteo model for each stretch of the forecast, from one request that asks for
  * several (`models=best_match,gfs_hrrr,ecmwf_ifs`; Open-Meteo then names each variable after its
- * model, e.g. `temperature_2m_gfs_hrrr`):
+ * model, e.g. `temperature_2m_gfs_hrrr`). Worked out afresh for each answer, so each place (Tacoma,
+ * Renton, anywhere) gets its own split:
  *
  *  - the next 48 hours (now, the hourly strip, the scrub bar, the precip card, the time-lapse hours)
  *    come from HRRR, NOAA's 3 km model, updated every hour: the best at short-range rain timing in
  *    the US;
- *  - days 3 to 7 come from ECMWF IFS (9 km), the best global model at medium range;
- *  - across [BLEND_FROM_H]..[BLEND_TO_H] hours ahead the two are cross-faded hour by hour, so the
- *    temperature and rain chance don't jump where one model hands over to the other;
- *  - a value one model doesn't give (HRRR outside the US, or past its run; rain chance, UV or
- *    visibility, which some models don't report) is taken from Open-Meteo's `best_match`, that
- *    value only.
+ *  - days 3 to 7 come from ECMWF IFS (9 km), the best global model at medium range: the 7-day list
+ *    takes its daily highs, lows and rain straight from it;
+ *  - one model per hour: an hour's values (temperature, rain chance, rain, code, wind...) all come
+ *    from the same model, so the strip, the rain chance and the precip graph can't disagree. If that
+ *    model has no forecast for the hour, the whole hour is Open-Meteo's `best_match`;
+ *  - over the last [BLEND_H] hours of HRRR's stretch (hours 42-48, or earlier when HRRR's latest
+ *    run ends before 48) each hour is cross-faded from the HRRR hour into the ECMWF hour, so the
+ *    temperature and rain chance don't jump where one hands over to the other.
  *
- * The result is shaped like a single-model answer (plain variable names), so the parsers read it as
- * before. An answer with no model names in it (a single-model request) passes through unchanged.
- * Pure; JVM-tested.
+ * A value a model never publishes at all (daily UV) comes from best_match. The result is shaped
+ * like a single-model answer (plain variable names), so the parsers read it as before. An answer
+ * with no model names in it (a single-model request) passes through unchanged. Pure; JVM-tested.
  */
 object ModelBlend {
 
@@ -32,21 +35,27 @@ object ModelBlend {
     const val LONG = "ecmwf_ifs"
     val MODELS = listOf(BEST, SHORT, LONG)
 
-    /** HRRR alone up to here (hours ahead of now)... */
-    const val BLEND_FROM_H = 40.0
-    /** ...ECMWF alone from here; in between, a cross-fade. */
-    const val BLEND_TO_H = 48.0
+    /** HRRR's stretch: the next 48 hours (less if its latest run ends sooner). */
+    const val SHORT_RANGE_H = 48.0
+    /** The cross-fade: the last 6 hours of that stretch. */
+    const val BLEND_H = 6.0
+    /** Today and tomorrow follow the hours; from the third day on, ECMWF's days. */
+    const val SHORT_DAYS = 2
 
     private const val HOUR_MS = 3_600_000L
     private const val DAY_MS = 24 * HOUR_MS
 
-    /** How much of the moment [t] comes from the short-range model (1: all HRRR; 0: all ECMWF). */
-    fun shortWeight(t: Long, nowMs: Long): Double {
+    /**
+     * How much of the moment [t] comes from the short-range model (1: all HRRR; 0: all ECMWF), when
+     * HRRR's stretch ends [endH] hours after [nowMs]: 1 up to [BLEND_H] before the end, 0 from the end.
+     */
+    fun shortWeight(t: Long, nowMs: Long, endH: Double = SHORT_RANGE_H): Double {
         val h = (t - nowMs) / HOUR_MS.toDouble()
+        val from = endH - BLEND_H
         return when {
-            h <= BLEND_FROM_H -> 1.0
-            h >= BLEND_TO_H -> 0.0
-            else -> (BLEND_TO_H - h) / (BLEND_TO_H - BLEND_FROM_H)
+            h <= from -> 1.0
+            h >= endH -> 0.0
+            else -> (endH - h) / BLEND_H
         }
     }
 
@@ -67,8 +76,8 @@ object ModelBlend {
         val daily = root.optJSONObject("daily")
         if (!hasModelKeys(current) && !hasModelKeys(hourly) && !hasModelKeys(daily)) return root
         val out = JSONObject(root.toString())
-        current?.let { out.put("current", blendCurrent(it, hourly, nowMs)) }
         val hours = hourly?.let { blendHourly(it, nowMs) }
+        current?.let { out.put("current", blendCurrent(it, hourly, nowMs)) }
         hours?.let { out.put("hourly", it) }
         daily?.let { out.put("daily", blendDaily(it, hours, nowMs)) }
         return out
@@ -92,105 +101,185 @@ object ModelBlend {
 
     private fun JSONObject.num(base: String, model: String, i: Int?) = raw(base, model, i).num()
 
-    /**
-     * [base] at [i], [w] of it from HRRR and the rest from ECMWF, each falling back to best_match
-     * where it has no value.
-     */
-    private fun JSONObject.mix(base: String, i: Int?, w: Double): Any? {
-        if (base in TIMES) return raw(base, BEST, i) ?: raw(base, SHORT, i) ?: raw(base, LONG, i)
-        if (base in CATEGORICAL) {
-            val s = raw(base, SHORT, i) ?: raw(base, BEST, i)
-            val l = raw(base, LONG, i) ?: raw(base, BEST, i)
-            return if (w >= 0.5) s ?: l else l ?: s
+    private fun mixNum(base: String, s: Double?, l: Double?, w: Double): Double? = when {
+        s == null || l == null -> s ?: l
+        w >= 1.0 -> s
+        w <= 0.0 -> l
+        base == DIRECTION -> {
+            // Directions blend round the compass (350° and 10° make 0°, not 180°).
+            val r = Math.toRadians(s)
+            val q = Math.toRadians(l)
+            val deg = Math.toDegrees(atan2(w * sin(r) + (1 - w) * sin(q), w * cos(r) + (1 - w) * cos(q)))
+            (deg + 360.0) % 360.0
         }
-        val best = num(base, BEST, i)
-        val s = num(base, SHORT, i) ?: best
-        val l = num(base, LONG, i) ?: best
-        return when {
-            s == null || l == null -> s ?: l
-            w >= 1.0 -> s
-            w <= 0.0 -> l
-            base == DIRECTION -> {
-                // Directions blend round the compass (350° and 10° make 0°, not 180°).
-                val r = Math.toRadians(s)
-                val q = Math.toRadians(l)
-                val deg = Math.toDegrees(atan2(w * sin(r) + (1 - w) * sin(q), w * cos(r) + (1 - w) * cos(q)))
-                (deg + 360.0) % 360.0
-            }
-            else -> w * s + (1 - w) * l
-        }
+        else -> w * s + (1 - w) * l
     }
 
     private fun bases(o: JSONObject): List<String> =
         o.keys().asSequence().map { baseOf(it) }.filter { it != "time" && it != "interval" }.distinct().toList()
 
-    private fun JSONObject.length(): Int =
-        keys().asSequence().mapNotNull { optJSONArray(it)?.length() }.maxOrNull() ?: 0
+    /** The variables [model] publishes in [o] (a value for at least one entry). */
+    private fun published(o: JSONObject, model: String, bs: List<String>): List<String> = bs.filter { b ->
+        val a = o.optJSONArray("${b}_$model") ?: (if (model == BEST) o.optJSONArray(b) else null)
+        a != null && (0 until a.length()).any { !a.isNull(it) }
+    }
+
+    /**
+     * Temperatures: without them a model has no forecast for the entry, whatever else it fills in
+     * (Open-Meteo gives every model a rain chance and day/night flag, even past the end of its run).
+     */
+    private val CORE = setOf("temperature_2m", "temperature_2m_max", "temperature_2m_min")
+
+    /** Whether [model] gives entry [i] whole: its temperature, and every other variable it publishes. */
+    private fun JSONObject.covers(model: String, vars: List<String>, i: Int): Boolean {
+        val core = keys().asSequence().map { baseOf(it) }.filter { it in CORE }.toSet()
+        return core.isNotEmpty() && core.all { raw(it, model, i) != null } && vars.all { raw(it, model, i) != null }
+    }
+
+    /**
+     * Entry [i]'s value of [base]: [w] of it from [s], the rest from [l] (each a model that gives the
+     * entry whole). A value neither publishes comes from best_match.
+     */
+    private fun JSONObject.pick(base: String, i: Int, s: String, l: String, w: Double): Any? {
+        if (base in TIMES) return raw(base, BEST, i) ?: raw(base, SHORT, i) ?: raw(base, LONG, i)
+        if (base in CATEGORICAL) {
+            val a = raw(base, s, i)
+            val b = raw(base, l, i)
+            return (if (w >= 0.5) a ?: b else b ?: a) ?: raw(base, BEST, i)
+        }
+        val a = num(base, s, i)
+        val b = num(base, l, i)
+        return when {
+            w >= 1.0 -> a
+            w <= 0.0 -> b
+            else -> mixNum(base, a, b, w)
+        } ?: num(base, BEST, i)
+    }
 
     // ------------------------------------------------------------------ sections
 
+    /** HRRR's stretch for this answer: the hours ahead of [nowMs] to its last whole hour, at most 48. */
+    private fun shortEndH(h: JSONObject, nowMs: Long): Double {
+        val time = h.optJSONArray("time") ?: return SHORT_RANGE_H
+        val vars = published(h, SHORT, bases(h))
+        var last: Double? = null
+        for (i in 0 until time.length()) {
+            val ahead = (time.optLong(i) * 1000L - nowMs) / HOUR_MS.toDouble()
+            if (ahead > SHORT_RANGE_H) break
+            if (ahead >= 0 && h.covers(SHORT, vars, i)) last = ahead
+        }
+        // No HRRR here (outside the US): best_match stands in for it over the same 48 hours.
+        return last ?: SHORT_RANGE_H
+    }
+
+    private class Plan(val weights: List<Double>, val short: List<String>, val long: List<String>)
+
+    /** For each hour: its share from the short side, and which model gives each side the hour whole. */
+    private fun plan(h: JSONObject, nowMs: Long): Plan? {
+        val time = h.optJSONArray("time") ?: return null
+        val bs = bases(h)
+        val sv = published(h, SHORT, bs)
+        val lv = published(h, LONG, bs)
+        val end = shortEndH(h, nowMs)
+        val n = time.length()
+        val weights = (0 until n).map { shortWeight(time.optLong(it) * 1000L, nowMs, end) }
+        val short = (0 until n).map { if (h.covers(SHORT, sv, it)) SHORT else BEST }
+        val long = (0 until n).map { if (h.covers(LONG, lv, it)) LONG else BEST }
+        return Plan(weights, short, long)
+    }
+
+    private fun blendHourly(h: JSONObject, nowMs: Long): JSONObject {
+        val time = h.optJSONArray("time") ?: return h
+        val p = plan(h, nowMs) ?: return h
+        val out = JSONObject().put("time", time)
+        for (b in bases(h)) {
+            out.put(b, JSONArray().apply {
+                for (i in 0 until time.length()) put(h.pick(b, i, p.short[i], p.long[i], p.weights[i]) ?: JSONObject.NULL)
+            })
+        }
+        return out
+    }
+
     /**
-     * Now: HRRR's reading (best_match where it has none). Open-Meteo answers `current` once, not per
-     * model (it's best_match's); then each value HRRR gives hour by hour is HRRR's, read between the
-     * hours either side of now, and the rest stay best_match's.
+     * Now: read from the hours either side of now, the same models and shares as the hourly strip
+     * (HRRR's, or best_match's where HRRR has no hour). Open-Meteo answers `current` once, not per
+     * model (it's best_match's); a reading it doesn't give hour by hour (feels like, humidity, UV...)
+     * stays best_match's.
      */
     private fun blendCurrent(c: JSONObject, hourly: JSONObject?, nowMs: Long): JSONObject {
         val out = JSONObject()
         c.opt("time")?.let { out.put("time", it) }
         c.opt("interval")?.let { out.put("interval", it) }
-        val split = hasModelKeys(c)
-        for (b in bases(c)) {
-            val v = if (split) c.mix(b, null, 1.0) else hourly?.let { shortAt(it, b, nowMs) } ?: c.opt(b)
-            out.put(b, v ?: JSONObject.NULL)
+        if (hasModelKeys(c)) {
+            for (b in bases(c)) {
+                val v = if (b in CATEGORICAL) c.raw(b, SHORT, null) ?: c.raw(b, BEST, null)
+                else c.num(b, SHORT, null) ?: c.num(b, BEST, null)
+                out.put(b, v ?: JSONObject.NULL)
+            }
+            return out
         }
+        val at = hourly?.let { hourAt(it, nowMs) }
+        for (b in bases(c)) out.put(b, at?.invoke(b) ?: c.opt(b) ?: JSONObject.NULL)
         return out
     }
 
-    /** HRRR's [base] at [nowMs], between the hours either side (a code or flag: the nearer hour's); null if it has none. */
-    private fun shortAt(h: JSONObject, base: String, nowMs: Long): Any? {
-        if (base == "is_day") return null
+    /** The hourly answer at [nowMs], between the hours either side (a code: the nearer hour's). */
+    private fun hourAt(h: JSONObject, nowMs: Long): ((String) -> Any?)? {
         val time = h.optJSONArray("time") ?: return null
-        val a = h.optJSONArray("${base}_$SHORT") ?: return null
+        val p = plan(h, nowMs) ?: return null
         var i = -1
         for (k in 0 until time.length()) if (time.optLong(k) * 1000L <= nowMs) i = k else break
         if (i < 0) return null
-        val t0 = time.optLong(i) * 1000L
-        val f = ((nowMs - t0) / HOUR_MS.toDouble()).coerceIn(0.0, 1.0)
-        val v0 = a.opt(i).num()
-        val v1 = if (i + 1 < a.length()) a.opt(i + 1).num() else null
-        if (base in CATEGORICAL) return (if (f < 0.5 || v1 == null) v0 ?: v1 else v1)?.toInt()
-        if (v0 == null || v1 == null) return if (f < 0.5) v0 else v1
-        if (base == DIRECTION) {
-            val r = Math.toRadians(v0)
-            val q = Math.toRadians(v1)
-            return (Math.toDegrees(atan2((1 - f) * sin(r) + f * sin(q), (1 - f) * cos(r) + f * cos(q))) + 360.0) % 360.0
+        val f = ((nowMs - time.optLong(i) * 1000L) / HOUR_MS.toDouble()).coerceIn(0.0, 1.0)
+        val j = if (i + 1 < time.length()) i + 1 else i
+        // A whole hour from a model with no forecast for it is best_match's; best_match's own
+        // reading of now is better than an hourly guess at it, so `current` stands then.
+        if (p.short[i] == BEST || (f > 0 && p.short[j] == BEST)) return null
+        return { b ->
+            if (b == "is_day") null else {
+                val v0 = h.pick(b, i, p.short[i], p.long[i], p.weights[i])
+                val v1 = h.pick(b, j, p.short[j], p.long[j], p.weights[j])
+                when {
+                    !h.has("${b}_$SHORT") -> null
+                    b in CATEGORICAL -> (if (f < 0.5) v0 ?: v1 else v1 ?: v0).num()?.toInt()
+                    else -> {
+                        val a = v0.num()
+                        val z = v1.num()
+                        if (a == null || z == null) (if (f < 0.5) a else z)
+                        else if (b == DIRECTION) mixNum(b, z, a, f) else a + (z - a) * f
+                    }
+                }
+            }
         }
-        return v0 + (v1 - v0) * f
-    }
-
-    private fun blendHourly(h: JSONObject, nowMs: Long): JSONObject {
-        val time = h.optJSONArray("time") ?: return h
-        val out = JSONObject().put("time", time)
-        val weights = (0 until time.length()).map { shortWeight(time.optLong(it) * 1000L, nowMs) }
-        for (b in bases(h)) {
-            out.put(b, JSONArray().apply { weights.forEachIndexed { i, w -> put(h.mix(b, i, w) ?: JSONObject.NULL) } })
-        }
-        return out
     }
 
     /**
-     * Each day takes its models in the share its hours do. A day the blended hours cover whole gets
-     * its high, low, rain chance and rain total from those hours, so the 7-day list agrees with the
-     * hourly strip and the time-lapse hour for hour, across the hand-over too.
+     * Today and tomorrow follow their hours: high, low, rain chance and rain total from the same
+     * hours the strip shows, so the two can't disagree. From the third day on, ECMWF IFS's own days
+     * (each day whole: a day it has no forecast for is best_match's).
      */
     private fun blendDaily(d: JSONObject, hours: JSONObject?, nowMs: Long): JSONObject {
         val time = d.optJSONArray("time") ?: return d
         val out = JSONObject().put("time", time)
         val n = time.length()
         val starts = (0 until n).map { time.optLong(it) * 1000L }
-        val weights = starts.map { s -> (0 until 24).sumOf { k -> shortWeight(s + k * HOUR_MS + HOUR_MS / 2, nowMs) } / 24.0 }
         val bs = bases(d)
-        for (b in bs) out.put(b, JSONArray().apply { weights.forEachIndexed { i, w -> put(d.mix(b, i, w) ?: JSONObject.NULL) } })
+        val sv = published(d, SHORT, bs)
+        val lv = published(d, LONG, bs)
+        // Today's index: the day [nowMs] falls in.
+        val today = starts.indexOfLast { it <= nowMs }.coerceAtLeast(0)
+        for (b in bs) out.put(b, JSONArray().apply {
+            for (i in 0 until n) {
+                val near = i < today + SHORT_DAYS
+                val m = when {
+                    near && d.covers(SHORT, sv, i) -> SHORT
+                    near -> BEST
+                    d.covers(LONG, lv, i) -> LONG
+                    else -> BEST
+                }
+                put(d.pick(b, i, m, m, 1.0) ?: JSONObject.NULL)
+            }
+        })
 
         val ht = hours?.optJSONArray("time") ?: return out
         fun dayValues(key: String, start: Long): List<Double>? {
@@ -207,7 +296,7 @@ object ModelBlend {
         fun derive(dailyKey: String, hourlyKey: String, f: (List<Double>) -> Double) {
             if (dailyKey !in bs) return
             val arr = out.getJSONArray(dailyKey)
-            starts.forEachIndexed { i, s -> dayValues(hourlyKey, s)?.let { arr.put(i, f(it)) } }
+            for (i in 0 until minOf(n, today + SHORT_DAYS)) dayValues(hourlyKey, starts[i])?.let { arr.put(i, f(it)) }
         }
         derive("temperature_2m_max", "temperature_2m") { it.max() }
         derive("temperature_2m_min", "temperature_2m") { it.min() }
