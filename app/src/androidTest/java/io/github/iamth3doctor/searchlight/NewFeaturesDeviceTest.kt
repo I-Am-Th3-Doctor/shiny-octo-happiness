@@ -396,8 +396,10 @@ class NewFeaturesDeviceTest {
             waitFor("gesture service", 15_000) { GestureService.isConnected }
             home { h ->
                 // A double tap on the home card (a tile, not empty space) does nothing new.
+                // (Unfolded, the search pill hides until asked for: then the card itself.)
                 val card = on(h) { a ->
-                    val v = a.findViewById<View>(R.id.searchPill)
+                    val v = a.findViewById<View>(R.id.searchPill).takeIf { it.isShown } ?: a.findViewById(R.id.homeCard)
+                    assertTrue("the card is on screen", v.isShown && v.width > 0)
                     val l = IntArray(2)
                     v.getLocationOnScreen(l)
                     (l[0] + v.width / 2) to (l[1] + v.height / 2)
