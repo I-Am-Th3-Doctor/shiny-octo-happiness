@@ -408,16 +408,10 @@ class NewFeaturesDeviceTest {
                 doubleTap(card.first, card.second)
                 assertNull(on(h) { it.lastDoubleTap })
                 assertTrue(app.getSystemService(PowerManager::class.java).isInteractive)
-                // Tapping the card opens search and the keyboard; close both so empty space
-                // is reachable again (unfolded, the keyboard can cover it).
-                @Suppress("DEPRECATION") h.onActivity { it.onBackPressed() }
-                h.onActivity {
-                    it.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
-                        .hideSoftInputFromWindow(it.window.decorView.windowToken, 0)
-                    it.lastHomeSwipe = null
-                }
-                Thread.sleep(1000)
-
+            }
+            // A fresh home screen (tapping the card opened search) for the empty-space gestures.
+            home { h ->
+                h.onActivity { it.lastHomeSwipe = null }
                 // Long-press on empty space still opens widget edit mode.
                 val spot = on(h) { emptySpot(it) }
                 shell("input swipe ${spot.first} ${spot.second} ${spot.first} ${spot.second} 900")
