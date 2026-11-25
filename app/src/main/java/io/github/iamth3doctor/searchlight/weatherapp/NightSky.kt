@@ -123,6 +123,13 @@ class NightSkyView(context: Context) : View(context) {
     var waxing = true
         set(value) { field = value; invalidate() }
 
+    /**
+     * Only the stars and the moon, no sky of its own: over a living scene (the 7 days), whose own
+     * night sky, clouds and weather show between them.
+     */
+    var clearSky = false
+        set(value) { field = value; invalidate() }
+
     /** Where the moon sits (tests): its centre and radius, in this view. */
     var moonX = 0f
         private set
@@ -174,11 +181,13 @@ class NightSkyView(context: Context) : View(context) {
         val h = height.toFloat()
         if (w <= 0 || h <= 0) return
         place()
-        paint.shader = LinearGradient(0f, 0f, 0f, h, intArrayOf(
-            SceneRenderer.withAlpha(Moonlight.SKY_TOP, 0.94), SceneRenderer.withAlpha(Moonlight.SKY_MID, 0.92),
-            SceneRenderer.withAlpha(Moonlight.SKY_BOTTOM, 0.9)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawRect(0f, 0f, w, h, paint)
-        paint.shader = null
+        if (!clearSky) {
+            paint.shader = LinearGradient(0f, 0f, 0f, h, intArrayOf(
+                SceneRenderer.withAlpha(Moonlight.SKY_TOP, 0.94), SceneRenderer.withAlpha(Moonlight.SKY_MID, 0.92),
+                SceneRenderer.withAlpha(Moonlight.SKY_BOTTOM, 0.9)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+            canvas.drawRect(0f, 0f, w, h, paint)
+            paint.shader = null
+        }
         // Stars, thinning toward the bottom, none over the moon.
         for (i in 0 until STARS) {
             val sx = stars[i * 3] * w

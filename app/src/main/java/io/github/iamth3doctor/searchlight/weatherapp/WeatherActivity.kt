@@ -139,6 +139,25 @@ class WeatherActivity : Activity() {
     private var themeFade: android.animation.ValueAnimator? = null
     /** Whether the fade between themes is under way (tests). */
     val themeFading: Boolean get() = themeFade != null
+
+    /** The 7 days are in their night theme (sunset to sunrise), or fading into it. */
+    var weekNight = false
+        private set
+    /** The fade between the 7 days' day and night themes, while it runs. */
+    private var weekFade: android.animation.ValueAnimator? = null
+    /** Whether the 7 days' fade between themes is under way (tests). */
+    val weekFading: Boolean get() = weekFade != null
+    /** The 7 days' header: its title, back arrow and "Details" (they follow the theme). */
+    private lateinit var weekTitle: TextView
+    private lateinit var weekBack: ImageView
+    private lateinit var weekDetails: TextView
+    /** The 7 days' stars and tonight's moon, over their scene at night. */
+    lateinit var weekNightSky: NightSkyView
+        private set
+    /** The hour swiped to on the 7 days' scene; null: now. */
+    var weekScrubTime: Long? = null
+        private set
+    private var weekScrubBase = DayBar.BEFORE_HOURS
     /** The hour dragged to on the data screen's scene; null: now. */
     var detailScrubTime: Long? = null
         private set
@@ -241,7 +260,10 @@ class WeatherActivity : Activity() {
 
         week = WeekView(this, light).apply {
             clock = { this@WeatherActivity.clock() }
-            onSettled = { armIdle() }
+            // A day played and let go: the scene is back on now.
+            onSettled = { weekScrubTime = null; armIdle() }
+            // Tap a day: the details, with that day open in them.
+            onDayTapped = { i -> openDay(i) }
         }
         val details = TextView(this).apply {
             type(Type.BODY)
@@ -254,7 +276,24 @@ class WeatherActivity : Activity() {
             tag = "weather_week_details"
             setOnClickListener { openDetails() }
         }
-        weekScreen = screen(title(getString(R.string.weather_week_title)), details, week.root, "weather_screen_week")
+        weekDetails = details
+        weekTitle = title(getString(R.string.weather_week_title))
+        weekScreen = screen(weekTitle, details, week.root, "weather_screen_week")
+        weekBack = lastBack!!
+        // The weather now fills the whole page, edge to edge, behind the list's frosted glass.
+        weekScreen.background = GradientDrawable().apply { setColor(0xFF000000.toInt()) }
+        week.preview.tag = "weather_week_scene"
+        weekScreen.addView(week.preview, 0, match())
+        // At night, stars and tonight's moon over it, large and clear (its own small moon left out).
+        weekNightSky = NightSkyView(this).apply { clearSky = true; tag = "weather_week_night_sky" }
+        weekScreen.addView(weekNightSky, 1, match())
+        // Swipe sideways across it: the scene (and the readout over it) goes through the hours.
+        weekScreen.canDragXAt = { _, _ ->
+            weekScrubBase = weekScrubHour()
+            week.previewDay == null
+        }
+        weekScreen.onDragX = { dx -> scrubWeek(dx) }
+        weekScreen.onDragXEnd = { armIdle() }
         // One vertical stack: hero, swipe up to the 7 days, swipe up again (once the list is at its
         // bottom) to the details; swipe down steps back the same way.
         weekScroll = lastScroll!!
@@ -683,13 +722,15 @@ class WeatherActivity : Activity() {
         // Frosted throughout: light, so the status and navigation bars' icons are dark (on the
         // details' night sky, light icons).
         barsFor(v)
-        if (v !== weekScreen) week.stopPreview()
+        if (v !== weekScreen) { week.stopPreview(); endWeekScrub() }
         if (v !== dataScreen) { panel.closeDay(animate = false); endDetailScrub() }
         armIdle()
     }
 
     fun openWeek() {
         if (quickShown) setQuick(false)
+        // The theme for now: night from sunset to sunrise, as on the details.
+        setWeekNight(detailsNightNow(), animate = false)
         week.haptics = soundOn()
         week.render(repo.state.data)
         weekRendered = repo.state
@@ -698,7 +739,7 @@ class WeatherActivity : Activity() {
 
     /** The status and navigation bars' icons: dark on the frosted screens, light on the details' night sky. */
     private fun barsFor(v: View) {
-        val dark = v === dataScreen && detailsNight
+        val dark = (v === dataScreen && detailsNight) || (v === weekScreen && weekNight)
         androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
             isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
@@ -768,11 +809,65 @@ class WeatherActivity : Activity() {
         anim.start()
     }
 
+    /**
+     * The 7 days' theme, day or [night]: by day the scene with dark print on pale frosted glass, as
+     * it was; at night the night scene with every piece of print in moonlight on dark frosted glass.
+     * With [animate], a smooth fade between the two.
+     */
+    fun setWeekNight(night: Boolean, animate: Boolean) {
+        val fade = weekFade
+        if (fade != null) { weekFade = null; fade.cancel() }
+        val from = week.level
+        val to = if (night) 1f else 0f
+        weekNight = night
+        moonTonight()
+        week.preview.renderer.hideMoon = night
+        barsFor(screens.top)
+        if (!animate || !android.animation.ValueAnimator.areAnimatorsEnabled()) { weekLevel(to); return }
+        val anim = android.animation.ValueAnimator.ofFloat(from, to).setDuration(THEME_FADE_MS)
+        anim.interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+        anim.addUpdateListener { weekLevel(it.animatedValue as Float) }
+        anim.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(a: android.animation.Animator) {
+                if (weekFade !== anim) return
+                weekFade = null
+                weekLevel(to)
+            }
+        })
+        weekFade = anim
+        anim.start()
+    }
+
+    /** The 7 days between day (0) and night (1): the list, the caption, the header. */
+    private fun weekLevel(level: Float) {
+        week.level = level
+        weekNightSky.level = level
+        val ev = android.animation.ArgbEvaluator()
+        val ink = ev.evaluate(level, fg, Moonlight.INK) as Int
+        // A soft edge under the print, so it reads straight over the scene: pale by day, dark at night.
+        val shadow = ev.evaluate(level, 0x8CFFFFFF.toInt(), Moonlight.SHADOW) as Int
+        val r = 3 * resources.displayMetrics.density
+        for (t in listOf(weekTitle, weekDetails)) { t.setTextColor(ink); t.setShadowLayer(r, 0f, 1f, shadow) }
+        weekBack.setColorFilter(ink)
+    }
+
+    /** Day [i] from the 7 days: the details, with that day open in their 7 DAYS. */
+    fun openDay(i: Int) {
+        week.stopPreview()
+        openDetails()
+        panel.openDay(i, animate = false)
+        armIdle()
+    }
+
     /** The night sky's moon as it is tonight. */
     private fun moonTonight() {
         val t = clock()
         dataNightSky.moonLit = io.github.iamth3doctor.searchlight.weather.Moon.illumination(t)
         dataNightSky.waxing = io.github.iamth3doctor.searchlight.weather.MetricArt.waxing(t)
+        if (::weekNightSky.isInitialized) {
+            weekNightSky.moonLit = dataNightSky.moonLit
+            weekNightSky.waxing = dataNightSky.waxing
+        }
     }
 
     /** The details' backdrop and header between day (0) and night (1). */
@@ -959,8 +1054,11 @@ class WeatherActivity : Activity() {
             week.render(data)
             weekRendered = state
         }
-        // The 7 days' window and the details' scene show the weather now (unless a day is playing).
-        if (weekShown) week.live()
+        // Sunset or sunrise while the 7 days are open: they fade into the other theme.
+        if (weekShown && weekFade == null && detailsNightNow() != weekNight) setWeekNight(!weekNight, animate = true)
+        if (weekShown && weekNight) moonTonight()
+        // The 7 days' window and the details' scene show the weather now (unless a day is playing or an hour swiped to).
+        if (weekShown && weekScrubTime == null) week.live()
         if (dataShown && detailScrubTime == null) detailLapse.showLive(data, now)
         panel.precip.update(data, now, bar.scrubTime)
         scene.contentDescription = getString(R.string.weather_scene_desc, "${WeatherText.f(c.tempC)}°F", WeatherCodes.describe(c.code))
@@ -1054,6 +1152,32 @@ class WeatherActivity : Activity() {
         if (soundOn()) dataScreen.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
 
+    /** A sideways swipe [dx] on the 7 days: the scene behind them goes to that hour, the readout with it. */
+    private fun scrubWeek(dx: Float) {
+        val data = repo.state.data ?: return
+        if (week.previewDay != null) return
+        val start = DayBar.start(clock())
+        val step = (weekScreen.width / DayBar.HOURS.toFloat()).coerceAtLeast(18 * resources.displayMetrics.density)
+        val hour = (weekScrubBase + (dx / step).roundToInt()).coerceIn(0, DayBar.HOURS)
+        val t = start + hour * HOUR_MS
+        if (t == weekScrubTime) return
+        disarmIdle()
+        weekScrubTime = t
+        week.window.showAt(data, t)
+        if (soundOn()) weekScreen.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    /** Where a swipe starts on the 7 days: from the hour it's on. */
+    private fun weekScrubHour(): Int =
+        weekScrubTime?.let { ((it - DayBar.start(clock())) / HOUR_MS).toInt().coerceIn(0, DayBar.HOURS) } ?: DayBar.BEFORE_HOURS
+
+    /** The 7 days' scene back to now, easing there, the readout and pin with it. */
+    private fun endWeekScrub() {
+        if (weekScrubTime == null) return
+        weekScrubTime = null
+        week.live()
+    }
+
     /** Where a drag starts on the data screen: from the hour it's on. */
     private fun detailScrubHour(): Int =
         detailScrubTime?.let { ((it - DayBar.start(clock())) / HOUR_MS).toInt().coerceIn(0, DayBar.HOURS) } ?: DayBar.BEFORE_HOURS
@@ -1096,12 +1220,12 @@ class WeatherActivity : Activity() {
     /** Showing anything but now: a scrubbed hour (the bar, the number, the precip graph), another day. */
     val awayFromNow: Boolean
         get() = bar.scrubTime != null || week.awayFromNow || panel.precip.awayFromToday || detailLapse.day != null ||
-            detailScrubTime != null
+            detailScrubTime != null || weekScrubTime != null
 
     /** A finger is down, holding or dragging: the idle count waits for it to lift. */
     private val idleBusy: Boolean
         get() = touching || bar.isDragging || hero.scrubbing || week.previewDay != null || detailLapse.day != null || bar.returning ||
-            detailScrubbing
+            detailScrubbing || (::weekScreen.isInitialized && weekScreen.draggingX)
 
     private val idleReturn = Runnable {
         idleReturnAt = null
@@ -1143,6 +1267,7 @@ class WeatherActivity : Activity() {
         if (panel.precip.awayFromToday) panel.precip.backToToday()
         if (bar.scrubTime != null) bar.slideToNow { render() }
         endDetailScrub()
+        endWeekScrub()
         disarmIdle()
     }
 

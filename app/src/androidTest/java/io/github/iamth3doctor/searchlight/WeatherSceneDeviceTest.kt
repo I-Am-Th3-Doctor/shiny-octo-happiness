@@ -44,6 +44,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -1940,6 +1941,142 @@ class WeatherSceneDeviceTest {
         assertFalse(on(h) { sky.isShown })
         assertFalse(on(h) { it.detailLapse.preview.renderer.hideMoon })
         assertTrue(WeatherSkin.luminance(on(h) { it.panel.nowTemp!!.currentTextColor }) < 0.05)
+    }
+
+    @Test fun theSevenDaysFillThePageWithTheWeatherNowDayAndNight() = screen { h ->
+        // Overcast, the case from the 7 days at night.
+        val w = reading(3, 95, 0.0)
+        force(h, w)
+        settle(h)
+        val d = on(h) { it.resources.displayMetrics.density }
+        val ML = io.github.iamth3doctor.searchlight.weatherapp.Moonlight
+
+        // Day: the weather now fills the whole page, edge to edge, behind the list.
+        on(h) { it.nightOverride = false; it.openWeek() }
+        settle(h)
+        val ws = on(h) { it.weekScreen }
+        val week = on(h) { it.week }
+        val scene = on(h) { week.preview }
+        assertSame("the page's own backdrop", ws, on(h) { scene.parent })
+        assertEquals(on(h) { ws.width }, on(h) { scene.width })
+        assertEquals("the whole height: no empty space below the list", on(h) { ws.height }, on(h) { scene.height })
+        assertTrue("alive, the weather now", on(h) { scene.isShown && scene.animating && scene.conditions!!.live })
+        assertEquals(on(h) { it.scene.conditions!!.code }, on(h) { scene.conditions!!.code })
+        assertNull("nothing opaque over it", on(h) { week.window.root.background })
+        assertNull(on(h) { week.root.background })
+        val list = on(h) { week.list }
+        assertEquals(7, on(h) { list.childCount })
+        val dayTexts = texts(list).map { on(h) { _ -> it.text.toString() } }
+        fun glass() = on(h) { (list.background as android.graphics.drawable.GradientDrawable).color!!.defaultColor }
+        assertTrue("frosted glass, the scene through it", (glass() ushr 24) in 0x40..0xE0)
+        assertTrue("pale glass by day", WeatherSkin.luminance(glass() or 0xFF000000.toInt()) > 0.7)
+        assertTrue("dark print by day", WeatherSkin.luminance(texts(list).first().let { t -> on(h) { t.currentTextColor } }) < 0.05)
+        assertFalse(on(h) { it.weekNightSky.isShown })
+        assertTrue(on(h) { androidx.core.view.WindowCompat.getInsetsController(it.window, it.window.decorView).isAppearanceLightStatusBars })
+        shot("141-week-day")
+
+        // Sunset with the page open: a smooth fade into night.
+        on(h) { it.nightOverride = true; it.render() }
+        if (on(h) { android.animation.ValueAnimator.areAnimatorsEnabled() }) {
+            assertTrue("fading", on(h) { it.weekFading })
+            Thread.sleep(300)
+            val mid = on(h) { week.level }
+            assertTrue("part way: $mid", mid > 0f && mid < 1f)
+        }
+        waitFor("faded into night", 5_000) { on(h) { !it.weekFading } }
+        assertTrue(on(h) { it.weekNight && week.night })
+
+        // Open at night: the night theme straight away.
+        on(h) { it.back() }
+        settle(h)
+        on(h) { it.openWeek() }
+        settle(h)
+        assertFalse(on(h) { it.weekFading })
+        assertEquals(1f, on(h) { week.level })
+        assertTrue("still the scene, the whole page", on(h) { scene.isShown && scene.height == ws.height && scene.conditions!!.live })
+        // Stars and tonight's moon over it, large and on screen; the scene's own small moon left out.
+        val sky = on(h) { it.weekNightSky }
+        assertTrue(on(h) { sky.isShown && sky.clearSky })
+        assertTrue("large: ${on(h) { sky.moonR }}", on(h) { sky.moonR } >= 40 * d)
+        assertTrue("on screen", on(h) { sky.moonX - sky.moonR >= 0 && sky.moonX + sky.moonR <= sky.width && sky.moonY - sky.moonR >= 0 })
+        assertEquals(Moon.illumination(System.currentTimeMillis()), on(h) { sky.moonLit }, 0.01)
+        assertTrue(on(h) { scene.renderer.hideMoon })
+        assertFalse(on(h) { androidx.core.view.WindowCompat.getInsetsController(it.window, it.window.decorView).isAppearanceLightStatusBars })
+        // Dark frosted glass, and the same seven days, word for word.
+        assertTrue("frosted, the scene through it", (glass() ushr 24) in 0x40..0xE0)
+        assertTrue("dark glass at night", WeatherSkin.luminance(glass() or 0xFF000000.toInt()) < 0.05)
+        assertEquals("the same days and values", dayTexts, texts(list).map { on(h) { _ -> it.text.toString() } })
+        // Every number on the list in moonlight, readable (the blue chances too).
+        val bg = over(ML.GLASS, ML.SKY_MID)
+        for (t in texts(list).filter { on(h) { _ -> it.text.isNotBlank() } }) {
+            val ratio = contrast(on(h) { over(t.currentTextColor, bg) }, bg)
+            assertTrue("\"${on(h) { t.text }}\" ${"%.1f".format(ratio)}:1", ratio >= 4.5)
+        }
+        // The page's own print, straight over the night scene: moonlight.
+        for (t in texts(on(h) { ws }).filter { t -> on(h) { t.background == null && t.isShown && t.text.isNotBlank() && !list.hasDescendant(t) } }) {
+            assertTrue("\"${on(h) { t.text }}\" pale", WeatherSkin.luminance(on(h) { t.currentTextColor or 0xFF000000.toInt() }) > 0.5)
+        }
+        shot("142-week-night")
+
+        // Hold a day at night: it plays. Let go: back to now.
+        val row = on(h) { list.getChildAt(1) }
+        val t0 = SystemClock.uptimeMillis()
+        main { row.dispatchTouchEvent(MotionEvent.obtain(t0, t0, MotionEvent.ACTION_DOWN, 40f, 20f, 0)) }
+        waitFor("holding plays the day") { on(h) { week.previewDay == 1 } }
+        Thread.sleep(1500)
+        shot("143-week-night-hold")
+        main { row.dispatchTouchEvent(MotionEvent.obtain(t0, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, 40f, 20f, 0)) }
+        assertNull(on(h) { week.previewDay })
+        assertTrue("back on now", on(h) { scene.conditions!!.live })
+
+        // Swipe sideways across it: the scene goes through the hours, the readout with it.
+        val nowText = on(h) { week.readout.text.toString() }
+        assertTrue(nowText, nowText.startsWith("NOW · "))
+        val sy = on(h) { ws.height * 0.25f }
+        val sx = on(h) { ws.width * 0.2f }
+        val t1 = SystemClock.uptimeMillis()
+        main {
+            ws.dispatchTouchEvent(MotionEvent.obtain(t1, t1, MotionEvent.ACTION_DOWN, sx, sy, 0))
+            for (k in 1..12) ws.dispatchTouchEvent(MotionEvent.obtain(t1, t1 + k * 16, MotionEvent.ACTION_MOVE, sx + k * 20 * d, sy, 0))
+        }
+        assertNotNull("swiped to an hour", on(h) { it.weekScrubTime })
+        assertTrue("the scene at that hour", on(h) { !scene.conditions!!.live && abs(scene.conditions!!.timeMs - it.weekScrubTime!!) < 60_000 })
+        assertFalse("the readout at that hour", on(h) { week.readout.text.toString() }.startsWith("NOW · "))
+        assertFalse(on(h) { week.lapseBar.atNow })
+        main { ws.dispatchTouchEvent(MotionEvent.obtain(t1, t1 + 400, MotionEvent.ACTION_UP, sx + 240 * d, sy, 0)) }
+        assertTrue(on(h) { it.weekShown })
+        on(h) { it.returnToNow() }
+        assertNull(on(h) { it.weekScrubTime })
+        assertTrue("back on now", on(h) { scene.conditions!!.live })
+
+        // Tap a day: that day's view in the details.
+        val t2 = SystemClock.uptimeMillis()
+        main {
+            row.dispatchTouchEvent(MotionEvent.obtain(t2, t2, MotionEvent.ACTION_DOWN, 40f, 20f, 0))
+            row.dispatchTouchEvent(MotionEvent.obtain(t2, t2 + 80, MotionEvent.ACTION_UP, 40f, 20f, 0))
+        }
+        settle(h)
+        assertTrue("the details", on(h) { it.dataShown })
+        assertEquals("with that day open", 1, on(h) { it.panel.openDay })
+        on(h) { it.back() }
+        settle(h)
+        on(h) { it.back() }
+        settle(h)
+        assertTrue(on(h) { it.weekShown })
+
+        // Sunrise: back to day, exactly as before.
+        on(h) { it.nightOverride = false; it.render() }
+        waitFor("faded into day", 5_000) { on(h) { !it.weekFading } }
+        assertEquals(0f, on(h) { week.level })
+        assertFalse(on(h) { sky.isShown })
+        assertFalse(on(h) { scene.renderer.hideMoon })
+        assertTrue(WeatherSkin.luminance(texts(list).first().let { t -> on(h) { t.currentTextColor } }) < 0.05)
+    }
+
+    private fun ViewGroup.hasDescendant(v: View): Boolean {
+        var p = v.parent
+        while (p != null) { if (p === this) return true; p = p.parent }
+        return false
     }
 
     private fun collectTagged(v: View, tag: String, out: MutableList<View>) {

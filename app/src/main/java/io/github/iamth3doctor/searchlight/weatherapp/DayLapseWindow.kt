@@ -61,6 +61,8 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
     val lapseCondition = TextView(context)
     val readout = TextView(context)
     val lapseBar = LapseBarView(context)
+    /** The print over the window (on pads by day), to recolor with the theme. */
+    private val glassViews = ArrayList<TextView>()
 
     /** How far through the played day (0..1), while one plays. */
     var progress = 0.0
@@ -94,6 +96,33 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
 
     private fun px(t: Int) = context.px(t)
 
+    /**
+     * The scene leaves the card to be laid out by the caller behind a whole page; the card keeps
+     * its place, clear, with the bar and the readout over the scene showing through it.
+     */
+    fun liftScene() {
+        if (!card) return
+        root.removeView(preview)
+        root.background = null
+        root.clipToOutline = false
+    }
+
+    /** 0 the day theme, 1 night: the readout and the day's numbers in moonlight, on dark pads. */
+    var level = 0f
+        set(value) {
+            field = value.coerceIn(0f, 1f)
+            val skin = Skins.current
+            if (!skin.light) return
+            val ev = android.animation.ArgbEvaluator()
+            val ink = ev.evaluate(field, skin.ink, Moonlight.INK) as Int
+            val pad = ev.evaluate(field, skin.calloutBg, Moonlight.CHIP) as Int
+            for (t in glassViews) {
+                t.setTextColor(ink)
+                (t.background as? GradientDrawable)?.setColor(pad)
+            }
+            lapseBar.night = field >= 0.5f
+        }
+
     private fun buildOverlay() {
         // Over a light skin's pale sky, dark text; otherwise white, shadowed.
         val skin = Skins.current
@@ -104,6 +133,7 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
             if (bold) typeface = Typeface.create(typeface, 700, false)
             setTextColor(ink)
             includeFontPadding = false
+            glassViews += this
             if (skin.light) {
                 // Dark text on its own small frosted pad: it reads over a night sky too.
                 setShadowLayer(0f, 0f, 0f, 0)
@@ -213,7 +243,19 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
         preview.paused = false
         val c = SceneModel.at(data, t, live = false)
         preview.conditions = c
-        onFrame?.invoke(c, DayLapse.readout(data, t))
+        val r = DayLapse.readout(data, t)
+        if (card) {
+            // The card's readout and pin go to that hour too ("2 PM · 44° · 10% rain").
+            val detail = data.detail
+            val zone = ZoneOffset.ofTotalSeconds(detail?.utcOffsetSec ?: 0)
+            val today = io.github.iamth3doctor.searchlight.weather.Moon.dayStart(t, detail?.utcOffsetSec ?: 0)
+            lapseBar.cancelReturn()
+            lapseBar.atNow = false
+            lapseBar.progress = ((t - today) / DAY_MS.toFloat()).coerceIn(0f, 1f)
+            val hour = WeatherFormat.hour(context).format(Instant.ofEpochMilli(r.hourMs).atOffset(zone))
+            readout.text = context.getString(R.string.weather_week_readout, hour, deg(r.tempC), r.precipProb ?: 0)
+        }
+        onFrame?.invoke(c, r)
     }
 
     /** Shows the moment [f] of the way through the playing day: scene, numbers, readout and bar. */
@@ -254,12 +296,14 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
         /**
          * Hold [row] to play: [onHold] after a long-press timeout without moving; [onRelease] when the
          * finger lifts (or the touch is taken away) after it took. A move first is a scroll, not a hold.
+         * Lifted before the hold took, without moving: a tap ([row]'s click).
          */
         @SuppressLint("ClickableViewAccessibility")
         fun holdToPlay(row: View, isHeld: () -> Boolean, onHold: () -> Unit, onRelease: () -> Unit) {
             val slop = ViewConfiguration.get(row.context).scaledTouchSlop
             var downX = 0f
             var downY = 0f
+            var moved = false
             val start = Runnable {
                 row.parent?.requestDisallowInterceptTouchEvent(true)
                 onHold()
@@ -269,6 +313,7 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         downX = e.x; downY = e.y
+                        moved = false
                         v.postDelayed(start, ViewConfiguration.getLongPressTimeout().toLong())
                         true
                     }
@@ -276,6 +321,7 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
                         // Moved off before the hold took: it's a scroll or a swipe, not a hold.
                         if (!isHeld() && (abs(e.x - downX) > slop || abs(e.y - downY) > slop)) {
                             v.removeCallbacks(start)
+                            moved = true
                             return@setOnTouchListener false
                         }
                         true
@@ -283,6 +329,8 @@ class DayLapseWindow(private val context: Context, private val card: Boolean = t
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         v.removeCallbacks(start)
                         if (isHeld()) onRelease()
+                        else if (e.actionMasked == MotionEvent.ACTION_UP && !moved &&
+                            e.eventTime - e.downTime < ViewConfiguration.getLongPressTimeout()) v.performClick()
                         true
                     }
                     else -> false

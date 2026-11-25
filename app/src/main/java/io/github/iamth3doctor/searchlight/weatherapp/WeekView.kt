@@ -34,6 +34,10 @@ import java.time.format.TextStyle
  * condition and an hour readout ("2 PM · 44° · 10% rain") ride along over a thin bar showing where
  * in the day it is (and, in blue, when rain is due). Let go and it goes back to now. Otherwise the
  * window shows the weather now, alive, like the scene on the hero.
+ *
+ * The window's scene is the whole page's backdrop (the caller lays out [preview] behind it all);
+ * the list sits over it on frosted glass, pale with dark print by day, dark with moonlight print
+ * at night ([level]). Tap a day for its view ([onDayTapped]).
  */
 class WeekView(private val context: Context, private val light: Boolean) {
 
@@ -79,12 +83,32 @@ class WeekView(private val context: Context, private val light: Boolean) {
 
     private var data: WeatherData? = null
 
+    /** A tap on a day (not a hold): open that day ([Int] into the forecast). */
+    var onDayTapped: ((Int) -> Unit)? = null
+
     private fun px(t: Int) = context.px(t)
-    private val fg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
-    private val dim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
-    private val inset = if (light) 0x14000000 else context.color(R.color.surface_inset)
+    private val dayFg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
+    private val dayDim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
+
+    /** 0 the day theme, 1 the night theme (sunset to sunrise); between, fading. */
+    var level = 0f
+        set(value) { field = value.coerceIn(0f, 1f); paint() }
+    val night: Boolean get() = level >= 0.5f
+    private val ev = android.animation.ArgbEvaluator()
+    private fun between(day: Int, night: Int) = ev.evaluate(level, day, night) as Int
+    private val fg get() = between(dayFg, Moonlight.INK)
+    private val dim get() = between(dayDim, Moonlight.INK_DIM)
+
+    /** The days' print, to recolor with the theme. */
+    private val inkViews = ArrayList<TextView>()
+    private val dimViews = ArrayList<TextView>()
+    private var captionBright = false
+    private val listGlass = GradientDrawable().apply { cornerRadius = context.pxF(R.dimen.radius_card) / 2 }
 
     init {
+        // The window's scene is the page's own backdrop now (the caller lays it out behind
+        // everything); the window keeps its place for the bar and the readout over it.
+        window.liftScene()
         root.addView(window.root, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(R.dimen.size_weather_week_preview)))
         caption.type(Type.BODY)
         caption.setTextColor(dim)
@@ -92,11 +116,30 @@ class WeekView(private val context: Context, private val light: Boolean) {
         caption.text = context.getString(R.string.weather_week_hint)
         root.addView(caption, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { topMargin = px(R.dimen.space_s) })
-        list.background = GradientDrawable().apply { cornerRadius = context.pxF(R.dimen.radius_card) / 2; setColor(inset) }
+        // Frosted glass over the scene: pale by day, dark at night, the scene faintly through it.
+        list.background = listGlass
+        list.tag = "weather_week_list"
         val p = px(R.dimen.space_s)
         list.setPadding(p, p / 2, p, p / 2)
         root.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { topMargin = px(R.dimen.space_m) })
+        paint()
+    }
+
+    /**
+     * The theme's colors on everything: the days' print, the glass behind them, the caption (with a
+     * soft edge so it reads straight over the scene), the window's readout.
+     */
+    private fun paint() {
+        val d = context.resources.displayMetrics.density
+        listGlass.setColor(between(WeatherActivity.FROSTED_VEIL, Moonlight.GLASS))
+        listGlass.setStroke(d.toInt().coerceAtLeast(1), between(DAY_EDGE, Moonlight.GLASS_EDGE))
+        for (t in inkViews) t.setTextColor(fg)
+        for (t in dimViews) t.setTextColor(dim)
+        caption.setTextColor(if (captionBright) fg else dim)
+        caption.setShadowLayer(3 * d, 0f, 1f, between(DAY_GLOW, Moonlight.SHADOW))
+        previewDay?.let { highlight(it, true) }
+        window.level = level
     }
 
     private fun text(style: Int, color: Int, bold: Boolean = false) = TextView(context).apply {
@@ -111,6 +154,8 @@ class WeekView(private val context: Context, private val light: Boolean) {
     fun render(data: WeatherData?) {
         this.data = data
         list.removeAllViews()
+        inkViews.clear()
+        dimViews.clear()
         live()
         val d = data?.detail ?: return
         val zone = ZoneOffset.ofTotalSeconds(d.utcOffsetSec)
@@ -128,7 +173,7 @@ class WeekView(private val context: Context, private val light: Boolean) {
                 background = GradientDrawable().apply { cornerRadius = context.pxF(R.dimen.radius_card) / 3; setColor(0) }
             }
             val name = dayName(i, day, zone, locale)
-            row.addView(text(Type.BODY, fg, bold = i == 0).apply { text = name }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(text(Type.BODY, fg, bold = i == 0).apply { text = name; inkViews += this }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(ConditionView(context, glow = false).apply { visual = ConditionVisual.of(day.code, true) }, LinearLayout.LayoutParams(hv, hv))
             val rain = text(Type.CAPTION, context.color(R.color.weather_drop)).apply {
                 text = day.precipPct?.let { "$it%" } ?: ""
@@ -138,12 +183,13 @@ class WeekView(private val context: Context, private val light: Boolean) {
             // Room for "100%" on one line.
             val rainW = maxOf(col, kotlin.math.ceil(rain.paint.measureText("100%")).toInt() + px(R.dimen.space_xs) / 2)
             row.addView(rain, LinearLayout.LayoutParams(rainW, ViewGroup.LayoutParams.WRAP_CONTENT))
-            row.addView(text(Type.BODY, dim).apply { text = deg(day.lowC); gravity = Gravity.END },
+            row.addView(text(Type.BODY, dim).apply { text = deg(day.lowC); gravity = Gravity.END; dimViews += this },
                 LinearLayout.LayoutParams(col + px(R.dimen.space_s), ViewGroup.LayoutParams.WRAP_CONTENT))
-            row.addView(text(Type.BODY, fg, bold = true).apply { text = deg(day.highC); gravity = Gravity.END },
+            row.addView(text(Type.BODY, fg, bold = true).apply { text = deg(day.highC); gravity = Gravity.END; inkViews += this },
                 LinearLayout.LayoutParams(col + px(R.dimen.space_s), ViewGroup.LayoutParams.WRAP_CONTENT))
             row.contentDescription = "$name, ${WeatherCodes.describe(day.code)}, high ${deg(day.highC)}, low ${deg(day.lowC)}" +
                 (day.precipPct?.let { ", $it% chance of precipitation" } ?: "") + ". Hold to preview."
+            row.setOnClickListener { onDayTapped?.invoke(i) }
             DayLapseWindow.holdToPlay(row, isHeld = { previewDay == i }, onHold = { startPreview(i) }, onRelease = { stopPreview() })
             list.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
@@ -169,11 +215,12 @@ class WeekView(private val context: Context, private val light: Boolean) {
         caption.text = "${dayName(i, day, zone, context.resources.configuration.locales[0])} · " +
             "${WeatherCodes.describe(day.code)} · ${deg(day.highC)} / ${deg(day.lowC)}" +
             (wet.firstOrNull()?.let { (a, b) -> " · " + context.getString(R.string.weather_week_wet, hour(a), hour(b)) } ?: "")
+        captionBright = true
         caption.setTextColor(fg)
     }
 
     private fun highlight(i: Int, on: Boolean) {
-        list.getChildAt(i)?.let { (it.background as? GradientDrawable)?.setColor(if (on) (if (light) 0x1A000000 else 0x26FFFFFF) else 0) }
+        list.getChildAt(i)?.let { (it.background as? GradientDrawable)?.setColor(if (on) (if (light && !night) 0x1A000000 else 0x26FFFFFF) else 0) }
     }
 
     /** Stops the time-lapse: the window eases back to the weather now, alive. */
@@ -182,6 +229,7 @@ class WeekView(private val context: Context, private val light: Boolean) {
         window.stop(data, clock())
         highlight(i, false)
         caption.text = context.getString(R.string.weather_week_hint)
+        captionBright = false
         caption.setTextColor(dim)
         onSettled?.invoke()
     }
@@ -191,6 +239,12 @@ class WeekView(private val context: Context, private val light: Boolean) {
 
     /** Stops everything (the screen is closing). */
     fun stop() = stopPreview()
+
+    private companion object {
+        /** The day glass's edge, and the soft pale glow under the dark print on the open scene. */
+        const val DAY_EDGE = 0x59FFFFFF
+        const val DAY_GLOW = 0x8CFFFFFF.toInt()
+    }
 }
 
 /**
@@ -211,6 +265,9 @@ class LapseBarView(context: Context) : View(context) {
 
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     private val wet = context.color(R.color.weather_drop)
+    /** At night (the 7 days' night theme): a pale track on the dark sky. */
+    var night = false
+        set(value) { if (field != value) { field = value; invalidate() } }
     private var slide: android.animation.ValueAnimator? = null
 
     /** Sliding back to NOW. */
@@ -245,7 +302,7 @@ class LapseBarView(context: Context) : View(context) {
         val l = 8 * d
         val w = width - 2 * l
         val pin = Skins.current.accent
-        paint.color = if (Skins.current.light) 0x33000000 else 0x40FFFFFF
+        paint.color = if (Skins.current.light && !night) 0x33000000 else 0x40FFFFFF
         canvas.drawRoundRect(l, cy - r, l + w, cy + r, r, r, paint)
         paint.color = wet
         for ((a, b) in windows) canvas.drawRoundRect(l + w * a, cy - r, l + w * b, cy + r, r, r, paint)
