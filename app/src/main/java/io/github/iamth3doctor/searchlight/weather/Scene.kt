@@ -164,10 +164,10 @@ object SceneModel {
         val amount = intensity(code, precip)
         val rain = if (sky == Sky.RAIN) maxOf(amount, if (isThunder(code)) 0.55 else 0.1) else 0.0
         val snow = if (sky == Sky.SNOW) maxOf(amount, 0.15) else 0.0
-        // The forecast's own cover when it has one; else from the condition. Rain or snow comes
-        // with clouds; no sun shows except in a clear sky.
+        // The forecast's own cover when it has one; else from the condition. The sun shows only
+        // in a clear sky (see [sky]), whatever the cover.
         var cover = (cloudPct?.div(100.0)) ?: coverFromCode(code)
-        if (rain > 0 || snow > 0) cover = maxOf(cover, 0.7)
+        if (rain > 0 || snow > 0) cover = maxOf(cover, if (cloudPct != null) 0.3 else 0.7)
         if (code == 0 && sky == Sky.SUN) cover = minOf(cover, 0.2)
         val vis = if (useLive) d?.visibilityM else null
         val fog = when {

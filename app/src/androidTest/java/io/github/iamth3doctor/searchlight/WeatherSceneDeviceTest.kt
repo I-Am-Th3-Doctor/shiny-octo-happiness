@@ -1787,9 +1787,12 @@ class WeatherSceneDeviceTest {
         on(h) { it.panel.sections["precip"]!!.let { v -> (v.parent.parent as? android.widget.ScrollView)?.smoothScrollTo(0, v.top) } }
         shot("135-overcast-island")
 
-        // Rain now (a shower code): rain on the island and in the scene, still no sun.
-        force(h, reading(80, 60, 1.2))
+        // Rain now (a shower code): rain on the island and in the scene, still no sun. The hero is
+        // behind the details page, so show the reading without waiting on the hero's frames.
+        show(reading(80, 60, 1.2))
+        on(h) { it.render() }
         settle(h)
+        waitFor("rain on the island") { on(h) { card.island.particles } > 5 }
         assertEquals(SceneModel.Sky.RAIN, on(h) { it.conditions().sky })
         assertFalse(on(h) { card.island.showsSun })
         assertTrue("rain falls on the island", on(h) { card.island.particles } > 5)
@@ -1871,7 +1874,9 @@ class WeatherSceneDeviceTest {
     }
 
     @Test fun aSevereAlertTakesOverTheSceneAndShowsItsDetails() = screen { h ->
-        force(h, storm(reading(1, 25, 0.0)))
+        // Raining under a Severe Thunderstorm Warning: the storm it warns of, harder, with lightning.
+        // (A warning alone never makes rain the reading doesn't have.)
+        force(h, storm(reading(61, 25, 1.0)))
         assertTrue(on(h) { it.alertPill.isShown })
         assertEquals("! THUNDERSTORM !", on(h) { it.alertPill.text.toString() })
         val c = on(h) { it.scene.conditions!! }
