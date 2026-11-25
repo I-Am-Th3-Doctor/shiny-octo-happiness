@@ -41,6 +41,8 @@ data class SceneConditions(
     val moonAge: Double,
     /** A severe-weather alert is in effect: dark storm sky, whatever its kind adds. */
     val severe: AlertKind? = null,
+    /** What the sky shows ([SceneModel.sky]): the sun only when it's [SceneModel.Sky.SUN]. */
+    val sky: SceneModel.Sky = SceneModel.Sky.CLOUD,
 ) {
     /** Where the wind blows to (0 north, 90 east): the way the scene's arrow points. */
     val windTowardDeg: Double get() = (windFromDeg + 180) % 360
@@ -85,6 +87,21 @@ object SceneModel {
         3 -> 0.95
         45, 48 -> 0.8
         else -> 0.85
+    }
+
+    /** What the sky shows: one rule for the scene, the precip island and the readings beside them. */
+    enum class Sky { SUN, CLOUD, RAIN, SNOW }
+
+    /**
+     * The sky for a condition [code], a precipitation rate ([rateMm] an hour) and the hour's chance
+     * ([prob] %): snow for a snow code; rain for a rain or shower code, any rain falling, or a 50%+
+     * chance; the sun only for Clear or Mainly clear; otherwise cloud (no sun).
+     */
+    fun sky(code: Int, rateMm: Double?, prob: Int?): Sky = when {
+        isSnow(code) -> Sky.SNOW
+        isWet(code) || (rateMm ?: 0.0) > 0.0 || (prob ?: 0) >= 50 -> Sky.RAIN
+        code == 0 || code == 1 -> Sky.SUN
+        else -> Sky.CLOUD
     }
 
     fun isSnow(code: Int) = code in 71..77 || code == 85 || code == 86
@@ -137,15 +154,17 @@ object SceneModel {
         val windMph = (if (useLive) d?.windMph else lerp(h0!!.windMph, h1?.windMph)) ?: d?.windMph ?: 0.0
         val windFrom = (if (useLive) d?.windFromDeg else h0!!.windFromDeg) ?: d?.windFromDeg ?: 270.0
 
-        val snowy = isSnow(code)
-        val wet = isWet(code) || (!snowy && (precip ?: 0.0) >= 0.1)
+        val prob = if (useLive) h0?.precipProb else h0!!.precipProb
+        // The same condition the page shows decides the picture: no separate visual condition.
+        val sky = sky(code, precip, prob)
         val amount = intensity(code, precip)
-        val rain = if (wet && !snowy) maxOf(amount, if (isThunder(code)) 0.55 else 0.1) else 0.0
-        val snow = if (snowy) maxOf(amount, 0.15) else 0.0
-        // The forecast's own cover when it has one (a sunny shower stays sunny); else from the condition.
+        val rain = if (sky == Sky.RAIN) maxOf(amount, if (isThunder(code)) 0.55 else 0.1) else 0.0
+        val snow = if (sky == Sky.SNOW) maxOf(amount, 0.15) else 0.0
+        // The forecast's own cover when it has one; else from the condition. Rain or snow comes
+        // with clouds; no sun shows except in a clear sky.
         var cover = (cloudPct?.div(100.0)) ?: coverFromCode(code)
-        if (rain > 0 || snow > 0) cover = maxOf(cover, if (cloudPct != null) 0.3 else 0.7)
-        if (code == 0) cover = minOf(cover, 0.2)
+        if (rain > 0 || snow > 0) cover = maxOf(cover, 0.7)
+        if (code == 0 && sky == Sky.SUN) cover = minOf(cover, 0.2)
         val vis = if (useLive) d?.visibilityM else null
         val fog = when {
             code == 45 || code == 48 -> 0.85
@@ -153,7 +172,8 @@ object SceneModel {
             vis != null && vis < 4000 -> 0.25
             else -> 0.0
         }
-        // A severe-weather alert in effect then: the scene turns to the storm it warns of.
+        // A severe-weather alert in effect then: a darker, stormier sky, and the rain or snow that's
+        // falling falls harder. It never makes rain or snow the condition doesn't have.
         val severe = NwsAlerts.active(data.alerts, timeMs).firstOrNull()?.let { NwsAlerts.kind(it.event) }
         var thunder = isThunder(code)
         var rainOut = rain
@@ -163,12 +183,12 @@ object SceneModel {
         if (severe != null) {
             cover = 1.0
             when (severe) {
-                AlertKind.THUNDER -> { thunder = true; rainOut = maxOf(rainOut, 0.85) }
-                AlertKind.RAIN -> rainOut = maxOf(rainOut, 0.9)
-                AlertKind.WIND -> { rainOut = maxOf(rainOut, 0.55); windOut = maxOf(windOut, 30.0) }
-                AlertKind.SNOW -> { snowOut = maxOf(snowOut, 0.9); rainOut = 0.0 }
+                AlertKind.THUNDER -> if (rain > 0) { thunder = true; rainOut = maxOf(rainOut, 0.85) }
+                AlertKind.RAIN -> if (rain > 0) rainOut = maxOf(rainOut, 0.9)
+                AlertKind.WIND -> { if (rain > 0) rainOut = maxOf(rainOut, 0.55); windOut = maxOf(windOut, 30.0) }
+                AlertKind.SNOW -> if (snow > 0) snowOut = maxOf(snowOut, 0.9)
                 AlertKind.FOG -> fogOut = maxOf(fogOut, 0.9)
-                AlertKind.HEAT, AlertKind.OTHER -> rainOut = maxOf(rainOut, 0.4)
+                AlertKind.HEAT, AlertKind.OTHER -> if (rain > 0) rainOut = maxOf(rainOut, 0.4)
             }
         }
         val (sAlt, sAz) = Sun.position(timeMs, data.latitude, data.longitude)
@@ -180,7 +200,7 @@ object SceneModel {
             code = code,
             cloudCover = cover.coerceIn(0.0, 1.0),
             precipMm = precip ?: 0.0,
-            precipProb = if (useLive) h0?.precipProb else h0!!.precipProb,
+            precipProb = prob,
             rain = rainOut,
             snow = snowOut,
             thunder = thunder,
@@ -193,6 +213,7 @@ object SceneModel {
             moonAz = mAz,
             moonAge = Moon.age(timeMs),
             severe = severe,
+            sky = sky,
         )
     }
 }

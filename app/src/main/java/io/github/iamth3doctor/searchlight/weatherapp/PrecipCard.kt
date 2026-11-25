@@ -27,6 +27,7 @@ import io.github.iamth3doctor.searchlight.ui.pxF
 import io.github.iamth3doctor.searchlight.ui.type
 import io.github.iamth3doctor.searchlight.weather.DayBar
 import io.github.iamth3doctor.searchlight.weather.Precip
+import io.github.iamth3doctor.searchlight.weather.SceneModel
 import io.github.iamth3doctor.searchlight.weather.WeatherData
 import java.time.Instant
 import java.time.ZoneOffset
@@ -183,7 +184,12 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
     private fun refreshRows() {
         val d = data ?: return
         val week = graph.mode == PrecipGraphView.Mode.WEEK
-        val reading = if (week) Precip.day(d, graph.weekDayTime() ?: nowMs) else Precip.at(d, scrub ?: nowMs)
+        // Now: the condition the page shows (one rule with the scene); a scrubbed hour or a day: its own.
+        val reading = when {
+            week -> Precip.day(d, graph.weekDayTime() ?: nowMs)
+            scrub == null -> Precip.now(d, nowMs)
+            else -> Precip.at(d, scrub!!)
+        }
         rateLabel.text = context.getString(if (week) R.string.weather_precip_total else R.string.weather_precip_rate)
         rateValue.text = Precip.format(reading.rateIn)
         chanceValue.text = reading.chance?.let { "$it%" } ?: context.getString(R.string.weather_detail_none)
@@ -192,7 +198,7 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
             Precip.Type.SNOW -> R.string.weather_precip_snow
             Precip.Type.NONE -> R.string.weather_precip_none
         })
-        island.set(reading.type, if (week) reading.rateIn / 24 else reading.rateIn)
+        island.set(reading.sky, if (week) reading.rateIn / 24 else reading.rateIn)
 
         val next = Precip.nextWet(d, nowMs)
         expected.text = when {
@@ -208,14 +214,22 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
 
 /**
  * A small floating island, drawn in layers for depth: grass on top, rock tapering beneath, a
- * tree, its shadow below. When it rains, a cloud over it lets drops fall onto it (as many and as
- * fast as the rate); snow drifts down instead; dry, the sun glints. Animates only while shown,
- * never in battery saver.
+ * tree, its shadow below. Its sky is the page's ([SceneModel.Sky]): when it rains, a cloud over it
+ * lets drops fall onto it (as many and as fast as the rate); snow drifts down instead; cloudy or
+ * overcast, a gray cloud and no sun; only a clear sky has the sun. Animates only while shown, never
+ * in battery saver.
  */
 class IslandView(context: Context) : View(context) {
 
-    var type = Precip.Type.NONE
+    var sky = SceneModel.Sky.CLOUD
         private set
+    val type: Precip.Type get() = when (sky) {
+        SceneModel.Sky.RAIN -> Precip.Type.RAIN
+        SceneModel.Sky.SNOW -> Precip.Type.SNOW
+        else -> Precip.Type.NONE
+    }
+    /** The sun is drawn (tests): only in a clear sky. */
+    val showsSun: Boolean get() = sky == SceneModel.Sky.SUN
     /** Inches per hour. */
     var rate = 0.0
         private set
@@ -232,8 +246,8 @@ class IslandView(context: Context) : View(context) {
     private var running = false
     private val choreographer = Choreographer.getInstance()
 
-    fun set(type: Precip.Type, rateIn: Double) {
-        this.type = type
+    fun set(sky: SceneModel.Sky, rateIn: Double) {
+        this.sky = sky
         this.rate = rateIn
         val want = when (type) {
             Precip.Type.NONE -> 0
@@ -246,7 +260,12 @@ class IslandView(context: Context) : View(context) {
             count++
         }
         count = want
-        contentDescription = context.getString(R.string.weather_island_desc, type.name.lowercase())
+        contentDescription = context.getString(R.string.weather_island_desc, when (sky) {
+            SceneModel.Sky.SUN -> "sun"
+            SceneModel.Sky.CLOUD -> "cloud"
+            SceneModel.Sky.RAIN -> "rain"
+            SceneModel.Sky.SNOW -> "snow"
+        })
         update()
         invalidate()
     }
@@ -340,13 +359,13 @@ class IslandView(context: Context) : View(context) {
         canvas.drawCircle(tx, topY - h * 0.24f, h * 0.09f, paint)
         canvas.drawCircle(tx + h * 0.06f, topY - h * 0.19f, h * 0.07f, paint)
 
-        if (!wet) {
-            // Dry: a sun.
+        if (sky == SceneModel.Sky.SUN) {
+            // A clear sky: the sun.
             paint.color = context.color(R.color.weather_sun)
             canvas.drawCircle(cx + iw * 0.28f, h * 0.2f + bob / 2, h * 0.08f, paint)
             return
         }
-        // A cloud over it, then the fall onto the grass.
+        // A cloud over it (gray; white for snow), then, if it rains or snows, the fall onto the grass.
         paint.color = if (type == Precip.Type.SNOW) 0xFFE6EBF0.toInt() else 0xFF8C96A3.toInt()
         val cy = h * 0.16f
         for ((dx, r) in listOf(-0.22f to 0.09f, -0.05f to 0.12f, 0.14f to 0.1f, 0.28f to 0.07f)) {
@@ -354,6 +373,7 @@ class IslandView(context: Context) : View(context) {
         }
         oval.set(cx - iw * 0.32f, cy, cx + iw * 0.36f, cy + h * 0.08f)
         canvas.drawRoundRect(oval, h * 0.04f, h * 0.04f, paint)
+        if (!wet) return
         val fallTop = cy + h * 0.08f
         val fallBottom = topY - h * 0.04f
         paint.color = if (type == Precip.Type.SNOW) 0xFFFFFFFF.toInt() else context.color(R.color.weather_drop)

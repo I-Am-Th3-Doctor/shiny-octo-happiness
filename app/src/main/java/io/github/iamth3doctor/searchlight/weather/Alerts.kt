@@ -112,7 +112,8 @@ object Precip {
 
     enum class Type { RAIN, SNOW, NONE }
 
-    data class Reading(val rateIn: Double, val chance: Int?, val type: Type)
+    /** A precipitation reading: rate (in/h; a day's total in WEEK), chance, type, and the sky to draw. */
+    data class Reading(val rateIn: Double, val chance: Int?, val type: Type, val sky: SceneModel.Sky)
 
     private const val HOUR = 3_600_000L
 
@@ -121,27 +122,48 @@ object Precip {
     /** "0.09 IN" */
     fun format(inches: Double): String = String.format(Locale.US, "%.2f IN", inches)
 
-    private fun typeOf(code: Int, mm: Double?, chance: Int?): Type = when {
-        SceneModel.isSnow(code) -> Type.SNOW
-        SceneModel.isWet(code) || (mm ?: 0.0) >= 0.1 -> Type.RAIN
+    private fun typeOf(sky: SceneModel.Sky): Type = when (sky) {
+        SceneModel.Sky.SNOW -> Type.SNOW
+        SceneModel.Sky.RAIN -> Type.RAIN
         else -> Type.NONE
+    }
+
+    private fun reading(rateMm: Double?, chance: Int?, sky: SceneModel.Sky) =
+        Reading(inches(rateMm ?: 0.0), chance, typeOf(sky), sky)
+
+    private fun hourAt(data: WeatherData, t: Long): HourPoint? =
+        data.detail?.hourly?.lastOrNull { it.time <= t && t < it.time + HOUR }
+
+    /**
+     * Now, as the page shows it: the displayed condition with the current hour's rate and chance,
+     * through the same rule as the scene ([SceneModel.sky]), so the TYPE, the island and the scene
+     * can't disagree with the condition above them.
+     */
+    fun now(data: WeatherData, nowMs: Long): Reading {
+        val h = hourAt(data, nowMs)
+        val rate = data.detail?.precipMm?.takeIf { it > 0.0 } ?: h?.precipMm
+        return reading(rate, h?.precipProb, SceneModel.sky(data.weatherCode, rate, h?.precipProb))
     }
 
     /** The hour holding [t]: its rate (in/h), chance and type. */
     fun at(data: WeatherData, t: Long): Reading {
-        val h = data.detail?.hourly?.lastOrNull { it.time <= t && t < it.time + HOUR }
-            ?: return Reading(0.0, null, typeOf(data.weatherCode, data.detail?.precipMm, null))
-        return Reading(inches(h.precipMm ?: 0.0), h.precipProb, typeOf(h.code, h.precipMm, h.precipProb))
+        val h = hourAt(data, t)
+            ?: return reading(data.detail?.precipMm, null, SceneModel.sky(data.weatherCode, data.detail?.precipMm, null))
+        return reading(h.precipMm, h.precipProb, SceneModel.sky(h.code, h.precipMm, h.precipProb))
     }
 
-    /** The day holding [t]: its total (in), highest chance and type. */
+    /** The day holding [t]: its total (in), highest chance and type (from its condition and chance). */
     fun day(data: WeatherData, t: Long): Reading {
-        val d = data.detail?.daily?.lastOrNull { it.date <= t } ?: return Reading(0.0, null, Type.NONE)
-        return Reading(inches(d.precipMm ?: 0.0), d.precipPct, typeOf(d.code, d.precipMm, d.precipPct))
+        val d = data.detail?.daily?.lastOrNull { it.date <= t } ?: return Reading(0.0, null, Type.NONE, SceneModel.Sky.CLOUD)
+        return reading(d.precipMm, d.precipPct, SceneModel.sky(d.code, null, d.precipPct))
     }
 
-    /** Whether [h] is an hour of rain or snow (a good chance, or a real amount). */
-    fun wet(h: HourPoint) = (h.precipProb ?: 0) >= 50 || (h.precipMm ?: 0.0) >= 0.2
+    /**
+     * Whether [h] is an hour of rain or snow: a rain, shower or snow condition (the hourly strip's
+     * icon), a good chance, or a real amount.
+     */
+    fun wet(h: HourPoint) = SceneModel.isWet(h.code) || SceneModel.isSnow(h.code) ||
+        (h.precipProb ?: 0) >= 50 || (h.precipMm ?: 0.0) >= 0.2
 
     /** When rain is next expected, as the hour (epoch ms), within [withinMs]; the current hour if it's wet now; null if dry. */
     fun nextWet(data: WeatherData, nowMs: Long, withinMs: Long = 24 * HOUR): HourPoint? =

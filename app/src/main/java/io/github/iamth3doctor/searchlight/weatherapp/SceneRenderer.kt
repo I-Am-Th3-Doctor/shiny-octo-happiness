@@ -12,6 +12,7 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import io.github.iamth3doctor.searchlight.weather.SceneConditions
+import io.github.iamth3doctor.searchlight.weather.SceneModel
 import io.github.iamth3doctor.searchlight.weather.ScenePalette
 import io.github.iamth3doctor.searchlight.weather.ScenePhysics
 import java.util.Random
@@ -55,6 +56,8 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
     private var storm = 0.0
     private var windEast = 0.0
     private var sunAlt = 30.0
+    /** 1: the sun shows (a clear sky); 0: hidden (cloud, rain, snow). Eased, so it fades rather than pops. */
+    private var sunShow = 1.0
     private var sunAz = 0.0
     private var moonAlt = -30.0
     private var moonAz = 0.0
@@ -120,6 +123,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         if (immediate || !hasState) {
             cover = c.cloudCover; rain = c.rain; snow = c.snow; fog = c.fog; storm = if (c.thunder || c.severe != null) 1.0 else 0.0
             windEast = c.windEastMph; sunAlt = c.sunAltDeg; sunAz = c.sunAz; moonAlt = c.moonAltDeg; moonAz = c.moonAz
+            sunShow = sunTarget(c)
             moonAge = c.moonAge
             hasState = true
             drops = 0 // refill straight away, at the new rate
@@ -160,6 +164,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         storm += ((if (c.thunder || c.severe != null) 1.0 else 0.0) - storm) * k
         windEast += (c.windEastMph - windEast) * k
         sunAlt += (c.sunAltDeg - sunAlt) * k
+        sunShow += (sunTarget(c) - sunShow) * k
         sunAz += (c.sunAz - sunAz) * k
         moonAlt += (c.moonAltDeg - moonAlt) * k
         moonAz += (c.moonAz - moonAz) * k
@@ -652,12 +657,18 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         return horizon - ((alt.coerceIn(-6.0, 60.0) / 60.0) * (horizon - top)).toFloat()
     }
 
+    private fun sunTarget(c: SceneConditions) = if (c.sky == SceneModel.Sky.SUN) 1.0 else 0.0
+
+    /** The sun's disc shows now (tests): a clear sky, by day. */
+    val sunShowing: Boolean get() = sunShow > 0.01 && sunAlt >= -4
+
     private fun drawSun(canvas: Canvas) {
-        if (sunAlt < -4) return
+        // Only in a clear sky: never behind overcast, cloud, rain or snow.
+        if (sunAlt < -4 || sunShow <= 0.01) return
         val x = skyX(sunAz)
         val y = skyY(sunAlt)
         val r = min(w, h) * (if (mini) 0.085f else if (cartoon) 0.075f else 0.055f)
-        val vis = (1 - cover * 0.82 - rain * 0.1).coerceIn(0.1, 1.0) * ((sunAlt + 4) / 6).coerceIn(0.0, 1.0)
+        val vis = (1 - cover * 0.82 - rain * 0.1).coerceIn(0.1, 1.0) * ((sunAlt + 4) / 6).coerceIn(0.0, 1.0) * sunShow
         val low = ((8 - sunAlt) / 10).coerceIn(0.0, 1.0)
         val glowColor = mix(palette.sunGlow.first, palette.sunGlow.second, low)
         bmpPaint.colorFilter = PorterDuffColorFilter(glowColor, PorterDuff.Mode.SRC_IN)

@@ -36,6 +36,22 @@ object HeroReadings {
         else -> "%.2f in/h".format(java.util.Locale.US, mm / 25.4)
     }
 
+    /**
+     * The CLOUDS & RAIN callout's second line, agreeing with the scene ([SceneConditions.sky]): the
+     * rate when rain is measured; when the scene rains on a chance or a showery condition with no
+     * amount yet, "Rain likely · 60%" (or "Rain Light"); "Snow ..." the same way; "Rain None" when dry.
+     */
+    fun precipLine(c: SceneConditions): String {
+        val word = if (c.sky == SceneModel.Sky.SNOW) "Snow" else "Rain"
+        val wet = c.sky == SceneModel.Sky.RAIN || c.sky == SceneModel.Sky.SNOW
+        return when {
+            !wet -> "Rain ${rainRate(c.precipMm)}"
+            c.precipMm >= 0.005 -> "$word ${rainRate(c.precipMm)}"
+            (c.precipProb ?: 0) >= 50 -> "$word likely · ${c.precipProb}%"
+            else -> "$word Light"
+        }
+    }
+
     /** "30.02 inHg". */
     fun pressure(hpa: Double): String = "%.2f inHg".format(java.util.Locale.US, MetricArt.inHg(hpa))
 
@@ -66,7 +82,7 @@ object HeroReadings {
         val uv = (if (c.live) d?.uvIndex?.let { maxOf(it, day?.uvMax ?: it) } ?: day?.uvMax else day?.uvMax ?: d?.uvIndex)
         return listOf(
             Callout(WIND, label(WIND), listOf(wind)),
-            Callout(SKY, label(SKY), listOf("Cloud ${(c.cloudCover * 100).roundToInt()}%", "Rain ${rainRate(c.precipMm)}")),
+            Callout(SKY, label(SKY), listOf("Cloud ${(c.cloudCover * 100).roundToInt()}%", precipLine(c))),
             Callout(SUN, label(SUN), listOf(
                 "↑ ${day?.sunrise?.let(time) ?: NONE}  ↓ ${day?.sunset?.let(time) ?: NONE}",
                 "${Moon.phase(c.timeMs).label} · ${(Moon.illumination(c.timeMs) * 100).roundToInt()}% lit",

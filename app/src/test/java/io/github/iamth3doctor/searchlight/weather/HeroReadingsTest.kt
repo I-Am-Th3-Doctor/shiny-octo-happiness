@@ -30,7 +30,8 @@ class HeroReadingsTest {
         assertEquals("WIND", out.getValue("wind").label)
         val wind = out.getValue("wind").lines.single()
         assertTrue(wind, wind.contains("6 mph") && wind.contains("SSW") && wind.startsWith(HeroReadings.arrow(20.0)))
-        assertEquals(listOf("Cloud 75%", "Rain None"), out.getValue("sky").lines)
+        // Overcast with a 70% chance this hour and nothing measured yet: the scene rains, and the callout says so.
+        assertEquals(listOf("Cloud 75%", "Rain likely · 70%"), out.getValue("sky").lines)
         assertEquals("↑ 07:25  ↓ 16:40", out.getValue("sun").lines[0])
         assertTrue(out.getValue("sun").lines[1], out.getValue("sun").lines[1].endsWith("% lit"))
         val temp = out.getValue("temp").lines

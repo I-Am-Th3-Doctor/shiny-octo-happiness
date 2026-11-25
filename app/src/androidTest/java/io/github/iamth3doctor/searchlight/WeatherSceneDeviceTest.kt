@@ -21,6 +21,7 @@ import io.github.iamth3doctor.searchlight.weather.DayPoint
 import io.github.iamth3doctor.searchlight.weather.GeoPlace
 import io.github.iamth3doctor.searchlight.weather.HourPoint
 import io.github.iamth3doctor.searchlight.weather.Moon
+import io.github.iamth3doctor.searchlight.weather.SceneModel
 import io.github.iamth3doctor.searchlight.weather.TempUnit
 import io.github.iamth3doctor.searchlight.weather.WeatherData
 import io.github.iamth3doctor.searchlight.weather.WeatherDetail
@@ -1762,6 +1763,34 @@ class WeatherSceneDeviceTest {
         shell("cmd uimode night $savedNight")
     }
 
+    @Test fun overcastShowsNoSunAnywhere() = screen { h ->
+        // Overcast, 100% cloud, nothing falling, a 44%-ish chance: gray cloud on the island and in the
+        // scene, no sun, no rain; TYPE None.
+        force(h, reading(3, 100, 0.0))
+        settle(h)
+        // The hero's scene first, while it's on screen and animating: the sun fades out.
+        waitFor("the scene's sun fades out under overcast") { on(h) { !it.scene.renderer.sunShowing } }
+        assertEquals(SceneModel.Sky.CLOUD, on(h) { it.conditions().sky })
+        assertEquals(0.0, on(h) { it.conditions().rain }, 0.0)
+        on(h) { it.openDetails() }
+        settle(h)
+        val card = on(h) { it.panel.precip }
+        assertFalse("no sun on the island when it's overcast", on(h) { card.island.showsSun })
+        assertEquals(0, on(h) { card.island.particles })
+        assertEquals("NONE", on(h) { card.typeValue.text.toString() })
+        on(h) { it.panel.sections["precip"]!!.let { v -> (v.parent.parent as? android.widget.ScrollView)?.smoothScrollTo(0, v.top) } }
+        shot("135-overcast-island")
+
+        // Rain now (a shower code): rain on the island and in the scene, still no sun.
+        force(h, reading(80, 60, 1.2))
+        settle(h)
+        assertEquals(SceneModel.Sky.RAIN, on(h) { it.conditions().sky })
+        assertFalse(on(h) { card.island.showsSun })
+        assertTrue("rain falls on the island", on(h) { card.island.particles } > 5)
+        assertEquals("RAIN", on(h) { card.typeValue.text.toString() })
+        shot("136-showers-island")
+    }
+
     @Test fun precipCardRowsGraphAndBarMoveTogether() = screen { h ->
         force(h, reading(0, 2, 0.0))
         on(h) { it.openDetails() }
@@ -1772,6 +1801,7 @@ class WeatherSceneDeviceTest {
         assertEquals("RATE", on(h) { card.rateLabel.text.toString() })
         assertTrue(on(h) { card.expected.text.toString() }, on(h) { card.expected.text.toString() }.startsWith("Rain expected around "))
         assertEquals(0, on(h) { card.island.particles })
+        assertTrue("a clear sky: the island has its sun", on(h) { card.island.showsSun })
         assertEquals(PrecipGraphView.Mode.DAY, on(h) { card.graph.mode })
         on(h) { it.panel.sections["precip"]!!.let { v -> (v.parent.parent as? android.widget.ScrollView)?.smoothScrollTo(0, v.top) } }
         shot("93-precip-now")
