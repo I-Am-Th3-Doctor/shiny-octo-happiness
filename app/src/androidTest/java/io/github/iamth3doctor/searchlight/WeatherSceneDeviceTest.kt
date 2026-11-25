@@ -1764,20 +1764,26 @@ class WeatherSceneDeviceTest {
     }
 
     @Test fun overcastShowsNoSunAnywhere() = screen { h ->
-        // Overcast, 100% cloud, nothing falling, a 44%-ish chance: gray cloud on the island and in the
-        // scene, no sun, no rain; TYPE None.
+        // The Renton afternoon: Overcast, 100% cloud, nothing falling, a low chance, rain in the strip
+        // 3 hours on. Gray cloud on the island and in the scene, no sun, no streaks, "Rain None".
         force(h, reading(3, 100, 0.0))
         settle(h)
         // The hero's scene first, while it's on screen and animating: the sun fades out.
         waitFor("the scene's sun fades out under overcast") { on(h) { !it.scene.renderer.sunShowing } }
         assertEquals(SceneModel.Sky.CLOUD, on(h) { it.conditions().sky })
         assertEquals(0.0, on(h) { it.conditions().rain }, 0.0)
+        assertEquals("Rain None", on(h) { io.github.iamth3doctor.searchlight.weather.HeroReadings.precipLine(it.conditions()) })
         on(h) { it.openDetails() }
         settle(h)
         val card = on(h) { it.panel.precip }
         assertFalse("no sun on the island when it's overcast", on(h) { card.island.showsSun })
         assertEquals(0, on(h) { card.island.particles })
-        assertEquals("NONE", on(h) { card.typeValue.text.toString() })
+        // Rain in the strip within 6 hours: TYPE Rain, though none falls yet; expected around its first hour.
+        assertEquals("RAIN", on(h) { card.typeValue.text.toString() })
+        val firstRain = io.github.iamth3doctor.searchlight.weatherapp.WeatherFormat.hour(app)
+            .format(java.time.Instant.ofEpochMilli(h0 + 3 * hour).atOffset(java.time.ZoneOffset.ofTotalSeconds(off)))
+        val expected = on(h) { card.expected.text.toString() }
+        assertTrue(expected, expected.endsWith(firstRain))
         on(h) { it.panel.sections["precip"]!!.let { v -> (v.parent.parent as? android.widget.ScrollView)?.smoothScrollTo(0, v.top) } }
         shot("135-overcast-island")
 
@@ -1797,7 +1803,8 @@ class WeatherSceneDeviceTest {
         settle(h)
         val card = on(h) { it.panel.precip }
         fun rows() = on(h) { listOf(card.rateValue.text.toString(), card.chanceValue.text.toString(), card.typeValue.text.toString()) }
-        assertEquals(listOf("0.00 IN", "5%", "NONE"), rows())
+        // Clear and dry now, rain in the strip 3 hours on: RATE and CHANCE are now's; TYPE isn't NONE.
+        assertEquals(listOf("0.00 IN", "5%", "RAIN"), rows())
         assertEquals("RATE", on(h) { card.rateLabel.text.toString() })
         assertTrue(on(h) { card.expected.text.toString() }, on(h) { card.expected.text.toString() }.startsWith("Rain expected around "))
         assertEquals(0, on(h) { card.island.particles })
@@ -1851,7 +1858,7 @@ class WeatherSceneDeviceTest {
         // Now, from the graph: live everywhere.
         on(h) { card.graph.touchAt(card.graph.xOf(System.currentTimeMillis()), tap = true) }
         assertNull(on(h) { it.scrubTime })
-        assertEquals(listOf("0.00 IN", "5%", "NONE"), rows())
+        assertEquals(listOf("0.00 IN", "5%", "RAIN"), rows())
     }
 
     private fun storm(w: WeatherData, offline: Boolean = false): WeatherData {

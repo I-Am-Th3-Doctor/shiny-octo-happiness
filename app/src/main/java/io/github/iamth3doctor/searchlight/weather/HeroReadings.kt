@@ -38,15 +38,15 @@ object HeroReadings {
 
     /**
      * The CLOUDS & RAIN callout's second line, agreeing with the scene ([SceneConditions.sky]): the
-     * rate when rain is measured; when the scene rains on a chance or a showery condition with no
-     * amount yet, "Rain likely · 60%" (or "Rain Light"); "Snow ..." the same way; "Rain None" when dry.
+     * rate when rain is measured; when the scene rains on a 50%+ chance with no amount yet, "Rain
+     * likely · 60%"; "Snow ..." the same way; "Rain None" exactly when the scene has no rain or snow.
      */
     fun precipLine(c: SceneConditions): String {
         val word = if (c.sky == SceneModel.Sky.SNOW) "Snow" else "Rain"
         val wet = c.sky == SceneModel.Sky.RAIN || c.sky == SceneModel.Sky.SNOW
         return when {
             !wet -> "Rain ${rainRate(c.precipMm)}"
-            c.precipMm >= 0.005 -> "$word ${rainRate(c.precipMm)}"
+            c.precipMm > 0.0 -> "$word ${if (c.precipMm < 0.005) "< 0.01 in/h" else rainRate(c.precipMm)}"
             (c.precipProb ?: 0) >= 50 -> "$word likely · ${c.precipProb}%"
             else -> "$word Light"
         }

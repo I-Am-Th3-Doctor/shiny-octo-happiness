@@ -94,14 +94,18 @@ object SceneModel {
 
     /**
      * The sky for a condition [code], a precipitation rate ([rateMm] an hour) and the hour's chance
-     * ([prob] %): snow for a snow code; rain for a rain or shower code, any rain falling, or a 50%+
-     * chance; the sun only for Clear or Mainly clear; otherwise cloud (no sun).
+     * ([prob] %). Rain (or snow, for a snow condition) falls only when some is measured or the chance
+     * is 50% or more; a rain or shower condition with neither is cloud. The sun only for Clear or
+     * Mainly clear with nothing falling; otherwise cloud (no sun).
      */
-    fun sky(code: Int, rateMm: Double?, prob: Int?): Sky = when {
-        isSnow(code) -> Sky.SNOW
-        isWet(code) || (rateMm ?: 0.0) > 0.0 || (prob ?: 0) >= 50 -> Sky.RAIN
-        code == 0 || code == 1 -> Sky.SUN
-        else -> Sky.CLOUD
+    fun sky(code: Int, rateMm: Double?, prob: Int?): Sky {
+        val falling = (rateMm ?: 0.0) > 0.0 || (prob ?: 0) >= 50
+        return when {
+            falling && isSnow(code) -> Sky.SNOW
+            falling -> Sky.RAIN
+            code == 0 || code == 1 -> Sky.SUN
+            else -> Sky.CLOUD
+        }
     }
 
     fun isSnow(code: Int) = code in 71..77 || code == 85 || code == 86

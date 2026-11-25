@@ -285,6 +285,9 @@ class WeatherRepository(private val context: Context, private val prefs: Prefs) 
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         conn.setRequestProperty("User-Agent", "Searchlight-Launcher")
+        // Always a fresh answer (a refresh must show the latest run), never a stored copy.
+        conn.useCaches = false
+        conn.setRequestProperty("Cache-Control", "no-cache")
         if (accept != null) conn.setRequestProperty("Accept", accept)
         try {
             if (conn.responseCode != 200) throw HttpStatusException(conn.responseCode)

@@ -141,9 +141,24 @@ object Precip {
      */
     fun now(data: WeatherData, nowMs: Long): Reading {
         val h = hourAt(data, nowMs)
-        val rate = data.detail?.precipMm?.takeIf { it > 0.0 } ?: h?.precipMm
-        return reading(rate, h?.precipProb, SceneModel.sky(data.weatherCode, rate, h?.precipProb))
+        // The same rate and chance the scene uses for now.
+        val rate = data.detail?.precipMm ?: h?.precipMm
+        val sky = SceneModel.sky(data.weatherCode, rate, h?.precipProb)
+        // TYPE: what's falling now, else what the strip shows coming in the next hours.
+        val coming = data.detail?.hourly.orEmpty()
+            .filter { it.time + HOUR > nowMs && it.time < nowMs + TYPE_AHEAD_MS }
+        val type = when {
+            sky == SceneModel.Sky.SNOW -> Type.SNOW
+            sky == SceneModel.Sky.RAIN -> Type.RAIN
+            coming.any { SceneModel.isSnow(it.code) } && coming.none { SceneModel.isWet(it.code) } -> Type.SNOW
+            coming.any { SceneModel.isWet(it.code) || SceneModel.isSnow(it.code) || (it.precipMm ?: 0.0) > 0.0 } -> Type.RAIN
+            else -> Type.NONE
+        }
+        return Reading(inches(rate ?: 0.0), h?.precipProb, type, sky)
     }
+
+    /** TYPE now looks this far ahead: rain the strip shows within it isn't NONE. */
+    const val TYPE_AHEAD_MS = 6 * HOUR
 
     /** The hour holding [t]: its rate (in/h), chance and type. */
     fun at(data: WeatherData, t: Long): Reading {
@@ -160,10 +175,11 @@ object Precip {
 
     /**
      * Whether [h] is an hour of rain or snow: a rain, shower or snow condition (the hourly strip's
-     * icon), a good chance, or a real amount.
+     * icon), any amount (the graph's area), or a 50%+ chance (the graph's line). The soonest such
+     * hour is when rain is "expected around", so the card, the strip and the graph agree.
      */
     fun wet(h: HourPoint) = SceneModel.isWet(h.code) || SceneModel.isSnow(h.code) ||
-        (h.precipProb ?: 0) >= 50 || (h.precipMm ?: 0.0) >= 0.2
+        (h.precipProb ?: 0) >= 50 || (h.precipMm ?: 0.0) > 0.0
 
     /** When rain is next expected, as the hour (epoch ms), within [withinMs]; the current hour if it's wet now; null if dry. */
     fun nextWet(data: WeatherData, nowMs: Long, withinMs: Long = 24 * HOUR): HourPoint? =

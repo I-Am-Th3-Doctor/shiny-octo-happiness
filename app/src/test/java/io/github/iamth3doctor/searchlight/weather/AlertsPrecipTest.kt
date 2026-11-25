@@ -122,13 +122,16 @@ class AlertsPrecipTest {
         assertEquals(SceneModel.Sky.CLOUD, SceneModel.sky(2, 0.0, 10))
         assertEquals(SceneModel.Sky.CLOUD, SceneModel.sky(3, 0.0, 44))
         assertEquals(SceneModel.Sky.CLOUD, SceneModel.sky(45, 0.0, 0))
-        // Rain: a rain or shower condition, any rain falling, or a 50% chance.
-        assertEquals(SceneModel.Sky.RAIN, SceneModel.sky(61, 0.0, 10))
-        assertEquals(SceneModel.Sky.RAIN, SceneModel.sky(80, 0.0, 10))
+        // Rain falls only when some is measured or the chance is 50%+; a showery label alone is cloud, never sun.
+        assertEquals(SceneModel.Sky.CLOUD, SceneModel.sky(61, 0.0, 10))
+        assertEquals(SceneModel.Sky.CLOUD, SceneModel.sky(80, 0.0, 49))
+        assertEquals(SceneModel.Sky.RAIN, SceneModel.sky(61, 0.3, 10))
+        assertEquals(SceneModel.Sky.RAIN, SceneModel.sky(80, 0.0, 50))
         assertEquals(SceneModel.Sky.RAIN, SceneModel.sky(3, 0.1, 10))
         assertEquals(SceneModel.Sky.RAIN, SceneModel.sky(3, 0.0, 50))
         assertEquals(SceneModel.Sky.RAIN, SceneModel.sky(0, 0.0, 60))
         assertEquals(SceneModel.Sky.SNOW, SceneModel.sky(73, 1.0, 90))
+        assertEquals(SceneModel.Sky.CLOUD, SceneModel.sky(73, 0.0, 20))
     }
 
     /**
@@ -159,15 +162,28 @@ class AlertsPrecipTest {
             assertTrue(c.cloudCover >= 0.9)
             // The hero's callout says what the scene shows.
             assertEquals("Rain None", HeroReadings.precipLine(c))
-            // The precip card's island: the same sky (no sun); TYPE None now.
+            // The precip card: the island has the same sky (cloud, no sun); RATE and CHANCE are now's;
+            // TYPE is Rain, not None, as the strip shows rain within 6 hours.
             val r = Precip.now(d, now)
             assertEquals(SceneModel.Sky.CLOUD, r.sky)
-            assertEquals(Precip.Type.NONE, r.type)
+            assertEquals(0.0, r.rateIn, 0.0)
             assertEquals(44, r.chance)
+            assertEquals(Precip.Type.RAIN, r.type)
         }
         val d = overcastBeforeRain()
         // Rain expected at the first hour the strip shows rain (5 PM here), not the 60% hour later on.
         assertEquals(now / hour * hour + 2 * hour, Precip.nextWet(d, now)!!.time)
+        // No rain in the next 6 hours and none falling: TYPE None (and still no sun under overcast).
+        val dryAhead = d.copy(detail = d.detail!!.copy(hourly = d.detail!!.hourly.map {
+            if (it.time < now + 8 * hour) it.copy(code = 3, precipMm = 0.0, precipProb = 20) else it }))
+        assertEquals(Precip.Type.NONE, Precip.now(dryAhead, now).type)
+        assertEquals(SceneModel.Sky.CLOUD, Precip.now(dryAhead, now).sky)
+        // Any rain falling now: TYPE Rain, rain on the island and in the scene, and the words agree.
+        val drizzling = d.copy(detail = d.detail!!.copy(precipMm = 0.1))
+        assertEquals(SceneModel.Sky.RAIN, Precip.now(drizzling, now).sky)
+        val dc = SceneModel.at(drizzling, now, live = true)
+        assertTrue(dc.rain > 0)
+        assertEquals("Rain ${HeroReadings.rainRate(0.1)}", HeroReadings.precipLine(dc))
         // Once it rains: rain on the island, in the scene, and in the words.
         val t = now / hour * hour + 2 * hour
         val wet = SceneModel.at(d, t, live = false)
