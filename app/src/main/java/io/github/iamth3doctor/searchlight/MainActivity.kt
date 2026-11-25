@@ -612,12 +612,18 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         )
     }
 
-    /** The top six over the home card: from holding the magnifier, or a triple tap on empty home space. */
-    private fun showTopSix() {
+    /**
+     * The top six. Holding the magnifier: the row over the home card. A home gesture set to the
+     * top six: a small box at the screen point [at] where it landed (null: over the card).
+     */
+    private fun showTopSix(at: android.graphics.PointF? = null) {
         app.autoFavorites.refreshIfStale()
         app.autoFavorites.refreshPrediction()
-        favoritesPopup.show(binding.homeCard)
+        if (at == null) favoritesPopup.show(binding.homeCard) else favoritesPopup.showAt(binding.root, at.x, at.y)
     }
+
+    /** Test hook: the top six as a gesture at the screen point ([x], [y]) opens them. */
+    internal fun showTopSixAt(x: Float, y: Float) = showTopSix(android.graphics.PointF(x, y))
 
     /** Debug/test hook: what the last triple tap on empty space did. */
     internal var lastTripleTap: String? = null
@@ -907,10 +913,11 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
     @android.annotation.SuppressLint("ClickableViewAccessibility") // empty wallpaper: nothing to click
     private fun setupHomeGestures() {
         val grid = binding.widgetGrid
-        grid.onSwipeUp = { runGesture(HomeGesture.SWIPE_UP) }
-        grid.onSwipe = { d -> HomeGesture.of(d)?.let(::runGesture) }
-        grid.onDoubleTap = { runGesture(HomeGesture.DOUBLE_TAP) }
-        grid.onLongPress = { runGesture(HomeGesture.LONG_PRESS) }
+        // Each with where it landed: the top six opens there.
+        grid.onSwipeUp = { runGesture(HomeGesture.SWIPE_UP, android.graphics.PointF(grid.lastDownOnScreen)) }
+        grid.onSwipe = { d -> HomeGesture.of(d)?.let { runGesture(it, android.graphics.PointF(grid.lastDownOnScreen)) } }
+        grid.onDoubleTap = { runGesture(HomeGesture.DOUBLE_TAP, android.graphics.PointF(grid.lastTapOnScreen)) }
+        grid.onLongPress = { runGesture(HomeGesture.LONG_PRESS, android.graphics.PointF(grid.lastDownOnScreen)) }
         applyTripleTap()
         val tracker = homeSwipe
         // Wallpaper outside the canvas (beside the card when unfolded): the same gestures there.
@@ -919,13 +926,16 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             tapTimeout,
             android.view.ViewConfiguration.get(this).scaledDoubleTapSlop.toFloat(),
         )
-        val pendingDouble = Runnable { runGesture(HomeGesture.DOUBLE_TAP) }
+        // Where the touch on wallpaper came down, and where its last tap landed (screen pixels).
+        val down = android.graphics.PointF()
+        val tapAt = android.graphics.PointF()
+        val pendingDouble = Runnable { runGesture(HomeGesture.DOUBLE_TAP, android.graphics.PointF(tapAt)) }
         var longPressed = false
         val longPress = Runnable {
             longPressed = true
             taps.reset()
             binding.root.removeCallbacks(pendingDouble)
-            if (runGesture(HomeGesture.LONG_PRESS)) binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            if (runGesture(HomeGesture.LONG_PRESS, android.graphics.PointF(down))) binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         }
         var downX = 0f
         var downY = 0f
@@ -935,6 +945,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                 MotionEvent.ACTION_DOWN -> {
                     if (onHomeChrome(e.rawX, e.rawY)) return@setOnTouchListener false
                     tracker.down(e.x, e.y)
+                    down.set(e.rawX, e.rawY)
                     downX = e.x
                     downY = e.y
                     travelled = false
@@ -947,7 +958,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                         travelled = true
                         binding.root.removeCallbacks(longPress)
                     }
-                    if (!longPressed) tracker.move(e.x, e.y)?.let { d -> HomeGesture.of(d)?.let(::runGesture) }
+                    if (!longPressed) tracker.move(e.x, e.y)?.let { d -> HomeGesture.of(d)?.let { runGesture(it, android.graphics.PointF(down)) } }
                 }
                 MotionEvent.ACTION_POINTER_DOWN -> {
                     travelled = true
@@ -957,15 +968,16 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
                     binding.root.removeCallbacks(longPress)
                     val tap = e.actionMasked == MotionEvent.ACTION_UP && !travelled && !longPressed &&
                         e.eventTime - e.downTime < android.view.ViewConfiguration.getLongPressTimeout()
+                    if (tap) tapAt.set(e.rawX, e.rawY)
                     if (!tap) taps.reset() else when (taps.tap(e.x, e.y, e.eventTime)) {
                         // Two taps wait out the tap window while a triple tap is set, as on the canvas.
                         2 -> if (tripleTapSet()) {
                             binding.root.removeCallbacks(pendingDouble)
                             binding.root.postDelayed(pendingDouble, tapTimeout + TRIPLE_TAP_GRACE_MS)
-                        } else runGesture(HomeGesture.DOUBLE_TAP)
+                        } else runGesture(HomeGesture.DOUBLE_TAP, android.graphics.PointF(tapAt))
                         3 -> {
                             binding.root.removeCallbacks(pendingDouble)
-                            runGesture(HomeGesture.TRIPLE_TAP)
+                            runGesture(HomeGesture.TRIPLE_TAP, android.graphics.PointF(tapAt))
                         }
                     }
                 }
@@ -990,7 +1002,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * tap window first (so a third tap can win); with triple tap on None, a double tap is instant.
      */
     private fun applyTripleTap() {
-        binding.widgetGrid.onTripleTap = if (tripleTapSet()) ({ runGesture(HomeGesture.TRIPLE_TAP) }) else null
+        val grid = binding.widgetGrid
+        grid.onTripleTap = if (tripleTapSet()) ({ runGesture(HomeGesture.TRIPLE_TAP, android.graphics.PointF(grid.lastTapOnScreen)) }) else null
     }
 
     /** Does a touch at this screen point start on the card, results, edit bar, rail or a panel? */
@@ -1010,7 +1023,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
      * action). Not over the app table or all-apps panel, which keep their own touches, nor in edit
      * mode, which is for arranging. Returns whether it did anything.
      */
-    private fun runGesture(gesture: HomeGesture): Boolean {
+    private fun runGesture(gesture: HomeGesture, at: android.graphics.PointF? = null): Boolean {
         if (binding.appTable.isVisible || binding.allApps.isVisible || binding.widgetGrid.editMode) {
             lastHomeSwipe = "$gesture ignored"
             if (gesture == HomeGesture.TRIPLE_TAP) lastTripleTap = "ignored"
@@ -1022,7 +1035,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         if (gesture == HomeGesture.DOUBLE_TAP && action != GestureAction.LOCK_SCREEN) lastDoubleTap = action.name
         when (action) {
             GestureAction.NONE -> return false
-            GestureAction.TOP_SIX -> showTopSix()
+            GestureAction.TOP_SIX -> showTopSix(at)
             GestureAction.SEARCH -> showKeyboard()
             // A tap or hold asks once for the access (as double tap always has); a swipe says so in a toast.
             GestureAction.LOCK_SCREEN -> if (gesture.isSwipe) globalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) else lockScreen()

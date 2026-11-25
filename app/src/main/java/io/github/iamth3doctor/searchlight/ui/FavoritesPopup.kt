@@ -7,6 +7,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.Toast
 import io.github.iamth3doctor.searchlight.R
@@ -18,7 +19,8 @@ import io.github.iamth3doctor.searchlight.databinding.PopupFavoritesBinding
 
 /**
  * The favorites shown when you long-press the magnifier: one row of six, as wide as the home
- * card, with icons sized so all six fit (folded or unfolded).
+ * card, with icons sized so all six fit (folded or unfolded). From a home-screen gesture set to
+ * the top six, the same six instead pop up as a small 3×2 box where the gesture landed ([showAt]).
  *
  * Hold, slide, go: the finger that held the magnifier can slide on along the row without
  * lifting ([slideMove]); the slot under it grows and lights up, and lifting there launches it
@@ -36,7 +38,6 @@ class FavoritesPopup(
     private val onLongPress: (AppEntry, View) -> Unit,
 ) {
     private var window: PopupWindow? = null
-    private var anchor: View? = null
     private var card: View? = null
     private val slide = SlideToLaunch()
     private var apps: List<AppEntry?> = emptyList()
@@ -57,8 +58,36 @@ class FavoritesPopup(
     /** The slot the sliding finger is on (for tests). */
     internal val slideSelection: Int? get() = slide.selected
 
-    fun show(above: View) {
+    /** Where the open panel is: the row above the home card, or a 3×2 box at a tap on the home screen. */
+    private sealed interface Place {
+        data class Above(val card: View) : Place
+        data class At(val root: View, val x: Float, val y: Float) : Place
+    }
+    private var place: Place? = null
+
+    /** The row of six just above [above] (the home card): holding the magnifier. */
+    fun show(above: View) = open(Place.Above(above))
+
+    /**
+     * A compact 3×2 box of the same six, in the same order, at the screen point ([x], [y]) where
+     * the gesture that opens the top six landed: centred on it, below it near the top, above it
+     * near the bottom, and always wholly inside [root]'s safe area (clear of the status bar,
+     * navigation bar and cutouts), measured now, so folded or unfolded alike.
+     */
+    fun showAt(root: View, x: Float, y: Float) = open(Place.At(root, x, y))
+
+    /** The open panel's box on screen, for tests. */
+    internal fun boxOnScreen(): android.graphics.Rect? {
+        val c = card ?: return null
+        if (!isShowing) return null
+        val loc = IntArray(2).also { c.getLocationOnScreen(it) }
+        return android.graphics.Rect(loc[0], loc[1], loc[0] + c.width, loc[1] + c.height)
+    }
+
+    private fun open(where: Place) {
         dismiss()
+        val above = (where as? Place.Above)?.card
+        val at = where as? Place.At
         val b = PopupFavoritesBinding.inflate(LayoutInflater.from(activity))
         // The predicted slot's halo reaches a little past its cell: neither the row nor the card clips it.
         b.row.clipChildren = false
@@ -66,7 +95,16 @@ class FavoritesPopup(
         val favorites = homeFavorites(prefs, repo)
         val emptyHint = if (prefs.autoFavoritesActive) R.string.favorites_auto_empty_hint else R.string.favorites_empty_hint
         val inflater = LayoutInflater.from(activity)
-        val iconPx = iconSize(above.width - b.root.paddingLeft - b.root.paddingRight)
+        val iconPx = if (above != null) iconSize(above.width - b.root.paddingLeft - b.root.paddingRight)
+            else activity.px(R.dimen.size_grid_icon)
+        // At a tap: two rows of three. Same cells, same order, left to right then down.
+        val gridRows = if (at != null) {
+            b.row.orientation = LinearLayout.VERTICAL
+            List(2) {
+                LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL; clipChildren = false }
+                    .also { r -> b.row.addView(r, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)) }
+            }
+        } else null
         val shown = ArrayList<View>()
         badged.clear()
 
@@ -101,7 +139,7 @@ class FavoritesPopup(
                     Toast.makeText(activity, emptyHint, Toast.LENGTH_SHORT).show()
                 }
             }
-            b.row.addView(cell.root)
+            (gridRows?.get(i / GRID_COLUMNS) ?: b.row).addView(cell.root)
             shown += cell.root
         }
         b.hint.setText(emptyHint)
@@ -113,22 +151,39 @@ class FavoritesPopup(
             b.root, activity.resources.getDimension(R.dimen.radius_panel),
             activity.getColor(R.color.surface_raised), activity.getColor(R.color.surface_raised), wallpaper = false,
         )
-        val popup = PopupWindow(b.root, above.width, ViewGroup.LayoutParams.WRAP_CONTENT, false)
+        val safe = at?.let { safeArea(it.root) }
+        val width = if (above != null) above.width else {
+            // Three cells across, each the icon plus room for its name; never wider than the screen allows.
+            val cellW = iconPx + 2 * activity.px(R.dimen.space_m)
+            minOf(GRID_COLUMNS * cellW + b.root.paddingLeft + b.root.paddingRight, safe!!.width() - 2 * activity.px(R.dimen.space_menu_margin))
+        }
+        val popup = PopupWindow(b.root, width, ViewGroup.LayoutParams.WRAP_CONTENT, false)
         popup.setBackgroundDrawable(ColorDrawable(0))
         popup.isOutsideTouchable = true
         popup.elevation = 12f
         popup.animationStyle = android.R.style.Animation_Dialog
 
-        // Sit just above the anchor (the home card), same width and left edge.
         b.root.measure(
-            View.MeasureSpec.makeMeasureSpec(above.width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
         )
-        // Relative to the anchor itself, so system-bar insets can't shift it onto the card.
         val gap = activity.px(R.dimen.space_s)
-        popup.showAsDropDown(above, 0, -(above.height + b.root.measuredHeight + gap), Gravity.START)
+        if (above != null) {
+            // Sit just above the anchor (the home card), same width and left edge. Relative to the
+            // anchor itself, so system-bar insets can't shift it onto the card.
+            popup.showAsDropDown(above, 0, -(above.height + b.root.measuredHeight + gap), Gravity.START)
+        } else {
+            val root = at!!.root
+            val origin = IntArray(2).also { root.getLocationOnScreen(it) }
+            val s = safe!!
+            val (x, y) = TapPlacement.place(
+                at.x - origin[0], at.y - origin[1], width, b.root.measuredHeight,
+                s.left, s.top, s.right, s.bottom, activity.px(R.dimen.space_menu_margin), activity.px(R.dimen.space_m),
+            )
+            popup.showAtLocation(root, Gravity.TOP or Gravity.START, x, y)
+        }
         window = popup
-        anchor = above
+        place = where
         cells = shown
         card = b.root
         apps = (0 until Prefs.MAX_FAVORITES).map { favorites.getOrNull(it)?.entry }
@@ -137,8 +192,23 @@ class FavoritesPopup(
 
     /** Redraws the open popup in place, e.g. when the automatic ranking changes under it. */
     fun rerenderIfShowing() {
-        val a = anchor
-        if (isShowing && a != null) show(a)
+        val p = place
+        if (isShowing && p != null) open(p)
+    }
+
+    /**
+     * The part of [root]'s window the box may use, in window coordinates: inside the status bar,
+     * navigation bar, display cutout and keyboard. Read when it opens, so it's this display's.
+     */
+    private fun safeArea(root: View): android.graphics.Rect {
+        val insets = root.rootWindowInsets?.getInsets(
+            android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout() or
+                android.view.WindowInsets.Type.ime()
+        )
+        return android.graphics.Rect(
+            insets?.left ?: 0, insets?.top ?: 0,
+            root.width - (insets?.right ?: 0), root.height - (insets?.bottom ?: 0),
+        )
     }
 
     /** Largest icon (up to the usual size) that lets six cells fit across [rowWidthPx]. */
@@ -210,6 +280,7 @@ class FavoritesPopup(
 
     private companion object {
         const val SLIDE_SCALE = 1.25f
+        const val GRID_COLUMNS = 3
         const val SLIDE_ANIM_MS = 90L
     }
 }

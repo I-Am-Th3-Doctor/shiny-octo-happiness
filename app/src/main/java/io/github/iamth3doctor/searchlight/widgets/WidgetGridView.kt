@@ -55,6 +55,12 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
      * tap timeout first, so a third tap can make it a triple instead.
      */
     var onTripleTap: (() -> Unit)? = null
+    /**
+     * Where on screen the last touch on empty space came down, and where the last tap landed (the
+     * final tap of a double or triple): the top six opens there.
+     */
+    val lastDownOnScreen = android.graphics.PointF()
+    val lastTapOnScreen = android.graphics.PointF()
     private val tapTimeout = ViewConfiguration.getDoubleTapTimeout().toLong()
     private val doubleTap = MultiTap(tapTimeout, ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat())
     private val pendingDoubleTap = Runnable { onDoubleTap?.invoke() }
@@ -369,6 +375,7 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
             MotionEvent.ACTION_DOWN -> {
                 swipeDownX = ev.x
                 swipeDownY = ev.y
+                lastDownOnScreen.set(ev.rawX, ev.rawY)
                 swipe.down(ev.x, ev.y)
                 tapDownTime = ev.eventTime
                 travelled = false
@@ -394,6 +401,7 @@ class WidgetGridView @JvmOverloads constructor(context: Context, attrs: Attribut
             MotionEvent.ACTION_UP -> {
                 // A tap: no travel, no swipe, shorter than a long press. Two of them: double tap; three: triple.
                 val tap = !travelled && !swiped && ev.eventTime - tapDownTime < ViewConfiguration.getLongPressTimeout()
+                if (tap) lastTapOnScreen.set(ev.rawX, ev.rawY)
                 if (!tap) doubleTap.reset()
                 else when (doubleTap.tap(ev.x, ev.y, ev.eventTime)) {
                     2 -> if (onTripleTap == null) onDoubleTap?.invoke()

@@ -300,6 +300,17 @@ class NewFeaturesDeviceTest {
         return xs.flatMap { x -> ys.map { y -> x to y } }.first { (x, y) -> taken.none { it.contains(x, y) } }
     }
 
+    /** [box] (screen pixels) clears the status bar, navigation bar and cutouts. */
+    private fun assertInsideSafeArea(h: ActivityScenario<MainActivity>, box: android.graphics.Rect, what: String = "") {
+        val (safe, origin) = on(h) { a ->
+            val root = a.findViewById<View>(R.id.root) ?: a.window.decorView
+            val i = root.rootWindowInsets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+            val o = IntArray(2).also { root.getLocationOnScreen(it) }
+            android.graphics.Rect(o[0] + i.left, o[1] + i.top, o[0] + root.width - i.right, o[1] + root.height - i.bottom) to o
+        }
+        assertTrue("$what: $box inside $safe (window at ${origin.toList()})", safe.contains(box))
+    }
+
     /** Two real taps 120ms apart, injected with exact timing (shell taps are too slow for a double tap). */
     private fun doubleTap(x: Int, y: Int) = taps(x, y, 2)
 
@@ -333,9 +344,42 @@ class NewFeaturesDeviceTest {
             assertEquals("its six cells", 6, on(h) { it.favoritesPopup.cells.size })
             assertNull("a triple tap is not a double tap", on(h) { it.lastDoubleTap })
             Thread.sleep(600)
+            // Where the taps landed, as a 3×2 box: centred across on the tap, wholly on screen.
+            val box = on(h) { it.favoritesPopup.boxOnScreen()!! }
+            assertEquals("centred on the tap ($spot, box $box)", spot.first.toFloat(), box.exactCenterX(), 3f)
+            assertTrue("level with the tap ($spot, box $box)", spot.second in box.top - 200..box.bottom + 200)
+            val cellTops = on(h) { a -> a.favoritesPopup.cells.map { c -> IntArray(2).also { c.getLocationOnScreen(it) } } }
+            assertTrue("three across", cellTops[0][1] == cellTops[1][1] && cellTops[1][1] == cellTops[2][1])
+            assertTrue("then three below", cellTops[3][1] > cellTops[0][1] && cellTops[3][1] == cellTops[5][1])
+            assertTrue("in order, left to right", cellTops[0][0] < cellTops[1][0] && cellTops[1][0] < cellTops[2][0])
+            assertInsideSafeArea(h, box)
             shell("screencap -p $dir/${prefix}_font1.0_130-top-six-triple-tap.png")
             h.onActivity { it.favoritesPopup.dismiss() }
             Thread.sleep(500)
+
+            // Anywhere on the screen: the middle, near the top and bottom, the sides and corners.
+            val (sw, sh) = on(h) { a -> a.window.decorView.let { it.width to it.height } }
+            for ((name, pt) in listOf(
+                "middle" to (sw / 2 to sh / 2), "top" to (sw / 2 to sh / 12), "bottom" to (sw / 2 to sh * 11 / 12),
+                "left" to (4 to sh / 2), "right" to (sw - 4 to sh / 2),
+                "top-left" to (2 to 2), "bottom-right" to (sw - 2 to sh - 2),
+            )) {
+                h.onActivity { it.showTopSixAt(pt.first.toFloat(), pt.second.toFloat()) }
+                Thread.sleep(500)
+                val b = on(h) { it.favoritesPopup.boxOnScreen()!! }
+                assertInsideSafeArea(h, b, name)
+                when (name) {
+                    "middle" -> assertEquals("$name: centred down", pt.second.toFloat(), b.exactCenterY(), 3f)
+                    "top" -> assertTrue("$name: below the tap ($pt, $b)", b.top >= pt.second)
+                    "bottom" -> assertTrue("$name: above the tap ($pt, $b)", b.bottom <= pt.second)
+                }
+                if (name == "middle" || name == "top" || name == "bottom") {
+                    assertEquals("$name: centred across", pt.first.toFloat(), b.exactCenterX(), 3f)
+                    shell("screencap -p $dir/${prefix}_font1.0_131-top-six-at-$name.png")
+                }
+                h.onActivity { it.favoritesPopup.dismiss() }
+                Thread.sleep(300)
+            }
 
             // A double tap is still the lock (it waits out the tap window first).
             doubleTap(spot.first, spot.second)
