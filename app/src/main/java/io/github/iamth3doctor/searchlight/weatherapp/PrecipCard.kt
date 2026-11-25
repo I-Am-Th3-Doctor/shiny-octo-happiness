@@ -49,10 +49,28 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
     var onScrub: ((Long?) -> Unit)? = null
 
     private fun px(token: Int) = context.px(token)
-    private val fg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
-    private val dim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
+    private val dayFg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
+    private val dayDim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
     // No theme color: the controls are dark gray (the weather itself keeps its colors: blue rain, the sun).
-    private val accent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
+    private val dayAccent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
+    private val fg get() = if (night) Moonlight.INK else dayFg
+    private val dim get() = if (night) Moonlight.INK_DIM else dayDim
+    private val accent get() = if (night) Moonlight.ACCENT else dayAccent
+
+    /** The night theme: moonlight print, the island and graph in their night forms. */
+    var night = false
+        set(value) {
+            if (field == value) return
+            field = value
+            island.nightTheme = value
+            graph.night = value
+            paint()
+        }
+
+    /** Print colored by role, so a change of theme recolors it. */
+    private val inkViews = ArrayList<TextView>()
+    private val dimViews = ArrayList<TextView>()
+    private val accentViews = ArrayList<TextView>()
 
     val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     val island = IslandView(context)
@@ -74,7 +92,7 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
             type(Type.CAPTION)
             typeface = Typeface.create(typeface, 700, false)
             text = context.getString(R.string.weather_precip).uppercase()
-            setTextColor(accent)
+            accentViews += this
             letterSpacing = 0.08f
         })
         val top = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -85,14 +103,14 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
             label.apply {
                 type(Type.CAPTION)
                 typeface = Typeface.create(typeface, 700, false)
-                setTextColor(dim)
+                dimViews += this
                 letterSpacing = 0.1f
                 text = context.getString(labelRes)
             }
             value.apply {
                 type(Type.TILE_TITLE)
                 typeface = Typeface.create(typeface, 700, false)
-                setTextColor(fg)
+                inkViews += this
                 isSingleLine = true
             }
             r.addView(label)
@@ -109,7 +127,7 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
 
         expected.apply {
             type(Type.BODY)
-            setTextColor(fg)
+            inkViews += this
         }
         root.addView(expected, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { topMargin = px(R.dimen.space_s) })
@@ -138,6 +156,16 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
 
         graph.onScrub = { t -> onScrub?.invoke(t) }
         graph.onPickDay = { refreshRows(); onPicked?.invoke() }
+        paint()
+    }
+
+    /** Every piece of print in the theme's colors (at night with a soft dark edge), and the chips. */
+    private fun paint() {
+        val shadow = if (night) 3 * context.resources.displayMetrics.density else 0f
+        for ((views, color) in listOf(inkViews to fg, dimViews to dim, accentViews to accent)) for (v in views) {
+            v.setTextColor(color)
+            v.setShadowLayer(shadow, 0f, if (night) 1f else 0f, if (night) Moonlight.SHADOW else 0)
+        }
         styleChips()
     }
 
@@ -165,7 +193,7 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
                 cornerRadius = 999f
                 if (on) setColor(accent) else setStroke(context.resources.displayMetrics.density.toInt().coerceAtLeast(1), dim)
             }
-            chip.setTextColor(if (on) (if (light) 0xFFFFFFFF.toInt() else context.color(R.color.on_gold)) else dim)
+            chip.setTextColor(if (on) (if (night) Moonlight.ON_ACCENT else if (light) 0xFFFFFFFF.toInt() else context.color(R.color.on_gold)) else dim)
             chip.isSelected = on
         }
     }
@@ -200,7 +228,10 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
         })
         // Night (outside sunrise to sunset) at the moment shown: the moon, never the sun. A day of
         // the week is its daytime.
-        val day = week || io.github.iamth3doctor.searchlight.weather.Daylight.isDay(d, scrub ?: nowMs)
+        val shownAt = scrub ?: nowMs
+        val day = week || io.github.iamth3doctor.searchlight.weather.Daylight.isDay(d, shownAt)
+        island.moon(io.github.iamth3doctor.searchlight.weather.Moon.illumination(shownAt),
+            io.github.iamth3doctor.searchlight.weather.MetricArt.waxing(shownAt))
         island.set(reading.sky, if (week) reading.rateIn / 24 else reading.rateIn, day)
 
         val next = Precip.nextWet(d, nowMs)
@@ -237,8 +268,27 @@ class IslandView(context: Context) : View(context) {
         private set
     /** The sun is drawn (tests): only in a clear sky, by day. */
     val showsSun: Boolean get() = sky == SceneModel.Sky.SUN && day
-    /** The moon is drawn (tests): a clear sky at night. */
-    val showsMoon: Boolean get() = sky == SceneModel.Sky.SUN && !day
+    /** The moon is drawn (tests): a clear sky at night; in the night theme, at night whatever the sky (behind its cloud). */
+    val showsMoon: Boolean get() = !day && (sky == SceneModel.Sky.SUN || nightTheme)
+
+    /**
+     * The details' night theme: at night the island's own night version, the moon as it is tonight
+     * in its sky with stars, the grass, rock and tree in muted night tones (no bright day green).
+     */
+    var nightTheme = false
+        set(value) { field = value; invalidate() }
+
+    /** Drawn in its night version now (tests). */
+    val nightLook: Boolean get() = nightTheme && !day
+
+    private var moonLit = 1.0
+    private var moonWaxing = true
+
+    /** The moon's phase at the moment shown: lit fraction, and whether waxing. */
+    fun moon(lit: Double, waxing: Boolean) {
+        moonLit = lit
+        moonWaxing = waxing
+    }
     /** Inches per hour. */
     var rate = 0.0
         private set
@@ -315,6 +365,10 @@ class IslandView(context: Context) : View(context) {
     private val path = Path()
     private val moonBite = Path()
     private val oval = RectF()
+    private val moonRect = RectF()
+
+    /** A color in its night tone when the night version is drawn. */
+    private fun tone(c: Int, amount: Double = 0.55): Int = if (nightLook) Moonlight.muted(c, amount) else c
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
@@ -340,7 +394,18 @@ class IslandView(context: Context) : View(context) {
         path.lineTo(cx + iw * 0.1f, topY + h * 0.26f)
         path.quadTo(cx + iw * 0.36f, topY + h * 0.16f, cx + iw / 2, topY)
         path.close()
-        paint.shader = LinearGradient(0f, topY, 0f, topY + h * 0.34f, 0xFF8A6544.toInt(), 0xFF3E2A1C.toInt(), Shader.TileMode.CLAMP)
+        // At night: stars, and the moon in the sky (behind any cloud), before the island.
+        if (nightLook) {
+            paint.color = MoonDisc.LIT
+            NIGHT_STARS.forEachIndexed { i, (sx, sy, sr) ->
+                paint.alpha = if (i % 3 == 0) 255 else 170
+                canvas.drawCircle(cx + iw * sx, h * sy + bob / 2, sr * density, paint)
+            }
+            paint.alpha = 255
+            // High on the left, clear of the cloud (which sits over the middle and right).
+            MoonDisc.draw(canvas, paint, moonBite, moonRect, cx - iw * 0.42f, h * 0.13f + bob / 2, h * 0.1f, moonLit, moonWaxing, halo = 2f)
+        }
+        paint.shader = LinearGradient(0f, topY, 0f, topY + h * 0.34f, tone(0xFF8A6544.toInt()), tone(0xFF3E2A1C.toInt()), Shader.TileMode.CLAMP)
         canvas.drawPath(path, paint)
         // A darker right face for depth.
         path.reset()
@@ -354,7 +419,7 @@ class IslandView(context: Context) : View(context) {
         canvas.drawPath(path, paint)
 
         // Grass top: an ellipse with a lip, greener when wet.
-        val grass = if (wet) 0xFF4E8F57.toInt() else 0xFF7BAA4E.toInt()
+        val grass = tone(if (wet) 0xFF4E8F57.toInt() else 0xFF7BAA4E.toInt(), 0.6)
         oval.set(cx - iw / 2, topY - h * 0.07f, cx + iw / 2, topY + h * 0.07f)
         paint.color = SceneRenderer.mix(grass, 0xFF000000.toInt(), 0.25)
         canvas.drawOval(oval, paint)
@@ -363,13 +428,14 @@ class IslandView(context: Context) : View(context) {
         canvas.drawOval(oval, paint)
 
         // A tree.
-        paint.color = 0xFF5A3D27.toInt()
+        paint.color = tone(0xFF5A3D27.toInt())
         val tx = cx - iw * 0.18f
         canvas.drawRect(tx - 2 * density, topY - h * 0.2f, tx + 2 * density, topY - h * 0.02f, paint)
         paint.color = SceneRenderer.mix(grass, 0xFF0F3D1C.toInt(), 0.45)
         canvas.drawCircle(tx, topY - h * 0.24f, h * 0.09f, paint)
         canvas.drawCircle(tx + h * 0.06f, topY - h * 0.19f, h * 0.07f, paint)
 
+        if (nightLook && sky == SceneModel.Sky.SUN) return // a clear night: the moon and stars, drawn above
         if (sky == SceneModel.Sky.SUN && day) {
             // A clear sky by day: the sun.
             paint.color = context.color(R.color.weather_sun)
@@ -398,7 +464,7 @@ class IslandView(context: Context) : View(context) {
             return
         }
         // A cloud over it (gray; white for snow), then, if it rains or snows, the fall onto the grass.
-        paint.color = if (type == Precip.Type.SNOW) 0xFFE6EBF0.toInt() else 0xFF8C96A3.toInt()
+        paint.color = tone(if (type == Precip.Type.SNOW) 0xFFE6EBF0.toInt() else 0xFF8C96A3.toInt(), 0.4)
         val cy = h * 0.16f
         for ((dx, r) in listOf(-0.22f to 0.09f, -0.05f to 0.12f, 0.14f to 0.1f, 0.28f to 0.07f)) {
             canvas.drawCircle(cx + iw * dx, cy, h * r, paint)
@@ -418,6 +484,14 @@ class IslandView(context: Context) : View(context) {
             else canvas.drawLine(x, y, x - 1.2f * density, y + 6 * density, paint)
         }
     }
+
+    private companion object {
+        /** The island's night stars: (dx of its width, y of its height, radius dp). */
+        val NIGHT_STARS = listOf(
+            Triple(-0.2f, 0.05f, 1.4f), Triple(-0.12f, 0.24f, 1.0f), Triple(0.02f, 0.04f, 1.2f), Triple(0.08f, 0.28f, 0.9f),
+            Triple(0.22f, 0.08f, 1.1f), Triple(0.36f, 0.03f, 0.9f), Triple(0.46f, 0.3f, 1.0f), Triple(0.5f, 0.12f, 0.8f),
+        )
+    }
 }
 
 /**
@@ -425,6 +499,10 @@ class IslandView(context: Context) : View(context) {
  * bar's 24 hours, with its scrubber; WEEK: the 7 days, one picked at a time.
  */
 class PrecipGraphView(context: Context, private val light: Boolean) : View(context) {
+
+    /** The night theme: the axis and markers in moonlight; the rain keeps its light blue. */
+    var night = false
+        set(value) { field = value; invalidate() }
 
     enum class Mode { DAY, WEEK }
 
@@ -451,10 +529,13 @@ class PrecipGraphView(context: Context, private val light: Boolean) : View(conte
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val path = Path()
-    private val fg = if (light) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
-    private val dim = if (light) 0x991C1C21.toInt() else 0x99FFFFFF.toInt()
+    private val dayFg = if (light) 0xFF1C1C21.toInt() else 0xFFFFFFFF.toInt()
+    private val dayDim = if (light) 0x991C1C21.toInt() else 0x99FFFFFF.toInt()
     // No theme color: the controls are dark gray (the weather itself keeps its colors: blue rain, the sun).
-    private val accent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
+    private val dayAccent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
+    private val fg get() = if (night) Moonlight.INK else dayFg
+    private val dim get() = if (night) Moonlight.INK_DIM else dayDim
+    private val accent get() = if (night) Moonlight.ACCENT else dayAccent
     private val drop = context.color(R.color.weather_drop)
 
     init {

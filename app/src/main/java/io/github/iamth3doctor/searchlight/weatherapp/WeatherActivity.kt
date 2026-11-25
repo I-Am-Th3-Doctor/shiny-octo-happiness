@@ -122,6 +122,23 @@ class WeatherActivity : Activity() {
         private set
     lateinit var dataScrim: View
         private set
+
+    /** The data screen's night sky (the night theme's backdrop: stars and tonight's moon). */
+    lateinit var dataNightSky: NightSkyView
+        private set
+    /** The data screen's back arrow. */
+    private lateinit var dataBack: ImageView
+    private var lastBack: ImageView? = null
+
+    /** The details are in their night theme (sunset to sunrise), or fading into it. */
+    var detailsNight = false
+        private set
+    /** Tests: force the details' theme (true night, false day); null: by the sun. */
+    var nightOverride: Boolean? = null
+    /** The fade between the day and night themes, while it runs. */
+    private var themeFade: android.animation.ValueAnimator? = null
+    /** Whether the fade between themes is under way (tests). */
+    val themeFading: Boolean get() = themeFade != null
     /** The hour dragged to on the data screen's scene; null: now. */
     var detailScrubTime: Long? = null
         private set
@@ -212,6 +229,7 @@ class WeatherActivity : Activity() {
         dataTitle = title("")
         dataScreen = screen(dataHeader(), buildRefreshButton(), panel.body, "weather_screen_data", backdrop = detailLapse)
         dataScroll = lastScroll!!
+        dataBack = lastBack!!
         // Drag sideways across the data screen: the scene behind goes through the hours (the hourly
         // strip and the precip card keep their own sideways drags).
         dataScreen.canDragXAt = { x, y ->
@@ -500,6 +518,9 @@ class WeatherActivity : Activity() {
             // Frosted over: a white veil, so the dark numbers read over any sky.
             dataScrim = View(this).apply { setBackgroundColor(FROSTED_VEIL); this.tag = "weather_data_scrim" }
             frame.addView(dataScrim, match())
+            // At night, the night sky in the veil's place (faded between the two).
+            dataNightSky = NightSkyView(this)
+            frame.addView(dataNightSky, match())
         }
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val m = px(R.dimen.space_m)
@@ -517,6 +538,7 @@ class WeatherActivity : Activity() {
             contentDescription = getString(R.string.weather_back)
             this.tag = "weather_screen_back"
             setOnClickListener { back() }
+            lastBack = this
         }, LinearLayout.LayoutParams(button, button))
         header.addView(titleView, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(R.dimen.space_s) })
         if (action != null) header.addView(action)
@@ -658,11 +680,9 @@ class WeatherActivity : Activity() {
 
     /** A screen came in: status bar icons to suit it; anything left playing on the way out stops. */
     private fun onScreen(v: View) {
-        // Frosted throughout: light, so the status and navigation bars' icons are dark.
-        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = true
-            isAppearanceLightNavigationBars = true
-        }
+        // Frosted throughout: light, so the status and navigation bars' icons are dark (on the
+        // details' night sky, light icons).
+        barsFor(v)
         if (v !== weekScreen) week.stopPreview()
         if (v !== dataScreen) { panel.closeDay(animate = false); endDetailScrub() }
         armIdle()
@@ -676,9 +696,113 @@ class WeatherActivity : Activity() {
         screens.push(weekScreen)
     }
 
+    /** The status and navigation bars' icons: dark on the frosted screens, light on the details' night sky. */
+    private fun barsFor(v: View) {
+        val dark = v === dataScreen && detailsNight
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
+    }
+
+    /** Night on the details now: from sunset to sunrise at the place (the sunrise and sunset the forecast gives). */
+    fun detailsNightNow(): Boolean {
+        nightOverride?.let { return it }
+        val data = repo.state.data ?: return false
+        return !io.github.iamth3doctor.searchlight.weather.Daylight.isDay(data, clock())
+    }
+
+    /**
+     * The details' theme, day or [night]: the night sky (stars, tonight's moon) in the frosted
+     * veil's place, and every piece of print in moonlight; day, exactly as it was. With [animate],
+     * a smooth fade: the sky crossfades, the header's print eases between the two, and the panel
+     * dips and comes back in its new colors. Without, straight to it (opening the page).
+     */
+    fun setDetailsNight(night: Boolean, animate: Boolean) {
+        val fade = themeFade
+        if (fade != null) { themeFade = null; fade.cancel() }
+        val from = dataNightSky.level
+        val to = if (night) 1f else 0f
+        detailsNight = night
+        moonTonight()
+        detailLapse.preview.renderer.hideMoon = night
+        barsFor(screens.top)
+        if (!animate || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
+            themeLevel(to)
+            panel.night = night
+            panel.body.alpha = 1f
+            return
+        }
+        val needSwap = panel.night != night
+        var swapped = !needSwap
+        val anim = android.animation.ValueAnimator.ofFloat(0f, 1f).setDuration(THEME_FADE_MS)
+        anim.interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+        anim.addUpdateListener {
+            val f = it.animatedValue as Float
+            themeLevel(from + (to - from) * f)
+            // The panel's print dips out, changes, and comes back.
+            if (needSwap) panel.body.alpha = kotlin.math.abs(1 - 2 * f)
+            if (!swapped && f >= 0.5f) {
+                swapped = true
+                panel.night = night
+                if (dataShown) {
+                    panel.render(repo.state)
+                    panelState = repo.state
+                    panel.precip.update(repo.state.data, clock(), bar.scrubTime)
+                }
+            }
+        }
+        anim.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(a: android.animation.Animator) {
+                if (themeFade !== anim) return
+                themeFade = null
+                if (panel.night != night) {
+                    panel.night = night
+                    if (dataShown) { panel.render(repo.state); panelState = repo.state; panel.precip.update(repo.state.data, clock(), bar.scrubTime) }
+                }
+                panel.body.alpha = 1f
+                themeLevel(to)
+            }
+        })
+        themeFade = anim
+        anim.start()
+    }
+
+    /** The night sky's moon as it is tonight. */
+    private fun moonTonight() {
+        val t = clock()
+        dataNightSky.moonLit = io.github.iamth3doctor.searchlight.weather.Moon.illumination(t)
+        dataNightSky.waxing = io.github.iamth3doctor.searchlight.weather.MetricArt.waxing(t)
+    }
+
+    /** The details' backdrop and header between day (0) and night (1). */
+    private fun themeLevel(level: Float) {
+        dataNightSky.level = level
+        dataScrim.alpha = 1f - level
+        val ev = android.animation.ArgbEvaluator()
+        fun between(day: Int, night: Int) = ev.evaluate(level, day, night) as Int
+        val ink = between(fg, Moonlight.INK)
+        val inkDim = between(dim, Moonlight.INK_DIM)
+        val shadow = if (level > 0f) 3 * resources.displayMetrics.density else 0f
+        val shadowColor = SceneRenderer.withAlpha(Moonlight.SHADOW, (Moonlight.SHADOW ushr 24) / 255.0 * level)
+        for (t in listOf(dataTitle, refreshNote)) { t.setTextColor(ink); t.setShadowLayer(shadow, 0f, 1f, shadowColor) }
+        dataUpdated.setTextColor(inkDim)
+        dataUpdated.setShadowLayer(shadow, 0f, 1f, shadowColor)
+        dataBack.setColorFilter(ink)
+        refreshIcon.setColorFilter(ink)
+        refreshSpinner.color = ink
+        refreshSpinner.invalidate()
+        (refreshButton.background as? GradientDrawable)?.apply {
+            setColor(between(glass(), Moonlight.CHIP))
+            setStroke(resources.displayMetrics.density.toInt().coerceAtLeast(1), between(glassBorder(), Moonlight.GLASS_EDGE))
+        }
+    }
+
     fun openDetails() {
         if (quickShown) setQuick(false)
         if (dataShown) return
+        // The theme for now: night from sunset to sunrise.
+        setDetailsNight(detailsNightNow(), animate = false)
         panel.render(repo.state)
         panelState = repo.state
         panel.precip.update(repo.state.data, clock(), bar.scrubTime)
@@ -822,6 +946,9 @@ class WeatherActivity : Activity() {
 
         if (quickShown) quick.render(data, c)
         renderRefresh(state)
+        // Sunset or sunrise while the details are open: they fade into the other theme.
+        if (dataShown && themeFade == null && detailsNightNow() != detailsNight) setDetailsNight(!detailsNight, animate = true)
+        if (dataShown && detailsNight) moonTonight()
         // The details and 7 days rebuild when the reading changes; scrubbing only moves the precip card along.
         if (dataShown && state !== panelState) {
             panel.render(state)
@@ -1084,6 +1211,9 @@ class WeatherActivity : Activity() {
 
         /** The frosted white veil over the scene behind the quick numbers and the details. */
         const val FROSTED_VEIL = 0xC7F4F5F7.toInt()
+
+        /** The fade between the details' day and night themes. */
+        const val THEME_FADE_MS = 1200L
 
         /** Opens straight to the severe-weather alert's details. */
         const val EXTRA_ALERT = "alert"

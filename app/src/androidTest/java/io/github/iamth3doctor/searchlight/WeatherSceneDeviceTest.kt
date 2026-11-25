@@ -581,7 +581,8 @@ class WeatherSceneDeviceTest {
 
     @Test fun theDetailsSitOverTheLivingSceneAndATappedDayOpensInItsBox() = screen { h ->
         force(h, lapseReading())
-        on(h) { it.openDetails() }
+        // The day theme (the night theme has its own test).
+        on(h) { it.nightOverride = false; it.openDetails() }
         settle(h)
         val panel = on(h) { it.panel }
         val rows = on(h) { panel.dayRows.toList() }
@@ -1836,6 +1837,111 @@ class WeatherSceneDeviceTest {
         shot("137-hours-sun-and-moon")
     }
 
+    /** A color with its alpha laid over [bg] (opaque). */
+    private fun over(c: Int, bg: Int): Int {
+        val a = (c ushr 24) / 255.0
+        fun ch(s: Int) = (((c shr s) and 0xFF) * a + ((bg shr s) and 0xFF) * (1 - a)).toInt()
+        return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+    }
+
+    private fun contrast(a: Int, b: Int): Double {
+        val la = WeatherSkin.luminance(a)
+        val lb = WeatherSkin.luminance(b)
+        return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
+    }
+
+    @Test fun theDetailsHaveANightThemeFromSunsetToSunrise() = screen { h ->
+        // Overcast, 52°F: the case from Tacoma at night.
+        val w = reading(3, 95, 0.0)
+        force(h, w)
+        settle(h)
+        // By the sun: night from sunset (4:30 PM in the fixture) to sunrise (7:25 AM).
+        val nightNow = !io.github.iamth3doctor.searchlight.weather.Daylight.isDay(w, System.currentTimeMillis())
+        assertEquals(nightNow, on(h) { it.detailsNightNow() })
+
+        // Day first: exactly as it was, the frosted white veil and dark print, no night sky.
+        on(h) { it.nightOverride = false; it.openDetails() }
+        settle(h)
+        val dayHours = on(h) { a -> ArrayList<View>().also { collectTagged(a.dataScreen, "weather_hour", it) }.size }
+        val dayTexts = texts(on(h) { it.panel.body }).map { on(h) { _ -> it.text.toString() } }
+        assertFalse(on(h) { it.detailsNight })
+        assertEquals(1f, on(h) { it.dataScrim.alpha })
+        assertFalse(on(h) { it.dataNightSky.isShown })
+        assertTrue("dark print by day", WeatherSkin.luminance(on(h) { it.panel.nowTemp!!.currentTextColor }) < 0.05)
+        assertFalse(on(h) { it.panel.precip.island.nightLook })
+        shot("140-details-day")
+
+        // Sunset with the page open: a smooth fade into the night theme, not a cut.
+        on(h) { it.nightOverride = true; it.render() }
+        if (on(h) { android.animation.ValueAnimator.areAnimatorsEnabled() }) {
+            assertTrue("fading", on(h) { it.themeFading })
+            Thread.sleep(300)
+            val mid = on(h) { it.dataNightSky.level }
+            assertTrue("part way: $mid", mid > 0f && mid < 1f)
+        }
+        waitFor("faded into night", 5_000) { on(h) { !it.themeFading } }
+        assertTrue(on(h) { it.detailsNight && it.panel.night })
+        assertEquals(1f, on(h) { it.dataNightSky.level })
+        assertEquals("the frosted white veil gone", 0f, on(h) { it.dataScrim.alpha })
+        assertEquals(1f, on(h) { it.panel.body.alpha })
+
+        // Open at night: the night theme straight away.
+        on(h) { it.back() }
+        settle(h)
+        on(h) { it.openDetails() }
+        settle(h)
+        assertFalse(on(h) { it.themeFading })
+        val sky = on(h) { it.dataNightSky }
+        assertTrue("the night sky shows", on(h) { sky.isShown && sky.level == 1f })
+        assertTrue("the scene's own small moon left out", on(h) { it.detailLapse.preview.renderer.hideMoon })
+        // The moon: large, on screen, tonight's phase.
+        val d = on(h) { it.resources.displayMetrics.density }
+        assertTrue("large: ${on(h) { sky.moonR }}", on(h) { sky.moonR } >= 40 * d)
+        assertTrue("on screen", on(h) { sky.moonX - sky.moonR >= 0 && sky.moonX + sky.moonR <= sky.width && sky.moonY - sky.moonR >= 0 })
+        assertEquals(Moon.illumination(System.currentTimeMillis()), on(h) { sky.moonLit }, 0.01)
+        // Light icons in the status bar over the dark sky.
+        assertFalse(on(h) { androidx.core.view.WindowCompat.getInsetsController(it.window, it.window.decorView).isAppearanceLightStatusBars })
+
+        // Every piece of data still there, in the same order.
+        val nightHours = on(h) { a -> ArrayList<View>().also { collectTagged(a.dataScreen, "weather_hour", it) }.size }
+        assertEquals(dayHours, nightHours)
+        assertEquals(7, on(h) { it.panel.dayRows.size })
+        val nightTexts = texts(on(h) { it.panel.body }).map { on(h) { _ -> it.text.toString() } }
+        assertEquals("the same words and numbers", dayTexts, nightTexts)
+        assertEquals(listOf("now", "summary", "precip", "hourly", "daily"), on(h) { it.panel.sections.keys.take(5) })
+
+        // Every label and number in moonlight, readable at a glance on the dark (the blue chances too).
+        val bg = over(io.github.iamth3doctor.searchlight.weatherapp.Moonlight.GLASS, io.github.iamth3doctor.searchlight.weatherapp.Moonlight.SKY_MID)
+        val all = texts(on(h) { it.dataScreen }).filter { t -> on(h) { t.background == null && t.text.isNotBlank() } }
+        assertTrue(all.size > 40)
+        for (t in all) {
+            val c = on(h) { over(t.currentTextColor, bg) }
+            val ratio = contrast(c, bg)
+            assertTrue("\"${on(h) { t.text }}\" ${"%.1f".format(ratio)}:1", ratio >= 4.5)
+        }
+        assertTrue("the big number pale", WeatherSkin.luminance(on(h) { it.panel.nowTemp!!.currentTextColor }) > 0.7)
+        assertTrue("the updated line legible", contrast(on(h) { over(it.dataUpdated.currentTextColor, bg) }, bg) >= 4.5)
+
+        // The island at night: its night version, the moon in its sky, no sun.
+        val island = on(h) { it.panel.precip.island }
+        assertTrue(on(h) { island.nightLook && island.showsMoon && !island.showsSun })
+        // The cards keep their glass, in night form: translucent, never flat black.
+        val glass = on(h) { (it.panel.sections["daily"] as ViewGroup).let { box -> ((box.getChildAt(1) as ViewGroup).getChildAt(0).background as android.graphics.drawable.GradientDrawable).color!!.defaultColor } }
+        assertTrue("frosted, the sky through it", (glass ushr 24) in 0x40..0xE0)
+        shot("138-details-night")
+        on(h) { it.panel.sections["hourly"]?.let { v -> (v.parent.parent as? android.widget.ScrollView)?.scrollTo(0, v.top) } }
+        idle()
+        shot("139-details-night-hours")
+
+        // Sunrise: back to day, exactly as before.
+        on(h) { it.dataScroll.scrollTo(0, 0); it.nightOverride = false; it.render() }
+        waitFor("faded into day", 5_000) { on(h) { !it.themeFading } }
+        assertEquals(1f, on(h) { it.dataScrim.alpha })
+        assertFalse(on(h) { sky.isShown })
+        assertFalse(on(h) { it.detailLapse.preview.renderer.hideMoon })
+        assertTrue(WeatherSkin.luminance(on(h) { it.panel.nowTemp!!.currentTextColor }) < 0.05)
+    }
+
     private fun collectTagged(v: View, tag: String, out: MutableList<View>) {
         if (v.tag == tag) out += v
         if (v is ViewGroup) for (i in 0 until v.childCount) collectTagged(v.getChildAt(i), tag, out)
@@ -2173,7 +2279,7 @@ class WeatherSceneDeviceTest {
             assertTrue(onMain { isGray(a.placeButton.currentTextColor) })
             shot("125-frost-hero")
             // The data screen: frosted veil and panels, dark text.
-            onMain { a.openDetails() }
+            onMain { a.nightOverride = false; a.openDetails() }
             waitFor("data screen") { onMain { a.dataShown && !a.screens.moving } }
             Thread.sleep(800)
             assertTrue(onMain { isGray(a.panel.nowTemp!!.currentTextColor) && WeatherSkin.luminance(a.panel.nowTemp!!.currentTextColor) < 0.05 })

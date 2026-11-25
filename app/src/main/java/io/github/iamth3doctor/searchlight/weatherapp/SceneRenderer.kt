@@ -105,6 +105,10 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
      * clouds, chunky rain — rather than the soft, photographic look.
      */
     var cartoon = false
+
+    /** Leave the moon out: the details' night sky draws its own, larger, over this scene. */
+    var hideMoon = false
+
     var outline = 0xFF1A1408.toInt()
 
     /**
@@ -547,7 +551,7 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         if (w <= 0 || h <= 0 || target == null) return
         drawSky(canvas)
         drawStars(canvas)
-        drawMoon(canvas)
+        if (!hideMoon) drawMoon(canvas)
         drawSun(canvas)
         drawBirds(canvas)
         drawClouds(canvas, front = false)

@@ -92,17 +92,37 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     private fun px(token: Int) = context.px(token)
     private fun pxF(token: Int) = context.pxF(token)
 
-    private val fg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
-    private val dim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
+    /**
+     * The night theme (sunset to sunrise): moonlight print and dark frosted panels over the night
+     * sky. Set before [render]; the precip card follows it. Day keeps its own colors.
+     */
+    var night = false
+        set(value) {
+            field = value
+            precip.night = value
+        }
+
+    private val dayFg = if (light) 0xFF1C1C21.toInt() else context.color(R.color.on_surface)
+    private val dayDim = if (light) 0xA61C1C21.toInt() else context.color(R.color.on_surface_dim)
     // No theme color: the chrome's marks are the text's own dark gray.
-    private val accent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
-    private val insetColor = if (light) 0x99FFFFFF.toInt() else context.color(R.color.surface_inset)
+    private val dayAccent = if (light) 0xFF2A2A30.toInt() else context.color(R.color.on_surface)
+    private val dayInset = if (light) 0x99FFFFFF.toInt() else context.color(R.color.surface_inset)
+    private val fg get() = if (night) Moonlight.INK else dayFg
+    private val dim get() = if (night) Moonlight.INK_DIM else dayDim
+    private val accent get() = if (night) Moonlight.ACCENT else dayAccent
+    private val insetColor get() = if (night) Moonlight.GLASS else dayInset
 
     private fun text(style: Int, dimmed: Boolean = false, bold: Boolean = false) = TextView(context).apply {
         type(style)
         if (bold) typeface = Typeface.create(typeface, 700, false) // Lexend Bold itself, never a faked heavier one
         setTextColor(if (dimmed) dim else fg)
         includeFontPadding = false
+        moonlit(this)
+    }
+
+    /** At night, a soft dark edge under the print, so it reads where it crosses the moon. */
+    private fun moonlit(t: TextView) {
+        if (night) t.setShadowLayer(3 * context.resources.displayMetrics.density, 0f, 1f, Moonlight.SHADOW)
     }
 
     private fun lp(top: Int = 0) =
@@ -123,6 +143,8 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     private fun inset() = GradientDrawable().apply {
         cornerRadius = pxF(R.dimen.radius_card) / 2
         setColor(insetColor)
+        // At night the dark glass has a thin moonlit edge.
+        if (night) setStroke(context.resources.displayMetrics.density.toInt().coerceAtLeast(1), Moonlight.GLASS_EDGE)
     }
 
     private fun deg(c: Double) = "${WeatherText.f(c)}°"
@@ -289,7 +311,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
             row.isClickable = true
             row.isFocusable = true
             row.background = android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(if (light) 0x1F000000 else 0x33FFFFFF),
+                android.content.res.ColorStateList.valueOf(if (light && !night) 0x1F000000 else 0x33FFFFFF),
                 null, GradientDrawable().apply { cornerRadius = pxF(R.dimen.radius_card) / 3; setColor(0xFF000000.toInt()) })
             row.setOnClickListener { openDay(i) }
             dayRows += row
@@ -464,7 +486,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
     private val ease = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
 
     private fun tile(key: String, labelRes: Int, value: String, sub: String?, art: ArtInfo, note: String): MetricTile {
-        val t = MetricTile(context, key, light).apply {
+        val t = MetricTile(context, key, light && !night).apply {
             background = inset()
             val p = px(R.dimen.space_s) + px(R.dimen.space_xs)
             setPadding(p, p, p, p)
@@ -480,6 +502,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         t.note.apply {
             type(Type.BODY)
             setTextColor(fg)
+            moonlit(this)
             text = note
             setLineSpacing(0f, 1.15f)
             tag = "weather_metric_note"
