@@ -43,6 +43,8 @@ data class SceneConditions(
     val severe: AlertKind? = null,
     /** What the sky shows ([SceneModel.sky]): the sun only when it's [SceneModel.Sky.SUN]. */
     val sky: SceneModel.Sky = SceneModel.Sky.CLOUD,
+    /** Between sunrise and sunset ([Daylight]): the sun is never drawn outside it. */
+    val day: Boolean = true,
 ) {
     /** Where the wind blows to (0 north, 90 east): the way the scene's arrow points. */
     val windTowardDeg: Double get() = (windFromDeg + 180) % 360
@@ -218,6 +220,7 @@ object SceneModel {
             moonAge = Moon.age(timeMs),
             severe = severe,
             sky = sky,
+            day = Daylight.isDay(data, timeMs),
         )
     }
 }

@@ -1800,6 +1800,47 @@ class WeatherSceneDeviceTest {
         shot("136-showers-island")
     }
 
+    @Test fun noSunAtNightAnywhere() = screen { h ->
+        // Mainly clear all day and night; the fixture's sunrise is 7:25 AM, sunset 4:30 PM.
+        val w = reading(1, 25, 0.0)
+        force(h, w)
+        settle(h)
+        val night = !io.github.iamth3doctor.searchlight.weather.Daylight.isDay(w, System.currentTimeMillis())
+        if (night) assertFalse("no sun in the hero at night", on(h) { it.scene.renderer.sunShowing })
+        assertEquals(!night, on(h) { it.conditions().day })
+        on(h) { it.openDetails() }
+        settle(h)
+        // Every hour in the strip: a sun only from sunrise to sunset, a moon outside it.
+        val now = System.currentTimeMillis()
+        val hours = w.detail!!.hourly.filter { it.time > now - hour }.take(24)
+        val cells = on(h) { a -> ArrayList<View>().also { collectTagged(a.dataScreen, "weather_hour", it) } }
+        assertEquals(hours.size, cells.size)
+        val visuals = on(h) { cells.map { c -> ((c as ViewGroup).getChildAt(1) as io.github.iamth3doctor.searchlight.widgets.ConditionView).visual } }
+        var sawDay = false
+        var sawNight = false
+        hours.zip(visuals).forEach { (hp, v) ->
+            val ofDay = Math.floorMod(hp.time + off * 1000L, 24 * hour)
+            val day = ofDay >= 7 * hour + 25 * 60_000L && ofDay < 16 * hour + 30 * 60_000L
+            val expected = if (hp.code == 63) io.github.iamth3doctor.searchlight.weather.ConditionVisual.RAIN
+                else if (day) io.github.iamth3doctor.searchlight.weather.ConditionVisual.PARTLY_DAY
+                else io.github.iamth3doctor.searchlight.weather.ConditionVisual.PARTLY_NIGHT
+            assertEquals("the ${ofDay / hour}:00 hour", expected, v)
+            if (hp.code != 63) { if (day) sawDay = true else sawNight = true }
+        }
+        assertTrue("24 hours hold both day and night", sawDay && sawNight)
+        // The island: the moon at night, the sun by day, in a clear sky.
+        val card = on(h) { it.panel.precip }
+        assertEquals(night, on(h) { card.island.showsMoon })
+        assertEquals(!night, on(h) { card.island.showsSun })
+        on(h) { it.panel.sections["hourly"]?.let { v -> (v.parent.parent as? android.widget.ScrollView)?.scrollTo(0, v.top) } }
+        shot("137-hours-sun-and-moon")
+    }
+
+    private fun collectTagged(v: View, tag: String, out: MutableList<View>) {
+        if (v.tag == tag) out += v
+        if (v is ViewGroup) for (i in 0 until v.childCount) collectTagged(v.getChildAt(i), tag, out)
+    }
+
     @Test fun precipCardRowsGraphAndBarMoveTogether() = screen { h ->
         force(h, reading(0, 2, 0.0))
         on(h) { it.openDetails() }
@@ -1811,7 +1852,10 @@ class WeatherSceneDeviceTest {
         assertEquals("RATE", on(h) { card.rateLabel.text.toString() })
         assertTrue(on(h) { card.expected.text.toString() }, on(h) { card.expected.text.toString() }.startsWith("Rain expected around "))
         assertEquals(0, on(h) { card.island.particles })
-        assertTrue("a clear sky: the island has its sun", on(h) { card.island.showsSun })
+        // A clear sky: the island has its sun by day, the moon by night.
+        val dayNow = io.github.iamth3doctor.searchlight.weather.Daylight.isDay(reading(0, 2, 0.0), System.currentTimeMillis())
+        assertEquals("a clear sky: the sun by day", dayNow, on(h) { card.island.showsSun })
+        assertEquals("a clear sky: the moon by night", !dayNow, on(h) { card.island.showsMoon })
         assertEquals(PrecipGraphView.Mode.DAY, on(h) { card.graph.mode })
         on(h) { it.panel.sections["precip"]!!.let { v -> (v.parent.parent as? android.widget.ScrollView)?.smoothScrollTo(0, v.top) } }
         shot("93-precip-now")

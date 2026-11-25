@@ -132,6 +132,10 @@ class ConditionView(context: Context, private val glow: Boolean = true) : View(c
         disc.op(bite, Path.Op.DIFFERENCE)
         fill.color = context.color(R.color.weather_moon)
         canvas.drawPath(disc, fill)
+        // A crater or two on the lit crescent: a moon at a glance, never the sun.
+        fill.color = context.color(R.color.weather_moon_crater)
+        canvas.drawCircle((cx - r * 0.45f) * s, (cy + r * 0.2f) * s, r * 0.14f * s, fill)
+        canvas.drawCircle((cx - r * 0.12f) * s, (cy + r * 0.6f) * s, r * 0.1f * s, fill)
     }
 
     private fun stars(canvas: Canvas, s: Float, at: List<Triple<Float, Float, Float>>) {

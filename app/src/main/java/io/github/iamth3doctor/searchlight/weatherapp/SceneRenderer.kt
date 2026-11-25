@@ -657,7 +657,8 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         return horizon - ((alt.coerceIn(-6.0, 60.0) / 60.0) * (horizon - top)).toFloat()
     }
 
-    private fun sunTarget(c: SceneConditions) = if (c.sky == SceneModel.Sky.SUN) 1.0 else 0.0
+    /** The sun: a clear sky, between sunrise and sunset; never at night. */
+    private fun sunTarget(c: SceneConditions) = if (c.sky == SceneModel.Sky.SUN && c.day) 1.0 else 0.0
 
     /** The sun's disc shows now (tests): a clear sky, by day. */
     val sunShowing: Boolean get() = sunShow > 0.01 && sunAlt >= -4
@@ -736,6 +737,10 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
         if (!waxing) canvas.scale(-1f, 1f, x, y) // waning: lit on the left (northern sky)
         paint.color = withAlpha(palette.moon, vis)
         canvas.drawPath(moonPath, paint)
+        // Craters on the lit part, a shade of the moon's own silver: a moon at a glance, full or not.
+        canvas.clipPath(moonPath)
+        paint.color = withAlpha(mix(palette.moon, palette.moonDark, 0.28), vis * 0.75)
+        for ((dx, dy, cr) in CRATERS) canvas.drawCircle(x + dx * r, y + dy * r, cr * r, paint)
         canvas.restore()
     }
 
@@ -874,6 +879,9 @@ class SceneRenderer(private val density: Float, private val mini: Boolean) {
     }
 
     companion object {
+        /** The moon's craters: (x, y, radius) as fractions of its radius, from its centre. */
+        private val CRATERS = listOf(Triple(0.3f, -0.25f, 0.2f), Triple(-0.35f, 0.3f, 0.16f), Triple(0.15f, 0.45f, 0.11f), Triple(-0.1f, -0.5f, 0.1f))
+
         fun mix(a: Int, b: Int, t: Double): Int {
             val f = t.coerceIn(0.0, 1.0)
             fun ch(s: Int) = (((a shr s) and 0xFF) + (((b shr s) and 0xFF) - ((a shr s) and 0xFF)) * f).toInt()

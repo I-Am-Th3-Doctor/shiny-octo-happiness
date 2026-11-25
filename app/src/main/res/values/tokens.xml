@@ -171,7 +171,9 @@
     <color name="weather_tint_fog">#FFA6A398</color>
     <!-- the visual's own glyphs -->
     <color name="weather_sun">#FFFFC93C</color>
-    <color name="weather_moon">#FFF4ECCB</color>
+    <!-- The moon: pale silver, never the sun's yellow, so even a full moon reads as the moon. -->
+    <color name="weather_moon">#FFDCE3EC</color>
+    <color name="weather_moon_crater">#FFAAB5C4</color>
     <color name="weather_cloud">#FFECEFF2</color>
     <color name="weather_cloud_dark">#FFAAB4BE</color>
     <color name="weather_drop">#FF8CC8F0</color>

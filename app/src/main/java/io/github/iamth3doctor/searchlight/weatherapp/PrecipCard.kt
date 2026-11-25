@@ -198,7 +198,10 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
             Precip.Type.SNOW -> R.string.weather_precip_snow
             Precip.Type.NONE -> R.string.weather_precip_none
         })
-        island.set(reading.sky, if (week) reading.rateIn / 24 else reading.rateIn)
+        // Night (outside sunrise to sunset) at the moment shown: the moon, never the sun. A day of
+        // the week is its daytime.
+        val day = week || io.github.iamth3doctor.searchlight.weather.Daylight.isDay(d, scrub ?: nowMs)
+        island.set(reading.sky, if (week) reading.rateIn / 24 else reading.rateIn, day)
 
         val next = Precip.nextWet(d, nowMs)
         expected.text = when {
@@ -216,8 +219,9 @@ class PrecipCard(private val context: Context, private val light: Boolean) {
  * A small floating island, drawn in layers for depth: grass on top, rock tapering beneath, a
  * tree, its shadow below. Its sky is the page's ([SceneModel.Sky]): when it rains, a cloud over it
  * lets drops fall onto it (as many and as fast as the rate); snow drifts down instead; cloudy or
- * overcast, a gray cloud and no sun; only a clear sky has the sun. Animates only while shown, never
- * in battery saver.
+ * overcast, a gray cloud and no sun; only a clear sky has the sun, and only by day: a clear night
+ * has a pale silver crescent moon and stars instead. Animates only while shown, never in battery
+ * saver.
  */
 class IslandView(context: Context) : View(context) {
 
@@ -228,8 +232,13 @@ class IslandView(context: Context) : View(context) {
         SceneModel.Sky.SNOW -> Precip.Type.SNOW
         else -> Precip.Type.NONE
     }
-    /** The sun is drawn (tests): only in a clear sky. */
-    val showsSun: Boolean get() = sky == SceneModel.Sky.SUN
+    /** Between sunrise and sunset (set with the sky). */
+    var day = true
+        private set
+    /** The sun is drawn (tests): only in a clear sky, by day. */
+    val showsSun: Boolean get() = sky == SceneModel.Sky.SUN && day
+    /** The moon is drawn (tests): a clear sky at night. */
+    val showsMoon: Boolean get() = sky == SceneModel.Sky.SUN && !day
     /** Inches per hour. */
     var rate = 0.0
         private set
@@ -246,8 +255,9 @@ class IslandView(context: Context) : View(context) {
     private var running = false
     private val choreographer = Choreographer.getInstance()
 
-    fun set(sky: SceneModel.Sky, rateIn: Double) {
+    fun set(sky: SceneModel.Sky, rateIn: Double, day: Boolean = true) {
         this.sky = sky
+        this.day = day
         this.rate = rateIn
         val want = when (type) {
             Precip.Type.NONE -> 0
@@ -261,7 +271,7 @@ class IslandView(context: Context) : View(context) {
         }
         count = want
         contentDescription = context.getString(R.string.weather_island_desc, when (sky) {
-            SceneModel.Sky.SUN -> "sun"
+            SceneModel.Sky.SUN -> if (day) "sun" else "moon"
             SceneModel.Sky.CLOUD -> "cloud"
             SceneModel.Sky.RAIN -> "rain"
             SceneModel.Sky.SNOW -> "snow"
@@ -303,6 +313,7 @@ class IslandView(context: Context) : View(context) {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
+    private val moonBite = Path()
     private val oval = RectF()
 
     override fun onDraw(canvas: Canvas) {
@@ -359,10 +370,31 @@ class IslandView(context: Context) : View(context) {
         canvas.drawCircle(tx, topY - h * 0.24f, h * 0.09f, paint)
         canvas.drawCircle(tx + h * 0.06f, topY - h * 0.19f, h * 0.07f, paint)
 
-        if (sky == SceneModel.Sky.SUN) {
-            // A clear sky: the sun.
+        if (sky == SceneModel.Sky.SUN && day) {
+            // A clear sky by day: the sun.
             paint.color = context.color(R.color.weather_sun)
             canvas.drawCircle(cx + iw * 0.28f, h * 0.2f + bob / 2, h * 0.08f, paint)
+            return
+        }
+        if (sky == SceneModel.Sky.SUN) {
+            // A clear night: a pale silver crescent with a crater or two, and stars round it.
+            val mx = cx + iw * 0.28f
+            val my = h * 0.2f + bob / 2
+            val r = h * 0.08f
+            path.reset()
+            path.addCircle(mx, my, r, Path.Direction.CW)
+            moonBite.reset()
+            moonBite.addCircle(mx + r * 0.62f, my - r * 0.42f, r * 0.86f, Path.Direction.CW)
+            path.op(moonBite, Path.Op.DIFFERENCE)
+            paint.color = context.color(R.color.weather_moon)
+            canvas.drawPath(path, paint)
+            paint.color = context.color(R.color.weather_moon_crater)
+            canvas.drawCircle(mx - r * 0.45f, my + r * 0.2f, r * 0.14f, paint)
+            canvas.drawCircle(mx - r * 0.12f, my + r * 0.6f, r * 0.1f, paint)
+            paint.color = context.color(R.color.weather_moon)
+            for ((sx, sy, sr) in listOf(Triple(-0.3f, 0.1f, 1.6f), Triple(0.05f, 0.06f, 1.2f), Triple(-0.12f, 0.26f, 1.0f), Triple(0.4f, 0.36f, 1.1f))) {
+                canvas.drawCircle(cx + iw * sx, h * sy + bob / 2, sr * density, paint)
+            }
             return
         }
         // A cloud over it (gray; white for snow), then, if it rains or snows, the fall onto the grass.

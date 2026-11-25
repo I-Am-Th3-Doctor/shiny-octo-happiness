@@ -135,7 +135,7 @@ class ScenePalette(
             skyBottom = intArrayOf(0xFF111C38.toInt(), 0xFF26305A.toInt(), 0xFFB86F6A.toInt(), 0xFFF2A46E.toInt(), 0xFFB9D5EE.toInt(), 0xFF9FCBF2.toInt()),
             grayDay = 0xFF7E8894.toInt() to 0xFFB8C0C9.toInt(), grayNight = 0xFF12161D.toInt() to 0xFF232830.toInt(),
             sunCore = 0xFFFFF8DC.toInt() to 0xFFFFC870.toInt(), sunGlow = 0xFFFFE680.toInt() to 0xFFFFA64D.toInt(),
-            moon = 0xFFF2F0E6.toInt(), moonDark = 0xFF2A3045.toInt(), moonGlow = 0xFFDDE5F5.toInt(),
+            moon = 0xFFDCE3EC.toInt(), moonDark = 0xFF2A3045.toInt(), moonGlow = 0xFFDDE5F5.toInt(),
             cloudClear = 0xFFFDFDFE.toInt(), cloudRain = 0xFF6E7378.toInt(), cloudNight = 0xFF2B313D.toInt(), cloudDusk = 0xFFF4B48C.toInt(),
             rain = 0xFF7FAEE0.toInt(), snow = 0xFFFFFFFF.toInt(), fog = 0xFFDADEE3.toInt() to 0xFF3A4049.toInt(),
             hillFar = 0xFF101620.toInt(), hillNear = 0xFF090C12.toInt(), stars = 0xFFFFFFFF.toInt(), birds = 0xFF2A2F3A.toInt() to 0xFF101318.toInt(),

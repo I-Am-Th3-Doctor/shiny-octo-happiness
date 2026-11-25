@@ -210,7 +210,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         val hv = px(R.dimen.size_weather_visual_hour) + px(R.dimen.space_xs)
         hours.forEachIndexed { i, h ->
             val name = if (i == 0 && h.time <= now) context.getString(R.string.weather_detail_now_hour) else fmt.format(Instant.ofEpochMilli(h.time).atOffset(zone))
-            strip.addView(hourCell(h, name, hv, "weather_hour"))
+            strip.addView(hourCell(data, h, name, hv, "weather_hour"))
         }
         box.addView(HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
@@ -220,8 +220,11 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
         section("hourly", box)
     }
 
-    /** One hour in a strip: its time, the condition drawn, the temperature, the chance of rain (10% or more). */
-    private fun hourCell(h: io.github.iamth3doctor.searchlight.weather.HourPoint, name: String, size: Int, tag: String) =
+    /**
+     * One hour in a strip: its time, the condition drawn (a moon, never a sun, outside sunrise to
+     * sunset), the temperature, the chance of rain (10% or more).
+     */
+    private fun hourCell(data: WeatherData, h: io.github.iamth3doctor.searchlight.weather.HourPoint, name: String, size: Int, tag: String) =
         LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -229,7 +232,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
             setPadding(p, p, p, p)
             this.tag = tag
             addView(text(Type.CAPTION, dimmed = true).apply { text = name })
-            addView(ConditionView(context, glow = false).apply { visual = ConditionVisual.of(h.code, h.isDay) },
+            addView(ConditionView(context, glow = false).apply { visual = ConditionVisual.of(h.code, io.github.iamth3doctor.searchlight.weather.Daylight.isDay(data, h.time)) },
                 LinearLayout.LayoutParams(size, size).apply { topMargin = px(R.dimen.space_xs); bottomMargin = px(R.dimen.space_xs) })
             addView(text(Type.BODY, bold = true).apply { text = deg(h.tempC) })
             h.precipProb?.takeIf { it >= 10 }?.let { pct ->
@@ -415,7 +418,7 @@ class WeatherDataPanel(private val context: Context, private val light: Boolean)
             val fmt = WeatherFormat.hour(context)
             val strip = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
             val hv = px(R.dimen.size_weather_visual_hour) + px(R.dimen.space_xs)
-            for (h in hours) strip.addView(hourCell(h, fmt.format(Instant.ofEpochMilli(h.time).atOffset(zone)), hv, "weather_day_hour"))
+            for (h in hours) strip.addView(hourCell(data, h, fmt.format(Instant.ofEpochMilli(h.time).atOffset(zone)), hv, "weather_day_hour"))
             inner.addView(HorizontalScrollView(context).apply {
                 isHorizontalScrollBarEnabled = false
                 addView(strip)

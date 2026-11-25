@@ -285,7 +285,7 @@ class WeatherForecastWidgetView(
         }
         placeView.text = data?.locationName ?: ""
         conditionView.text = data?.condition?.uppercase(context.resources.configuration.locales[0]) ?: ""
-        visual.visual = data?.let { ConditionVisual.of(it.weatherCode, it.isDay) } ?: ConditionVisual.CLOUDY
+        visual.visual = data?.let { ConditionVisual.of(it.weatherCode, io.github.iamth3doctor.searchlight.weather.Daylight.isDay(it, now)) } ?: ConditionVisual.CLOUDY
         bar.curve = data?.let { WidgetForecast.curve(it, now) }
         bar.zone = ZoneOffset.ofTotalSeconds(data?.detail?.utcOffsetSec ?: 0)
         contentDescription = if (data != null) context.getString(R.string.weather_widget_desc, "${WeatherText.f(data.temperatureC)}°F", data.condition, data.locationName)
