@@ -170,7 +170,7 @@ object Precip {
     /** The day holding [t]: its total (in), highest chance and type (from its condition and chance). */
     fun day(data: WeatherData, t: Long): Reading {
         val d = data.detail?.daily?.lastOrNull { it.date <= t } ?: return Reading(0.0, null, Type.NONE, SceneModel.Sky.CLOUD)
-        return reading(d.precipMm, d.precipPct, SceneModel.sky(d.code, null, d.precipPct))
+        return reading(d.precipMm, d.precipPct, SceneModel.sky(d.code, d.precipMm, d.precipPct))
     }
 
     /**
