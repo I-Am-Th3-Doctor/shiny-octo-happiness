@@ -35,6 +35,7 @@ class IconThemeDeviceTest {
     private val app = instrumentation.targetContext.applicationContext as SearchlightApp
     private val prefix = InstrumentationRegistry.getArguments().getString("shotPrefix") ?: "device"
     private val dir = "/sdcard/Download/searchlight-shots"
+    private val TEST_PACK = "io.github.iamth3doctor.searchlight.testiconpack"
     private val theme get() = app.iconThemes.theme
 
     private fun shell(cmd: String): String =
@@ -108,8 +109,11 @@ class IconThemeDeviceTest {
             com.example.b/.Main  b.png  ring  clock   # the exact component
             not a line
             com.example.c   c.png   wobble
+            com.example.d   -       record    # a move only, for whatever icon shows
         """.trimIndent())
-        assertEquals(setOf("com.example.a", "com.example.b/com.example.b.Main", "com.example.c"), parsed.keys)
+        assertEquals(setOf("com.example.a", "com.example.b/com.example.b.Main", "com.example.c", "com.example.d"), parsed.keys)
+        assertNull(parsed["com.example.d"]!!.file)
+        assertEquals(IconTheme.Move.RECORD, parsed["com.example.d"]!!.move)
         assertEquals(IconTheme.Move.RING, parsed["com.example.b/com.example.b.Main"]!!.move)
         assertEquals(IconTheme.Live.CLOCK, parsed["com.example.b/com.example.b.Main"]!!.live)
         assertEquals("an unknown move: a gentle bounce", IconTheme.Move.BOUNCE, parsed["com.example.c"]!!.move)
@@ -131,10 +135,11 @@ class IconThemeDeviceTest {
         val systemSettings = icon(settings)
         assertFalse("off: the system's settings icon", systemSettings.sameAs(themedSettings))
         assertTrue("an unmapped app keeps its own icon either way", icon(unmapped).sameAs(unmappedOn))
-        assertTrue(main { app.iconThemes.themedCount() } >= 4)
+        assertEquals("off: nothing themed", 0, main { app.iconThemes.themedCount() })
 
         // On again: in the drawer, the favorites and search results.
         setTheme(true)
+        assertTrue(main { app.iconThemes.themedCount() } >= 4)
         favorites(settings, youtube, entry("com.google.android.deskclock"), entry("com.google.android.calendar"))
         ActivityScenario.launch(MainActivity::class.java).use { home ->
             Thread.sleep(2000)
@@ -142,7 +147,8 @@ class IconThemeDeviceTest {
             waitFor("themed icons in the drawer") { IconMotion.onScreen().isNotEmpty() }
             // Each themed icon there is the theme's own art.
             assertTrue("the drawer shows the theme's art", main {
-                IconMotion.onScreen().all { (iv, ic) ->
+                IconMotion.onScreen().all { (iv, _) ->
+                    val ic = theme.find(IconMotion.entryOf(iv)!!.component)!!
                     val shown = (iv.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
                     shown == null || ic.live != null || shown.sameAs(theme.render(ic, shown.width, 0L, false))
                 }
@@ -152,13 +158,13 @@ class IconThemeDeviceTest {
             @Suppress("DEPRECATION") home.onActivity { it.onBackPressed() }
             Thread.sleep(800)
             home.onActivity { it.findViewById<EditText>(R.id.searchInput).setText("Settings") }
-            waitFor("themed settings in search") { IconMotion.onScreen().any { it.second.file == "settings.png" } }
+            waitFor("themed settings in search") { shownApps().contains("com.android.settings") }
             Thread.sleep(800)
             shot("151-icon-theme-search")
             home.onActivity { it.findViewById<EditText>(R.id.searchInput).setText("") }
             Thread.sleep(800)
             home.onActivity { it.findViewById<View>(R.id.searchIcon).performLongClick() }
-            waitFor("themed favorites") { IconMotion.onScreen().map { it.second.file }.containsAll(listOf("settings.png", "clock.png", "calendar.png")) }
+            waitFor("themed favorites") { shownApps().containsAll(listOf("com.android.settings", "com.google.android.deskclock", "com.google.android.calendar")) }
             Thread.sleep(1500)
             shot("152-icon-theme-favorites")
         }
@@ -241,7 +247,7 @@ class IconThemeDeviceTest {
 
             // A tap mid-move opens the app at once.
             IconMotion.forceMotion = true
-            val (iv, _) = main { IconMotion.onScreen().first { it.second.file == "settings.png" } }
+            val (iv, _) = main { IconMotion.onScreen().first { IconMotion.entryOf(it.first)?.packageName == "com.android.settings" } }
             main { IconMotion.play(iv, IconTheme.Move.RECORD) }
             assertTrue(main { IconMotion.moving(iv) })
             val target = main { generateSequence(iv as View) { it.parent as? View }.first { it.hasOnClickListeners() } }
@@ -252,6 +258,72 @@ class IconThemeDeviceTest {
         }
         shell("input keyevent KEYCODE_HOME")
     }
+
+    @Test fun aPackReplacesTheArtTheLiveIconsAndMovesStay() {
+        val packs = app.iconPacks.installedPacks().map { it.packageName }
+        org.junit.Assume.assumeTrue("the test pack isn't installed: $packs", TEST_PACK in packs)
+        val settings = entry("com.android.settings")
+        val clock = entry("com.google.android.deskclock")
+        val youtube = entry("com.google.android.youtube")
+        // Without a pack or the theme: the system's icons, for reference.
+        setTheme(false)
+        val systemYoutube = icon(youtube)
+        setTheme(true)
+        val themeSettings = icon(settings)
+        var ok: Boolean? = null
+        main { app.iconPacks.select(TEST_PACK) { ok = it } }
+        waitFor("the pack applied") { ok != null }
+        assertTrue(ok!!)
+        try {
+            // The pack's own art in place of the theme's.
+            val s = icon(settings)
+            assertFalse("the pack's settings icon, not the theme's", s.sameAs(themeSettings))
+            val c = s.getPixel(s.width / 2, s.height / 4)
+            assertTrue("the pack's orange disc", Color.red(c) > 200 && Color.green(c) in 70..150 && Color.blue(c) < 60)
+            // The live clock stays Searchlight's own.
+            main { app.apps.forgetIcon(clock) }
+            val shown = icon(clock)
+            val line = theme.find(clock.component)!!
+            val now = System.currentTimeMillis()
+            assertTrue("the live clock with a pack applied", listOf(now, now - 60_000, now + 60_000).any { t ->
+                theme.render(line, shown.width, t, false)!!.sameAs(shown) || theme.render(line, shown.width, t, true)!!.sameAs(shown)
+            })
+            // An app the pack doesn't draw: its system icon, standing still.
+            assertTrue("youtube keeps its system icon", icon(youtube).sameAs(systemYoutube))
+            // The moves are the app's, whoever drew the icon: settings still turns like a cog.
+            assertEquals(IconTheme.Move.GEAR, main { app.apps.moveFor(settings) })
+            assertEquals(IconTheme.Move.RING, main { app.apps.moveFor(clock) })
+            assertNull("a plain system icon stays still", main { app.apps.moveFor(youtube) })
+            // Pack icons with no move of their own: a generic one.
+            val generic = setOf(IconTheme.Move.SPIN, IconTheme.Move.SWING, IconTheme.Move.BOUNCE, IconTheme.Move.FLIP)
+            for (e in main { app.apps.apps.filter { !it.isSelf && theme.find(it.component) == null && app.apps.moveFor(it) != null } }) {
+                assertTrue("${e.label}: ${main { app.apps.moveFor(e) }}", main { app.apps.moveFor(e) } in generic)
+            }
+            // On Home: the pack's icons make those moves.
+            favorites(settings, clock, youtube, entry("com.google.android.calendar"))
+            IconMotion.forceMotion = true
+            ActivityScenario.launch(MainActivity::class.java).use { home ->
+                Thread.sleep(1500)
+                home.onActivity { it.findViewById<View>(R.id.searchIcon).performLongClick() }
+                waitFor("pack icons on screen") { shownApps().containsAll(listOf("com.android.settings", "com.google.android.deskclock")) }
+                assertFalse("youtube, not drawn by the pack, stays still", main { shownApps() }.contains("com.google.android.youtube"))
+                val before = IconMotion.played.size
+                assertTrue(main { IconMotion.homeOpened() } >= 2)
+                waitFor("they move") { IconMotion.played.size >= before + 2 }
+                Thread.sleep(200)
+                shot("154-icon-pack-alive")
+                val moves = IconMotion.played.drop(before).toMap()
+                assertEquals(IconTheme.Move.GEAR, moves[settings.key])
+                assertEquals(IconTheme.Move.RING, moves[clock.key])
+                waitFor("settled", 5_000) { IconMotion.onScreen().none { IconMotion.moving(it.first) } }
+            }
+        } finally {
+            main { app.iconPacks.select(null) {} }
+        }
+    }
+
+    /** The apps whose icons on screen come alive (packages). Main thread. */
+    private fun shownApps() = IconMotion.onScreen().mapNotNull { IconMotion.entryOf(it.first)?.packageName }
 
     /** The favorites row: exactly [apps] (manual mode, nothing else on it). */
     private fun favorites(vararg apps: AppEntry) = main {

@@ -224,6 +224,30 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
     /** Whether the theme's live icons hold still (the clock at 10:10): animations are paused. */
     @Volatile var iconsStill: () -> Boolean = { false }
 
+    /**
+     * How [entry]'s icon comes alive on Home, or null when it doesn't: with the theme on, every app
+     * whose icon Searchlight or the applied pack draws moves (its own move from the theme, keyed by
+     * the app, else a generic one); an app showing its plain system icon stays still. Main thread.
+     */
+    fun moveFor(entry: AppEntry): io.github.iamth3doctor.searchlight.iconpack.IconTheme.Move? {
+        val theme = iconTheme ?: return null
+        val line = theme.find(entry.component)
+        val pack = iconPack
+        val drawn = when {
+            line?.live != null -> true
+            pack != null -> packCovers(pack, entry)
+            else -> line?.file != null
+        }
+        return if (drawn) theme.moveFor(entry.component) else null
+    }
+
+    private fun packCovers(pack: IconPack, entry: AppEntry): Boolean = try {
+        pack.covers(entry.component.packageName, entry.component.className,
+            java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH))
+    } catch (e: Exception) {
+        false
+    }
+
     /** The theme's icon for [entry] while the theme is on, or null. */
     fun themedIcon(entry: AppEntry): io.github.iamth3doctor.searchlight.iconpack.IconTheme.Icon? = iconTheme?.find(entry.component)
 
@@ -247,33 +271,31 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
             entry.user,
         ) ?: return null
         val dpi = context.resources.displayMetrics.densityDpi
-        iconTheme?.let { theme ->
-            val drawn = theme.find(entry.component)?.let { icon ->
-                try {
-                    theme.render(icon, iconSizePx, System.currentTimeMillis(), iconsStill())
-                } catch (e: Exception) {
-                    null // the pack's or the system's icon below, never a blank
-                }
-            }
-            if (drawn != null) {
-                if (entry.user == Process.myUserHandle()) return drawn
-                return context.packageManager.getUserBadgedIcon(BitmapDrawable(context.resources, drawn), entry.user)
-                    .toBitmap(iconSizePx, iconSizePx)
-            }
+        // Work apps keep their briefcase badge, as the system's icons have it.
+        fun badged(b: Bitmap): Bitmap = if (entry.user == Process.myUserHandle()) b
+            else context.packageManager.getUserBadgedIcon(BitmapDrawable(context.resources, b), entry.user).toBitmap(iconSizePx, iconSizePx)
+        val theme = iconTheme
+        val line = theme?.find(entry.component)
+        fun themeArt(): Bitmap? = try {
+            if (theme == null || line == null) null else theme.render(line, iconSizePx, System.currentTimeMillis(), iconsStill())
+        } catch (e: Exception) {
+            null // the system's icon below, never a blank
         }
-        iconPack?.let { pack ->
+        // 1. The live clock and calendar: always Searchlight's own, even with a pack applied.
+        if (line?.live != null) themeArt()?.let { return badged(it) }
+        val pack = iconPack
+        if (pack != null) {
+            // 2. A pack applied: its icons in place of the theme's; an app it doesn't draw keeps its system icon.
             val day = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
-            val themed = try {
-                pack.render(entry.component.packageName, entry.component.className, day, iconSizePx, dpi) { info.getIcon(dpi) }
+            val drawn = try {
+                pack.render(entry.component.packageName, entry.component.className, day, iconSizePx, dpi)
             } catch (e: Exception) {
-                null // the system icon below, never a blank
+                null
             }
-            if (themed != null) {
-                if (entry.user == Process.myUserHandle()) return themed
-                // Work apps keep their briefcase badge, as the system's icons have it.
-                return context.packageManager.getUserBadgedIcon(BitmapDrawable(context.resources, themed), entry.user)
-                    .toBitmap(iconSizePx, iconSizePx)
-            }
+            if (drawn != null) return badged(drawn)
+        } else {
+            // 3. The theme's own art.
+            themeArt()?.let { return badged(it) }
         }
         return info.getBadgedIcon(dpi).toBitmap(iconSizePx, iconSizePx)
     }

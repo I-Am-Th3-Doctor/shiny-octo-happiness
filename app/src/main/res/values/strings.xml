@@ -338,7 +338,7 @@
     <!-- Appearance: icon packs -->
     <string name="settings_section_appearance">Appearance</string>
     <string name="icon_pack_title">Icon pack</string>
-    <string name="icon_pack_help">App icons everywhere in Searchlight. Apps a pack doesn\'t draw keep their own icon, in the pack\'s style when it has one.</string>
+    <string name="icon_pack_help">App icons everywhere in Searchlight. Apps a pack doesn\'t draw keep their own icon. The live clock and calendar stay Searchlight\'s own, and the icons still come alive on Home.</string>
     <string name="icon_pack_system">System default</string>
     <string name="icon_theme_title">Icon theme</string>
     <plurals name="icon_theme_count">

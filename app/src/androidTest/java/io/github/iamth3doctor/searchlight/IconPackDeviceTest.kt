@@ -137,14 +137,15 @@ class IconPackDeviceTest {
         // What the launcher actually draws: the pack's own art for themed apps...
         val s = icon(settings)
         assertTrue(near(s.getPixel(s.width / 2, s.height / 4), 0xFF, 0x6F, 0x00)) // orange disc
-        // ...and, for the others, their own icon on the pack's blue back with the white dot: never blank.
+        // ...and, for the apps it doesn't draw, their own system icon, as it is with no pack: never blank.
         for (e in app.apps.apps.filter { !it.isSelf }) {
             val b = icon(e)
-            assertTrue("blank icon for ${e.label}", opaquePixels(b) > (b.width / 4) * (b.height / 4) / 2)
+            assertTrue("blank icon for ${e.label}", opaquePixels(b) > 0)
         }
         val y = icon(youtube)
-        assertTrue("fallback has no pack back", near(y.getPixel(2, y.height / 2), 0x15, 0x65, 0xC0))
-        assertTrue("fallback has no upon", near(y.getPixel(y.width * 40 / 48, y.height * 8 / 48), 0xFF, 0xFF, 0xFF))
+        assertTrue(select(null))
+        assertTrue("an app the pack doesn't draw keeps its system icon", icon(youtube).sameAs(y))
+        assertTrue(select(TEST_PACK))
 
         shots("testpack")
 

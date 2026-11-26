@@ -3,24 +3,17 @@ package io.github.iamth3doctor.searchlight.iconpack
 import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.graphics.drawable.Drawable
 import android.util.Xml
 import androidx.core.graphics.drawable.toBitmap
 import org.xmlpull.v1.XmlPullParser
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 /**
  * One installed icon pack, loaded: its appfilter and its resources. Icons come from, in order:
  * the calendar entry for today (calendar apps the pack lists), the app's exact component in
- * appfilter, a drawable named after the app's package or class, and last the app's own icon,
- * restyled with the pack's back / mask / upon layers and scale when it has them. Safe to use
- * from the icon threads.
+ * appfilter, and a drawable named after the app's package or class. An app the pack doesn't draw
+ * keeps its own system icon. Safe to use from the icon threads.
  */
 class IconPack private constructor(
     val packageName: String,
@@ -30,7 +23,6 @@ class IconPack private constructor(
     enum class Source { CALENDAR, APPFILTER, NAME_MATCH, FALLBACK }
 
     private val ids = ConcurrentHashMap<String, Int>()
-    private val layers = ConcurrentHashMap<String, Bitmap>()
 
     /** Is any app themed by today's calendar drawable (so the icons change at midnight)? */
     val hasCalendars: Boolean get() = filter.calendars.isNotEmpty()
@@ -38,15 +30,15 @@ class IconPack private constructor(
     /** Where [pkg]/[cls]'s icon comes from on day [day] of the month. */
     fun source(pkg: String, cls: String, day: Int): Source = find(pkg, cls, day)?.first ?: Source.FALLBACK
 
+    /** Does the pack draw [pkg]/[cls] (on day [day] of the month)? */
+    fun covers(pkg: String, cls: String, day: Int): Boolean = find(pkg, cls, day) != null
+
     /**
-     * The icon for [pkg]/[cls] at [size]px. [system] is the app's own (unbadged) icon, used for the
-     * fallback. Never fails for the fallback: a pack drawable that won't load is skipped.
+     * The pack's own icon for [pkg]/[cls] at [size]px, or null when the pack doesn't draw that app
+     * (or its drawable won't load): that app keeps its system icon.
      */
-    fun render(pkg: String, cls: String, day: Int, size: Int, density: Int, system: () -> Drawable): Bitmap {
-        find(pkg, cls, day)?.let { (_, id) -> drawable(id, density)?.let { return it.toBitmap(size, size) } }
-        val own = system()
-        return if (filter.stylesFallbacks) restyle(own, "$pkg/$cls", size, density) else own.toBitmap(size, size)
-    }
+    fun render(pkg: String, cls: String, day: Int, size: Int, density: Int): Bitmap? =
+        find(pkg, cls, day)?.let { (_, id) -> drawable(id, density)?.toBitmap(size, size) }
 
     private fun find(pkg: String, cls: String, day: Int): Pair<Source, Int>? {
         val c = "$pkg/$cls"
@@ -63,34 +55,6 @@ class IconPack private constructor(
         res.getDrawableForDensity(id, density, null)
     } catch (e: Exception) {
         null
-    }
-
-    private fun layer(name: String?, size: Int, density: Int): Bitmap? {
-        name ?: return null
-        layers["$name@$size"]?.let { return it }
-        val id = id(name).takeIf { it != 0 } ?: return null
-        val bmp = drawable(id, density)?.toBitmap(size, size) ?: return null
-        layers["$name@$size"] = bmp
-        return bmp
-    }
-
-    /** The app's own icon in the pack's style: scaled, cut by the mask, on the back, under the upon. */
-    private fun restyle(own: Drawable, key: String, size: Int, density: Int): Bitmap {
-        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(out)
-        val inner = (size * filter.scale).roundToInt().coerceIn(1, size)
-        val offset = (size - inner) / 2f
-        canvas.drawBitmap(own.toBitmap(inner, inner), offset, offset, null)
-        layer(filter.mask, size, density)?.let {
-            canvas.drawBitmap(it, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT) })
-        }
-        // The same app always gets the same back when the pack offers several.
-        val back = filter.backs.takeIf { it.isNotEmpty() }?.let { it[abs(key.hashCode() % it.size)] }
-        layer(back, size, density)?.let {
-            canvas.drawBitmap(it, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OVER) })
-        }
-        layer(filter.upon, size, density)?.let { canvas.drawBitmap(it, 0f, 0f, null) }
-        return out
     }
 
     companion object {

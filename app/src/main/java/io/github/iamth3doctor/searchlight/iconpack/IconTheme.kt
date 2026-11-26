@@ -29,7 +29,8 @@ class IconTheme private constructor(private val context: Context, val icons: Map
     /** A live icon: drawn over its PNG by Searchlight, as time passes. */
     enum class Live { CLOCK, CALENDAR }
 
-    class Icon(val file: String, val move: Move, val live: Live?)
+    /** One app's line: its art ([file], null for a move only), its [move], and whether it's [live]. */
+    class Icon(val file: String?, val move: Move, val live: Live?)
 
     private val art = ConcurrentHashMap<String, Bitmap>()
 
@@ -38,14 +39,20 @@ class IconTheme private constructor(private val context: Context, val icons: Map
         icons[component.flattenToString()] ?: icons[component.packageName]
 
     /** The icon files the theme names (distinct). */
-    val files: Set<String> get() = icons.values.map { it.file }.toSet()
+    val files: Set<String> get() = icons.values.mapNotNull { it.file }.toSet()
+
+    /**
+     * [component]'s move on Home: the one its line gives (keyed by the app, so it plays whatever
+     * art shows for it: the theme's, a pack's), else one of the generic moves, always the same one.
+     */
+    fun moveFor(component: ComponentName): Move = find(component)?.move ?: genericMove(component)
 
     /**
      * [icon] at [size]px at time [now]: a live clock shows that time (10:10 when [still]), a live
      * calendar that date. Null when its PNG won't load (the app's own icon is used then).
      */
     fun render(icon: Icon, size: Int, now: Long, still: Boolean): Bitmap? {
-        val base = art(icon.file) ?: return null
+        val base = art(icon.file ?: return null) ?: return null
         val out = Bitmap.createScaledBitmap(base, size, size, true).let {
             if (it === base) it.copy(Bitmap.Config.ARGB_8888, true) else it
         }
@@ -128,6 +135,15 @@ class IconTheme private constructor(private val context: Context, val icons: Map
         const val CAL_BAND_Y = 232f / 768
         const val CAL_PAGE_Y = 474f / 768
 
+        /** In theme.txt, "-" in place of a file: a move for the app, no art of its own. */
+        const val NO_ART = "-"
+
+        private val GENERIC = listOf(Move.SPIN, Move.SWING, Move.BOUNCE, Move.FLIP)
+
+        /** A generic move for an app with none of its own: the same one every time for that app. */
+        fun genericMove(component: ComponentName): Move =
+            GENERIC[Math.floorMod(component.flattenToString().hashCode(), GENERIC.size)]
+
         /** The still face: 10:10. */
         val STILL_TIME = 10 to 10
 
@@ -169,7 +185,7 @@ class IconTheme private constructor(private val context: Context, val icons: Map
                 val line = raw.substringBefore('#').trim()
                 if (line.isEmpty()) continue
                 val parts = line.split(Regex("\\s+"))
-                if (parts.size < 2 || !parts[1].endsWith(".png")) {
+                if (parts.size < 2 || !(parts[1].endsWith(".png") || parts[1] == NO_ART)) {
                     Log.w(TAG, "Icon theme: skipped \"$raw\"")
                     continue
                 }
@@ -178,7 +194,7 @@ class IconTheme private constructor(private val context: Context, val icons: Map
                 } else parts[0]
                 val move = parts.getOrNull(2)?.let { m -> Move.entries.firstOrNull { it.name.equals(m, ignoreCase = true) } } ?: Move.BOUNCE
                 val live = parts.getOrNull(3)?.let { l -> Live.entries.firstOrNull { it.name.equals(l, ignoreCase = true) } }
-                out[key] = Icon(parts[1], move, live)
+                out[key] = Icon(parts[1].takeIf { it != NO_ART }, move, live)
             }
             return out
         }

@@ -68,15 +68,21 @@ object IconMotion {
         running.remove(iv)?.cancel()
     }
 
+    /** The app [iv] shows (tests). */
+    fun entryOf(iv: ImageView): AppEntry? = views[iv]
+
     /** Is [iv] moving (tests)? */
     fun moving(iv: ImageView): Boolean = running[iv] != null
 
-    /** The themed icons on screen now, with their icons. */
-    fun onScreen(): List<Pair<ImageView, IconTheme.Icon>> {
+    /**
+     * The icons on screen now that come alive, with their moves: the theme's, a pack's, and the
+     * live clock and calendar (not plain system icons).
+     */
+    fun onScreen(): List<Pair<ImageView, IconTheme.Move>> {
         val r = repo ?: return emptyList()
         val rect = Rect()
         return views.entries.mapNotNull { (iv, entry) ->
-            val icon = r.themedIcon(entry) ?: return@mapNotNull null
+            val icon = r.moveFor(entry) ?: return@mapNotNull null
             if (!iv.isAttachedToWindow || !iv.isShown || iv.width == 0 || !iv.getGlobalVisibleRect(rect)) return@mapNotNull null
             iv to icon
         }
@@ -86,7 +92,7 @@ object IconMotion {
     fun homeOpened(): Int {
         if (paused) return 0
         val icons = onScreen()
-        icons.forEachIndexed { i, (iv, icon) -> androidx.core.os.HandlerCompat.postDelayed(main, { play(iv, icon.move) }, PLAYS, OPEN_DELAY_MS + i * STAGGER_MS) }
+        icons.forEachIndexed { i, (iv, move) -> androidx.core.os.HandlerCompat.postDelayed(main, { play(iv, move) }, PLAYS, OPEN_DELAY_MS + i * STAGGER_MS) }
         return icons.size
     }
 
@@ -96,7 +102,7 @@ object IconMotion {
         val icons = onScreen().filter { running[it.first] == null }.shuffled()
         if (icons.isEmpty()) return 0
         val n = if (icons.size >= 4 && Math.random() < 0.5) 2 else 1
-        icons.take(n).forEachIndexed { i, (iv, icon) -> androidx.core.os.HandlerCompat.postDelayed(main, { play(iv, icon.move) }, PLAYS, i * 450L) }
+        icons.take(n).forEachIndexed { i, (iv, move) -> androidx.core.os.HandlerCompat.postDelayed(main, { play(iv, move) }, PLAYS, i * 450L) }
         return n.coerceAtMost(icons.size)
     }
 
@@ -271,8 +277,8 @@ class IconThemes(private val context: Context, private val prefs: Prefs, private
         repo.iconTheme = if (prefs.iconTheme) theme else null
     }
 
-    /** How many of the installed apps the theme draws. */
-    fun themedCount(): Int = repo.apps.filter { !it.isSelf && theme.find(it.component) != null }.distinctBy { it.packageName }.size
+    /** How many of the installed apps are themed: drawn by the theme (or the applied pack, and the live icons). */
+    fun themedCount(): Int = repo.apps.filter { !it.isSelf && repo.moveFor(it) != null }.distinctBy { it.packageName }.size
 
     private fun today() = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
 

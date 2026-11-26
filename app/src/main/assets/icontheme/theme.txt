@@ -20,7 +20,11 @@
 #   exact component (package/activity, e.g. com.android.settings/.Settings), which wins over its
 #   package. List the same file on several lines for the same app on different phones (a Pixel's
 #   and a Galaxy's dialer, say).
-# <move> is how the icon comes alive on Home:
+# <file> may be "-": no art of its own, only a move for that app (for an icon a pack draws, say).
+# <move> is how the app's icon comes alive on Home. It belongs to the app, not to the file: it plays
+#   on whatever icon shows for that app, this theme's art or an applied icon pack's. Apps a pack
+#   draws that have no line here get one of the generic moves (always the same one for that app).
+#   Apps showing their plain system icon stay still.
 #   generic moves:   spin, swing, bounce, flip
 #   signature moves: record  (spins like a record on a turntable)
 #                    ring    (rings like an alarm bell)
@@ -30,6 +34,10 @@
 # The optional last word makes an icon live, drawn over its PNG by Searchlight:
 #   clock     the current time, hour and minute hands, every minute (10:10 when animations pause)
 #   calendar  today's date: the day on the page, the month on the band; it turns over at midnight
+#
+# With an icon pack applied (Settings > Icon pack), the pack's icons replace this theme's art; the
+# live clock and calendar stay Searchlight's own, and apps the pack doesn't draw keep their system
+# icon.
 #
 # Lines starting with # are notes.
 
