@@ -1,78 +1,70 @@
 # Searchlight icon theme
 # ======================
 #
-# Every icon in this folder (app/src/main/assets/icontheme/) is a 192x192 PNG (xxxhdpi) with a
-# transparent background. The starter set is drawn as glossy 3D objects: each one a soft, raised
-# object in the app's own colors, lit from the top, the same rounded depth and soft shadow below.
-# Keep new icons in that style so the set stays one family. (tools/icontheme/make_icons.py draws
-# the starter set; your own artwork can simply replace any of its files.)
+# This folder (app/src/main/assets/icontheme/) is the theme: your icon files and this mapping.
+# It ships with no icons of its own: every app shows its system icon until you add yours here.
 #
+# Icons you add
+# -------------
+# Size and format: 192x192 PNG (xxxhdpi), transparent background.
+# Style, so the set stays one family: glossy 3D objects. Each icon is a soft, glossy, raised
+#   3D object in the app's own colors, lit by the same light from the top, with the same rounded
+#   depth.
 # Naming: lowercase letters, digits and underscores, ending in .png, named after the app
-# (spotify.png, google_keep.png).
+#   (spotify.png, google_keep.png).
 #
 # To add an icon:
 #   1. Drop the PNG into this folder.
 #   2. Add one line below:   <app>  <file>  <move>  [clock|calendar]
 #   3. Rebuild Searchlight.
-# To swap one of the starter icons for your own: replace its PNG (same name), rebuild.
+# To swap an icon: replace its PNG (same name) and rebuild.
 #
+# The lines
+# ---------
 # <app> is the app's package (every launcher entry of that app, e.g. com.spotify.music), or one
 #   exact component (package/activity, e.g. com.android.settings/.Settings), which wins over its
-#   package. List the same file on several lines for the same app on different phones (a Pixel's
+#   package. Give the same file on several lines for the same app on different phones (a Pixel's
 #   and a Galaxy's dialer, say).
-# <file> may be "-": no art of its own, only a move for that app (for an icon a pack draws, say).
-# <move> is how the app's icon comes alive on Home. It belongs to the app, not to the file: it plays
-#   on whatever icon shows for that app, this theme's art or an applied icon pack's. Apps a pack
-#   draws that have no line here get one of the generic moves (always the same one for that app).
-#   Apps showing their plain system icon stay still.
+# <file> is the icon's PNG here, or "-" for none: the app keeps its system icon (or the applied
+#   pack's) and the line only gives it a move.
+# <move> is how the app's icon comes alive on Home. It belongs to the app, not to the file: it
+#   plays on whatever icon shows for that app (yours, an icon pack's, or the system's).
 #   generic moves:   spin, swing, bounce, flip
-#   signature moves: record  (spins like a record on a turntable)
-#                    ring    (rings like an alarm bell)
+#   signature moves: ring    (rings: a phone call, an alarm bell)
 #                    shutter (clicks like a camera shutter)
+#                    record  (spins like a record on a turntable)
 #                    gear    (turns a notch like a cog)
-#                    drop    (drops in and lands, like a pin)
-# The optional last word makes an icon live, drawn over its PNG by Searchlight:
-#   clock     the current time, hour and minute hands, every minute (10:10 when animations pause)
-#   calendar  today's date: the day on the page, the month on the band; it turns over at midnight
+#                    drop    (drops in and lands, like a map pin)
+#   An app with no line here gets one of the generic moves (always the same one for that app).
+# The optional last word makes the icon live, drawn by Searchlight itself (any file is ignored):
+#   clock     a clock face with the current time, hour and minute hands, every minute
+#             (a still 10:10 while animations pause)
+#   calendar  today's date: the day number, and the month where there's room; it turns over at
+#             midnight
 #
-# With an icon pack applied (Settings > Icon pack), the pack's icons replace this theme's art; the
-# live clock and calendar stay Searchlight's own, and apps the pack doesn't draw keep their system
-# icon.
+# With an icon pack applied (Settings > Icon pack), the pack's icons replace the icons here; the
+# live clock and calendar stay Searchlight's own, every app keeps its move, and apps the pack
+# doesn't draw keep their system icon.
 #
 # Lines starting with # are notes.
 
-# Phone
-com.google.android.dialer             phone.png     swing
-com.samsung.android.dialer            phone.png     swing
-com.android.dialer                    phone.png     swing
-# Messages
-com.google.android.apps.messaging     messages.png  bounce
-com.samsung.android.messaging         messages.png  bounce
-# Gmail
-com.google.android.gm                 gmail.png     flip
-# Brave
-com.brave.browser                     brave.png     swing
-# Quetta
-net.quetta.browser                    quetta.png    spin
-# Google Calendar (and the Galaxy calendar)
-com.google.android.calendar           calendar.png  flip     calendar
-com.samsung.android.calendar          calendar.png  flip     calendar
-# Clock
-com.google.android.deskclock          clock.png     ring     clock
-com.sec.android.app.clockpackage      clock.png     ring     clock
-# Camera
-com.google.android.GoogleCamera       camera.png    shutter
-com.sec.android.app.camera            camera.png    shutter
-com.android.camera2                   camera.png    shutter
-# Photos
-com.google.android.apps.photos        photos.png    bounce
-# Maps
-com.google.android.apps.maps          maps.png      drop
-# Spotify
-com.spotify.music                     spotify.png   record
-# YouTube
-com.google.android.youtube            youtube.png   bounce
-# Canva
-com.canva.editor                      canva.png     spin
-# Settings
-com.android.settings                  settings.png  gear
+# Phone: rings
+com.google.android.dialer             -    ring
+com.samsung.android.dialer            -    ring
+com.android.dialer                    -    ring
+# Camera: the shutter clicks
+com.google.android.GoogleCamera       -    shutter
+com.sec.android.app.camera            -    shutter
+com.android.camera2                   -    shutter
+# Clock: a live face, and the alarm bell rings
+com.google.android.deskclock          -    ring     clock
+com.sec.android.app.clockpackage      -    ring     clock
+# Calendar: today's date, live
+com.google.android.calendar           -    flip     calendar
+com.samsung.android.calendar          -    flip     calendar
+# Spotify: spins like a record
+com.spotify.music                     -    record
+# Settings: turns a notch
+com.android.settings                  -    gear
+# Maps: drops in like a pin
+com.google.android.apps.maps          -    drop

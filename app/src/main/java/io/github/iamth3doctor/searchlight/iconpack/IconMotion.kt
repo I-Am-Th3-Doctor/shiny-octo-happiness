@@ -24,9 +24,9 @@ import kotlin.math.abs
 import kotlin.math.sin
 
 /**
- * The themed icons coming alive on Home. Each list that shows app icons hands its icon views to
- * [track]; when Home opens ([homeOpened]) every themed icon on screen makes its move (the one the
- * theme gives it), one after another, and while Home stays in view ([startPeriodic]) one or two of
+ * The app icons coming alive on Home while the icon theme is on. Each list that shows app icons
+ * hands its icon views to [track]; when Home opens ([homeOpened]) every icon on screen makes its
+ * move (its app's own from the theme, else a generic one), whoever drew it, one after another, and while Home stays in view ([startPeriodic]) one or two of
  * them move again about every 30 seconds, never all at once. The moves are only the views' own
  * rotation, lift and scale: they never take a touch, so a tap opens the app at once, mid-move or
  * not. Nothing moves under Battery Saver or with the system's animations off ([paused]).
@@ -74,10 +74,7 @@ object IconMotion {
     /** Is [iv] moving (tests)? */
     fun moving(iv: ImageView): Boolean = running[iv] != null
 
-    /**
-     * The icons on screen now that come alive, with their moves: the theme's, a pack's, and the
-     * live clock and calendar (not plain system icons).
-     */
+    /** The app icons on screen now, with their moves (every one, while the theme is on). */
     fun onScreen(): List<Pair<ImageView, IconTheme.Move>> {
         val r = repo ?: return emptyList()
         val rect = Rect()
@@ -88,7 +85,7 @@ object IconMotion {
         }
     }
 
-    /** Home opened: each themed icon on screen makes its move, a moment after the one before. */
+    /** Home opened: each app icon on screen makes its move, a moment after the one before. */
     fun homeOpened(): Int {
         if (paused) return 0
         val icons = onScreen()
@@ -96,7 +93,7 @@ object IconMotion {
         return icons.size
     }
 
-    /** One or two themed icons on screen make their move (never all of them). */
+    /** One or two app icons on screen make their move (never all of them). */
     fun nudge(): Int {
         if (paused) return 0
         val icons = onScreen().filter { running[it.first] == null }.shuffled()
@@ -237,7 +234,17 @@ object IconMotion {
 class IconThemes(private val context: Context, private val prefs: Prefs, private val repo: AppRepository) {
 
     /** The bundled theme (assets/icontheme). */
-    val theme: IconTheme = IconTheme.load(context)
+    var theme: IconTheme = IconTheme.load(context)
+        private set
+
+    /**
+     * Tests: use [t] in place of the bundled theme (a temporary icon to prove the mapping), or
+     * the bundled theme again with null.
+     */
+    fun useTheme(t: IconTheme?) {
+        theme = t ?: IconTheme.load(context)
+        apply()
+    }
 
     private val power = context.getSystemService(PowerManager::class.java)
 
@@ -277,8 +284,8 @@ class IconThemes(private val context: Context, private val prefs: Prefs, private
         repo.iconTheme = if (prefs.iconTheme) theme else null
     }
 
-    /** How many of the installed apps are themed: drawn by the theme (or the applied pack, and the live icons). */
-    fun themedCount(): Int = repo.apps.filter { !it.isSelf && repo.moveFor(it) != null }.distinctBy { it.packageName }.size
+    /** How many of the installed apps are themed: drawn by the theme (or the applied pack), and the live icons. */
+    fun themedCount(): Int = repo.apps.filter { !it.isSelf && repo.isThemed(it) }.distinctBy { it.packageName }.size
 
     private fun today() = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
 

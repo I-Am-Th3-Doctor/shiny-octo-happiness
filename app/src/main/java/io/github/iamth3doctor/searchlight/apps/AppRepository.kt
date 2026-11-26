@@ -225,20 +225,26 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
     @Volatile var iconsStill: () -> Boolean = { false }
 
     /**
-     * How [entry]'s icon comes alive on Home, or null when it doesn't: with the theme on, every app
-     * whose icon Searchlight or the applied pack draws moves (its own move from the theme, keyed by
-     * the app, else a generic one); an app showing its plain system icon stays still. Main thread.
+     * How [entry]'s icon comes alive on Home while the theme is on (null: off): its own move from
+     * the theme, keyed by the app, so it plays on whatever icon shows (the theme's, a pack's, the
+     * system's), else a generic one. Main thread.
      */
-    fun moveFor(entry: AppEntry): io.github.iamth3doctor.searchlight.iconpack.IconTheme.Move? {
-        val theme = iconTheme ?: return null
+    fun moveFor(entry: AppEntry): io.github.iamth3doctor.searchlight.iconpack.IconTheme.Move? =
+        iconTheme?.moveFor(entry.component)
+
+    /**
+     * Is [entry]'s icon themed (not its system icon)? The live clock and calendar; with a pack
+     * applied, the apps it draws; otherwise the apps the theme has a file for. Main thread.
+     */
+    fun isThemed(entry: AppEntry): Boolean {
+        val theme = iconTheme ?: return false
         val line = theme.find(entry.component)
         val pack = iconPack
-        val drawn = when {
+        return when {
             line?.live != null -> true
             pack != null -> packCovers(pack, entry)
             else -> line?.file != null
         }
-        return if (drawn) theme.moveFor(entry.component) else null
     }
 
     private fun packCovers(pack: IconPack, entry: AppEntry): Boolean = try {
