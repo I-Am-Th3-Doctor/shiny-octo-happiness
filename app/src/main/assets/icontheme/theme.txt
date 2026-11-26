@@ -1,0 +1,70 @@
+# Searchlight icon theme
+# ======================
+#
+# Every icon in this folder (app/src/main/assets/icontheme/) is a 192x192 PNG (xxxhdpi) with a
+# transparent background. The starter set is drawn as glossy 3D objects: each one a soft, raised
+# object in the app's own colors, lit from the top, the same rounded depth and soft shadow below.
+# Keep new icons in that style so the set stays one family. (tools/icontheme/make_icons.py draws
+# the starter set; your own artwork can simply replace any of its files.)
+#
+# Naming: lowercase letters, digits and underscores, ending in .png, named after the app
+# (spotify.png, google_keep.png).
+#
+# To add an icon:
+#   1. Drop the PNG into this folder.
+#   2. Add one line below:   <app>  <file>  <move>  [clock|calendar]
+#   3. Rebuild Searchlight.
+# To swap one of the starter icons for your own: replace its PNG (same name), rebuild.
+#
+# <app> is the app's package (every launcher entry of that app, e.g. com.spotify.music), or one
+#   exact component (package/activity, e.g. com.android.settings/.Settings), which wins over its
+#   package. List the same file on several lines for the same app on different phones (a Pixel's
+#   and a Galaxy's dialer, say).
+# <move> is how the icon comes alive on Home:
+#   generic moves:   spin, swing, bounce, flip
+#   signature moves: record  (spins like a record on a turntable)
+#                    ring    (rings like an alarm bell)
+#                    shutter (clicks like a camera shutter)
+#                    gear    (turns a notch like a cog)
+#                    drop    (drops in and lands, like a pin)
+# The optional last word makes an icon live, drawn over its PNG by Searchlight:
+#   clock     the current time, hour and minute hands, every minute (10:10 when animations pause)
+#   calendar  today's date: the day on the page, the month on the band; it turns over at midnight
+#
+# Lines starting with # are notes.
+
+# Phone
+com.google.android.dialer             phone.png     swing
+com.samsung.android.dialer            phone.png     swing
+com.android.dialer                    phone.png     swing
+# Messages
+com.google.android.apps.messaging     messages.png  bounce
+com.samsung.android.messaging         messages.png  bounce
+# Gmail
+com.google.android.gm                 gmail.png     flip
+# Brave
+com.brave.browser                     brave.png     swing
+# Quetta
+net.quetta.browser                    quetta.png    spin
+# Google Calendar (and the Galaxy calendar)
+com.google.android.calendar           calendar.png  flip     calendar
+com.samsung.android.calendar          calendar.png  flip     calendar
+# Clock
+com.google.android.deskclock          clock.png     ring     clock
+com.sec.android.app.clockpackage      clock.png     ring     clock
+# Camera
+com.google.android.GoogleCamera       camera.png    shutter
+com.sec.android.app.camera            camera.png    shutter
+com.android.camera2                   camera.png    shutter
+# Photos
+com.google.android.apps.photos        photos.png    bounce
+# Maps
+com.google.android.apps.maps          maps.png      drop
+# Spotify
+com.spotify.music                     spotify.png   record
+# YouTube
+com.google.android.youtube            youtube.png   bounce
+# Canva
+com.canva.editor                      canva.png     spin
+# Settings
+com.android.settings                  settings.png  gear

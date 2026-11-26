@@ -211,6 +211,27 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
             invalidateIcons()
         }
 
+    /**
+     * Searchlight's own icon theme, when it's on (null: off). It comes first for the apps it maps;
+     * the rest keep the icon pack's or the system's icon. Setting it redraws every icon. Main thread.
+     */
+    @Volatile var iconTheme: io.github.iamth3doctor.searchlight.iconpack.IconTheme? = null
+        set(value) {
+            field = value
+            invalidateIcons()
+        }
+
+    /** Whether the theme's live icons hold still (the clock at 10:10): animations are paused. */
+    @Volatile var iconsStill: () -> Boolean = { false }
+
+    /** The theme's icon for [entry] while the theme is on, or null. */
+    fun themedIcon(entry: AppEntry): io.github.iamth3doctor.searchlight.iconpack.IconTheme.Icon? = iconTheme?.find(entry.component)
+
+    /** Forget [entry]'s drawn icon (a live icon moved on): the next [icon] draws it afresh. Main thread. */
+    fun forgetIcon(entry: AppEntry) {
+        iconCache.remove(entry.key)
+    }
+
     private var iconGeneration = 0
 
     /** Forget every drawn icon and tell the lists to draw them again. Main thread. */
@@ -226,6 +247,20 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
             entry.user,
         ) ?: return null
         val dpi = context.resources.displayMetrics.densityDpi
+        iconTheme?.let { theme ->
+            val drawn = theme.find(entry.component)?.let { icon ->
+                try {
+                    theme.render(icon, iconSizePx, System.currentTimeMillis(), iconsStill())
+                } catch (e: Exception) {
+                    null // the pack's or the system's icon below, never a blank
+                }
+            }
+            if (drawn != null) {
+                if (entry.user == Process.myUserHandle()) return drawn
+                return context.packageManager.getUserBadgedIcon(BitmapDrawable(context.resources, drawn), entry.user)
+                    .toBitmap(iconSizePx, iconSizePx)
+            }
+        }
         iconPack?.let { pack ->
             val day = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
             val themed = try {

@@ -49,6 +49,7 @@ class AppTableAdapter(
         h.b.label.text = entry.label
         h.b.root.contentDescription = entry.label
         h.b.icon.setImageBitmap(repo.icon(entry) { bmp -> if (h.entry === entry) h.b.icon.setImageBitmap(bmp) })
+        io.github.iamth3doctor.searchlight.iconpack.IconMotion.track(h.b.icon, entry)
         h.b.icon.badgeCount = io.github.iamth3doctor.searchlight.apps.Badges.countFor(entry.packageName)
     }
 }

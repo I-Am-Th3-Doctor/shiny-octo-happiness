@@ -160,6 +160,22 @@
             <TextView android:id="@+id/iconPackValue" style="@style/SettingsRowSummary" />
         </LinearLayout>
 
+        <!-- Icon theme: Searchlight's own icons (assets/icontheme), on or off, and how many apps it draws. -->
+        <Switch
+            android:id="@+id/iconThemeSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="@dimen/size_touch"
+            android:text="@string/icon_theme_title"
+            android:textAppearance="@style/TextAppearance.Searchlight.Body" />
+
+        <TextView
+            android:id="@+id/iconThemeCount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Searchlight.Caption"
+            android:textColor="?android:attr/textColorSecondary" />
+
         <!-- Glass transparency: how clear or solid every frosted surface is, live. -->
         <LinearLayout
             android:id="@+id/glassRow"

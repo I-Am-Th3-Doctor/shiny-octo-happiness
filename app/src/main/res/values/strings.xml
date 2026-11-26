@@ -340,6 +340,12 @@
     <string name="icon_pack_title">Icon pack</string>
     <string name="icon_pack_help">App icons everywhere in Searchlight. Apps a pack doesn\'t draw keep their own icon, in the pack\'s style when it has one.</string>
     <string name="icon_pack_system">System default</string>
+    <string name="icon_theme_title">Icon theme</string>
+    <plurals name="icon_theme_count">
+        <item quantity="one">%1$d app themed. Glossy 3D icons that come alive on Home.</item>
+        <item quantity="other">%1$d apps themed. Glossy 3D icons that come alive on Home.</item>
+    </plurals>
+    <string name="icon_theme_off">Off: every app shows its own icon.</string>
     <string name="icon_pack_none_installed">No icon packs installed. Install one (they\'re apps) and it appears here.</string>
     <string name="icon_pack_failed">%1$s couldn\'t be loaded, so your icons stay as they were.</string>
 

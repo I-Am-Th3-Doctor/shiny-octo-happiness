@@ -116,6 +116,7 @@ class FavoritesPopup(
                 val entry = fav.entry
                 cell.label.text = entry.label
                 cell.icon.setImageBitmap(repo.icon(entry) { cell.icon.setImageBitmap(it) })
+                io.github.iamth3doctor.searchlight.iconpack.IconMotion.track(cell.icon, entry)
                 cell.icon.badgeCount = Badges.countFor(entry.packageName)
                 badged += cell.icon to entry.packageName
                 // The predicted slot changes with what you use: a soft gold halo says so.

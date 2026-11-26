@@ -27,6 +27,7 @@ class SearchlightApp : Application() {
     lateinit var shortcuts: AppShortcuts
         private set
     lateinit var iconPacks: IconPacks
+    lateinit var iconThemes: io.github.iamth3doctor.searchlight.iconpack.IconThemes
         private set
     lateinit var contacts: ContactRepository
         private set
@@ -76,6 +77,8 @@ class SearchlightApp : Application() {
         prefs.addFocusListener { focusDnd.sync() }
         iconPacks = IconPacks(this, prefs, apps)
         iconPacks.start()
+        iconThemes = io.github.iamth3doctor.searchlight.iconpack.IconThemes(this, prefs, apps)
+        iconThemes.start()
         apps.start()
         shortcuts = AppShortcuts(this, apps, prefs)
         shortcuts.start()

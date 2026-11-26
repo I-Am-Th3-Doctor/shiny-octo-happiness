@@ -94,7 +94,13 @@ class IconPackDeviceTest {
         }
     }
 
+    /** The pack's own art is what's checked here: Searchlight's icon theme (which comes first) off. */
+    @org.junit.Before fun themeOff() {
+        instrumentation.runOnMainSync { app.iconThemes.enabled = false }
+    }
+
     @After fun systemIcons() {
+        instrumentation.runOnMainSync { app.iconThemes.enabled = true }
         select(null)
         shell("pm install -r /data/local/tmp/testiconpack.apk") // in case the test removed it
     }

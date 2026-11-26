@@ -165,6 +165,7 @@ class ResultsAdapter(
         h.b.label.text = entry.label
         h.b.root.contentDescription = entry.label
         h.b.icon.setImageBitmap(apps.icon(entry) { bmp -> if (h.result === r) h.b.icon.setImageBitmap(bmp) })
+        io.github.iamth3doctor.searchlight.iconpack.IconMotion.track(h.b.icon, entry)
         h.b.icon.badgeCount = io.github.iamth3doctor.searchlight.apps.Badges.countFor(entry.packageName)
     }
 
@@ -182,11 +183,14 @@ class ResultsAdapter(
         b.action1.isVisible = false
         b.action2.isVisible = false
         b.title.type(Type.BODY)
+        // The row may have shown an app before: its icon is only an app's again if this is one.
+        io.github.iamth3doctor.searchlight.iconpack.IconMotion.untrack(b.icon)
 
         when (r) {
             is SearchResult.App -> {
                 b.title.text = r.entry.label
                 b.icon.setImageBitmap(apps.icon(r.entry) { bmp -> if (h.result === r) b.icon.setImageBitmap(bmp) })
+                io.github.iamth3doctor.searchlight.iconpack.IconMotion.track(b.icon, r.entry)
             }
             is SearchResult.Contact -> {
                 val c = r.entry

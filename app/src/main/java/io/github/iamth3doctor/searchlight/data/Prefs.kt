@@ -470,6 +470,11 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_ICON_PACK, null)
         set(value) = sp.edit().putString(KEY_ICON_PACK, value).apply()
 
+    /** Searchlight's own icon theme (assets/icontheme): on unless turned off. */
+    var iconTheme: Boolean
+        get() = sp.getBoolean(KEY_ICON_THEME, true)
+        set(value) = sp.edit().putBoolean(KEY_ICON_THEME, value).apply()
+
     // ---- Settings screens: which sections are open ----
 
     fun sectionExpanded(screen: String, key: String, default: Boolean): Boolean =
@@ -508,6 +513,7 @@ class Prefs(context: Context) {
         private const val KEY_GESTURE = "gesture_"
         private const val KEY_SECTION = "section_open."
         private const val KEY_ICON_PACK = "icon_pack"
+        private const val KEY_ICON_THEME = "icon_theme"
         const val KEY_BADGE_ASKED = "badge_access_asked"
         const val KEY_LOCK_ASKED = "lock_access_asked"
         private const val KEY_FOCUS = "focus_mode"

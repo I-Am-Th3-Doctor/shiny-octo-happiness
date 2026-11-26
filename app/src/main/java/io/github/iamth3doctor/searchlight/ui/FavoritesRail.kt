@@ -45,6 +45,7 @@ class FavoritesRail(
             if (fav != null) {
                 val entry = fav.entry
                 image.setImageBitmap(repo.icon(entry) { image.setImageBitmap(it) })
+                io.github.iamth3doctor.searchlight.iconpack.IconMotion.track(image, entry)
                 image.badgeCount = Badges.countFor(entry.packageName)
                 // The predicted slot changes with what you use: a soft gold halo says so.
                 if (fav.predicted) PredictedGlow.apply(slot, image)

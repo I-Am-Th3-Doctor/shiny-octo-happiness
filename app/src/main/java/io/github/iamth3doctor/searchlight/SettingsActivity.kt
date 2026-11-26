@@ -91,6 +91,12 @@ class SettingsActivity : Activity() {
         binding.greetingRow.setOnClickListener { editGreeting() }
         binding.webEngineRow.setOnClickListener { pickWebEngine() }
         binding.iconPackRow.setOnClickListener { startActivity(Intent(this, IconPackActivity::class.java)) }
+        binding.iconThemeSwitch.isChecked = app.iconThemes.enabled
+        binding.iconThemeSwitch.setOnCheckedChangeListener { _, on ->
+            if (on == app.iconThemes.enabled) return@setOnCheckedChangeListener
+            app.iconThemes.enabled = on
+            renderIconTheme()
+        }
         setupGlassSlider()
         binding.favoritesModeRow.setOnClickListener { pickFavoritesMode() }
         binding.predictedSlotSwitch.setOnCheckedChangeListener { _, on ->
@@ -207,6 +213,15 @@ class SettingsActivity : Activity() {
         }
     }
 
+    /** The icon theme's line: how many apps it draws, or that it's off. */
+    private fun renderIconTheme() {
+        binding.iconThemeSwitch.isChecked = app.iconThemes.enabled
+        binding.iconThemeCount.text = if (app.iconThemes.enabled) {
+            val n = app.iconThemes.themedCount()
+            resources.getQuantityString(R.plurals.icon_theme_count, n, n)
+        } else getString(R.string.icon_theme_off)
+    }
+
     /** The move confirmation last shown (tests). */
     internal var moveDialog: AlertDialog? = null
 
@@ -217,6 +232,7 @@ class SettingsActivity : Activity() {
         binding.iconPackValue.text = app.iconPacks.selected
             ?.let { pkg -> runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)) }.getOrNull() }
             ?: getString(R.string.icon_pack_system)
+        renderIconTheme()
 
         renderTileSettings()
         renderGestures()

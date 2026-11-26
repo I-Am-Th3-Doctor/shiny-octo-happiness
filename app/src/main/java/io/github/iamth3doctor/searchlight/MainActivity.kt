@@ -249,6 +249,9 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         WallpaperBlur.retryIfUnavailable() // photo access may have been granted in Settings
         binding.searchInput.hint = greeting()
         if (prefs.autoOpenKeyboard && !binding.appTable.isVisible) binding.searchInput.post { showKeyboard() }
+        // The themed icons come alive: each makes its move as Home opens, then now and then.
+        io.github.iamth3doctor.searchlight.iconpack.IconMotion.homeOpened()
+        io.github.iamth3doctor.searchlight.iconpack.IconMotion.startPeriodic()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -278,6 +281,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
             dismissPopups()
             resetHome()
             if (prefs.autoOpenKeyboard) showKeyboard()
+            if (isResumedNow) io.github.iamth3doctor.searchlight.iconpack.IconMotion.homeOpened()
         }
     }
 
@@ -293,6 +297,8 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
         super.onConfigurationChanged(newConfig)
         // Fold/unfold: views re-measure themselves; popups are anchored to stale coordinates.
         dismissPopups()
+        // Any icon mid-move goes back in place, to move again at its new size.
+        io.github.iamth3doctor.searchlight.iconpack.IconMotion.settle()
         measureHomeSwipe()
         applyPosture(Posture.of(newConfig))
     }
@@ -1173,6 +1179,7 @@ class MainActivity : Activity(), ResultsAdapter.Callbacks {
 
     override fun onPause() {
         isResumedNow = false
+        io.github.iamth3doctor.searchlight.iconpack.IconMotion.stopPeriodic()
         super.onPause()
     }
 
