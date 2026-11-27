@@ -130,32 +130,25 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-snapshot -wipe-data -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            adb install -r testiconpack/build/outputs/apk/debug/testiconpack-debug.apk
-            adb push testiconpack/build/outputs/apk/debug/testiconpack-debug.apk /data/local/tmp/testiconpack.apk
-            if [ -f arcticons.apk ]; then adb install -r arcticons.apk || echo "Arcticons didn't install"; else echo "No Arcticons download"; fi
-            adb shell wm size 1840x2208
-            adb shell wm density 420
-            # Wait until the new size has really reached the display (a slow emulator can take a
-            # while), so it doesn't land mid-test and restart the activity under the first one.
-            for i in $(seq 1 60); do adb shell dumpsys window displays | grep -q "cur=1840x2208" && break; sleep 1; done
-            adb shell input keyevent KEYCODE_HOME
-            sleep 5
-            adb shell wm size
-            adb logcat -b crash -c || true
-            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded -Pandroid.testInstrumentationRunnerArguments.class=io.github.iamth3doctor.searchlight.WeatherSceneDeviceTest || touch /tmp/device-tests-failed
-            timeout 60 adb logcat -d -b crash | tail -n 150 || true
-            timeout 60 adb logcat -d -s Watchdog:E lowmemorykiller:* lmkd:* | tail -n 120 || true
-            # A stuck test's thread dump: where the render thread was waiting.
-            timeout 30 adb root || true; timeout 60 adb wait-for-device || true
-            timeout 60 adb shell 'for f in $(ls -t /data/anr/trace_* 2>/dev/null | head -2); do echo "== $f"; grep -A45 -E "^\"(main|RenderThread)\"" "$f" | head -120; done' || true
-            timeout 60 adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-*.txt' || true
-            mkdir -p shots
-            for i in 1 2 3 4 5 6; do timeout 300 adb pull /sdcard/Download/searchlight-shots/. shots/ && break; echo "adb pull failed, retrying"; adb reconnect || true; timeout 60 adb wait-for-device; sleep 5; done
-            ls shots
-            cat shots/widgets-*.txt || true
-            cat shots/watchdog-*.txt || true
-            test ! -f /tmp/device-tests-failed
+          script: bash .github/scripts/weather-unfolded.sh first
+
+      # Only when the emulator itself died above (not a failing test): the same tests once more on a fresh one.
+      - name: Capture on emulator (Android 15, unfolded, the weather, after the emulator died)
+        if: always() && env.WEATHER_RETRY == '1'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-snapshot -wipe-data -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash .github/scripts/weather-unfolded.sh retry
+
+      - name: Check the device tests
+        if: always()
+        run: test ! -f /tmp/device-tests-failed
 
       - name: Upload screenshots artifact
         uses: actions/upload-artifact@v7
