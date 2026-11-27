@@ -770,8 +770,15 @@ class WeatherActivity : Activity() {
         barsFor(screens.top)
         if (!animate || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
             themeLevel(to)
+            val changed = panel.night != night
             panel.night = night
             panel.body.alpha = 1f
+            // The page already open (sunrise or sunset with no animations): its print redrawn in the new theme.
+            if (changed && dataShown) {
+                panel.render(repo.state)
+                panelState = repo.state
+                panel.precip.update(repo.state.data, clock(), bar.scrubTime)
+            }
             return
         }
         val needSwap = panel.night != night

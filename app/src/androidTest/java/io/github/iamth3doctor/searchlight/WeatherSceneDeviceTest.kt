@@ -1938,9 +1938,9 @@ class WeatherSceneDeviceTest {
         on(h) { it.dataScroll.scrollTo(0, 0); it.nightOverride = false; it.render() }
         waitFor("faded into day", 5_000) { on(h) { !it.themeFading } }
         assertEquals(1f, on(h) { it.dataScrim.alpha })
-        assertFalse(on(h) { sky.isShown })
-        assertFalse(on(h) { it.detailLapse.preview.renderer.hideMoon })
-        assertTrue(WeatherSkin.luminance(on(h) { it.panel.nowTemp!!.currentTextColor }) < 0.05)
+        assertFalse("no night sky by day", on(h) { sky.isShown })
+        assertFalse("the scene's own moon back", on(h) { it.detailLapse.preview.renderer.hideMoon })
+        assertTrue("dark print again", WeatherSkin.luminance(on(h) { it.panel.nowTemp!!.currentTextColor }) < 0.05)
     }
 
     @Test fun theSevenDaysFillThePageWithTheWeatherNowDayAndNight() = screen { h ->
