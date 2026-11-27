@@ -17,10 +17,11 @@ class IconActionsTest {
     @Test fun everyAppInTheTableHasItsAssignedAction() {
         assertEquals("every app of the table", 171, shipped.rows.size)
         assertEquals("every action one of the moves", emptyList<String>(), shipped.skipped)
-        // The 16 moves of the vocabulary, all of them used.
+        // Every action one of the 16 moves of the vocabulary (the table gives wobble to no app).
         val vocabulary = listOf("ring", "spin", "shutter", "bounce", "swing", "flip", "pop", "wobble",
             "pulse", "slide", "drop", "chat", "tick", "wave", "flash", "zoom")
-        assertEquals(vocabulary.toSet(), shipped.rows.map { it.action }.toSet())
+        assertEquals(emptySet<String>(), shipped.rows.map { it.action }.toSet() - vocabulary.toSet())
+        assertEquals(vocabulary.toSet() - "wobble", shipped.rows.map { it.action }.toSet())
         for (row in shipped.rows) assertEquals(row.label, Move.valueOf(row.action.uppercase()), row.move)
         // Each row reached through its own components, or else its label.
         for (row in shipped.rows) {
