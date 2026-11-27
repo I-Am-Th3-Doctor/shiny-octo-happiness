@@ -1854,10 +1854,13 @@ class WeatherSceneDeviceTest {
     @Test fun theDetailsHaveANightThemeFromSunsetToSunrise() = screen { h ->
         // Overcast, 52°F: the case from Tacoma at night.
         val w = reading(3, 95, 0.0)
+        // One moment for the whole test, so a minute turning over can't change a countdown between the day and night reads.
+        val t0 = System.currentTimeMillis()
+        on(h) { it.clock = { t0 } }
         force(h, w)
         settle(h)
         // By the sun: night from sunset (4:30 PM in the fixture) to sunrise (7:25 AM).
-        val nightNow = !io.github.iamth3doctor.searchlight.weather.Daylight.isDay(w, System.currentTimeMillis())
+        val nightNow = !io.github.iamth3doctor.searchlight.weather.Daylight.isDay(w, t0)
         assertEquals(nightNow, on(h) { it.detailsNightNow() })
 
         // Day first: exactly as it was, the frosted white veil and dark print, no night sky.

@@ -26,7 +26,7 @@ alive=1
 timeout 20 adb get-state >/dev/null 2>&1 || alive=0
 echo "host memory (last 20 samples):"; tail -n 20 /tmp/hostmem-$attempt.log || true
 echo "host kernel log:"; sudo dmesg -T 2>/dev/null | grep -iE "oom|killed process|segfault|qemu|emulator|general protection" | tail -n 30 || true
-ls -la /tmp/android-runner/ 2>/dev/null || true
+ls -la /tmp/android-runner/ 2>/dev/null || true; find /tmp/android-runner -type f -newer /tmp/hostmem-$attempt.log 2>/dev/null | head -20
 if [ "$ok" = 0 ] && [ "$alive" = 0 ] && [ "$attempt" = first ]; then
   echo "::warning::the emulator died during the unfolded weather tests; running them once more on a fresh one"
   echo "WEATHER_RETRY=1" >> "$GITHUB_ENV"
