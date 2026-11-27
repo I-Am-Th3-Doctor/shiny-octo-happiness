@@ -68,8 +68,8 @@ jobs:
             rm -f /tmp/device-tests-failed
             adb logcat -b crash -c || true
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=folded || touch /tmp/device-tests-failed
-            adb logcat -d -b crash | tail -n 150 || true
-            adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-*.txt' || true
+            timeout 60 adb logcat -d -b crash | tail -n 150 || true
+            timeout 60 adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-*.txt' || true
             adb shell wm size 1840x2208
             adb shell wm density 420
             # Wait until the new size has really reached the display (a slow emulator can take a
@@ -80,8 +80,8 @@ jobs:
             adb shell wm size
             adb logcat -b crash -c || true
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded || touch /tmp/device-tests-failed
-            adb logcat -d -b crash | tail -n 150 || true
-            adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-unfolded-*.txt' || true
+            timeout 60 adb logcat -d -b crash | tail -n 150 || true
+            timeout 60 adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-unfolded-*.txt' || true
             adb shell wm size reset
             adb shell wm density reset
             mkdir -p shots

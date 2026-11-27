@@ -245,7 +245,22 @@ class IconThemeDeviceTest {
         assertFalse(icon(clock).sameAs(shown))
     }
 
-    @Test fun everyIconComesAliveWithItsAppsMoveAndNeverHoldsUpATap() {
+    /**
+     * The emulator runs with the system's animations off (so the moves would end as they start);
+     * these tests watch moves play, so they run with animations at normal speed, as on a phone.
+     */
+    private fun <T> withAnimations(block: () -> T): T {
+        val was = shell("settings get global animator_duration_scale").trim()
+        shell("settings put global animator_duration_scale 1")
+        try {
+            waitFor("animations on") { android.animation.ValueAnimator.areAnimatorsEnabled() }
+            return block()
+        } finally {
+            shell("settings put global animator_duration_scale ${if (was == "null" || was.isEmpty()) "0" else was}")
+        }
+    }
+
+    @Test fun everyIconComesAliveWithItsAppsMoveAndNeverHoldsUpATap(): Unit = withAnimations {
         val settings = entry("com.android.settings")
         val clock = entry("com.google.android.deskclock")
         val youtube = entry("com.google.android.youtube")
@@ -302,7 +317,7 @@ class IconThemeDeviceTest {
         shell("input keyevent KEYCODE_HOME")
     }
 
-    @Test fun aPackDrawsItsIconsWhileMovesAndTheLiveIconsStay() {
+    @Test fun aPackDrawsItsIconsWhileMovesAndTheLiveIconsStay(): Unit = withAnimations {
         val packs = app.iconPacks.installedPacks().map { it.packageName }
         org.junit.Assume.assumeTrue("the test pack isn't installed: $packs", testPack in packs)
         val settings = entry("com.android.settings")
