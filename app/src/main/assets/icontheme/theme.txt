@@ -15,7 +15,7 @@
 #
 # To add an icon:
 #   1. Drop the PNG into this folder.
-#   2. Add one line below:   <app>  <file>  <move>  [clock|calendar]
+#   2. Add one line below:   <app>  <file>  [<move>]  [clock|calendar]
 #   3. Rebuild Searchlight.
 # To swap an icon: replace its PNG (same name) and rebuild.
 #
@@ -26,16 +26,14 @@
 #   package. Give the same file on several lines for the same app on different phones (a Pixel's
 #   and a Galaxy's dialer, say).
 # <file> is the icon's PNG here, or "-" for none: the app keeps its system icon (or the applied
-#   pack's) and the line only gives it a move.
-# <move> is how the app's icon comes alive on Home. It belongs to the app, not to the file: it
-#   plays on whatever icon shows for that app (yours, an icon pack's, or the system's).
-#   generic moves:   spin, swing, bounce, flip
-#   signature moves: ring    (rings: a phone call, an alarm bell)
-#                    shutter (clicks like a camera shutter)
-#                    record  (spins like a record on a turntable)
-#                    gear    (turns a notch like a cog)
-#                    drop    (drops in and lands, like a map pin)
-#   An app with no line here gets one of the generic moves (always the same one for that app).
+#   pack's).
+# <move> is optional. Every app's move on Home is set in searchlight-icon-actions.md, in this
+#   folder (one row per app, keyed by its component; the 16 moves are listed there). A move here
+#   wins over that table for this one app: ring, spin, shutter, bounce, swing, flip, pop, wobble,
+#   pulse, slide, drop, chat, tick, wave, flash, zoom (or "-" for the table's).
+#   The move belongs to the app, not to the file: it plays on whatever icon shows for that app
+#   (yours, an icon pack's, or the system's). An app in neither file gets a generic move (spin,
+#   swing, bounce or flip, always the same one for that app).
 # The optional last word makes the icon live, drawn by Searchlight itself (any file is ignored):
 #   clock     a clock face with the current time, hour and minute hands, every minute
 #             (a still 10:10 while animations pause)
@@ -48,23 +46,9 @@
 #
 # Lines starting with # are notes.
 
-# Phone: rings
-com.google.android.dialer             -    ring
-com.samsung.android.dialer            -    ring
-com.android.dialer                    -    ring
-# Camera: the shutter clicks
-com.google.android.GoogleCamera       -    shutter
-com.sec.android.app.camera            -    shutter
-com.android.camera2                   -    shutter
-# Clock: a live face, and the alarm bell rings
-com.google.android.deskclock          -    ring     clock
-com.sec.android.app.clockpackage      -    ring     clock
-# Calendar: today's date, live
-com.google.android.calendar           -    flip     calendar
-com.samsung.android.calendar          -    flip     calendar
-# Spotify: spins like a record
-com.spotify.music                     -    record
-# Settings: turns a notch
-com.android.settings                  -    gear
-# Maps: drops in like a pin
-com.google.android.apps.maps          -    drop
+# The clock: a live face (its move, tick, is in searchlight-icon-actions.md)
+com.google.android.deskclock          -    -    clock
+com.sec.android.app.clockpackage      -    -    clock
+# The calendar: today's date, live
+com.google.android.calendar           -    -    calendar
+com.samsung.android.calendar          -    -    calendar

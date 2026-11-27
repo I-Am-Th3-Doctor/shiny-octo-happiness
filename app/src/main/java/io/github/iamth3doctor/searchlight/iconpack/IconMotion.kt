@@ -130,9 +130,9 @@ object IconMotion {
     }
 
     /**
-     * [iv] makes [move]: a turn, a swing, a hop, a flip, or its own signature move. Only its own
-     * rotation, lift and scale change (and go back after), from wherever they were: a tap still
-     * lands on it and opens the app straight away.
+     * [iv] makes [move], one of the moves of searchlight-icon-actions.md. Only its own rotation,
+     * offset, scale and (for a flash) tint change, and go back after, from wherever they were: a
+     * tap still lands on it and opens the app straight away.
      */
     fun play(iv: ImageView, move: IconTheme.Move): Boolean {
         if (paused || !iv.isAttachedToWindow) return false
@@ -141,13 +141,16 @@ object IconMotion {
         val rot = iv.rotation
         val rotY = iv.rotationY
         val ty = iv.translationY
+        val tx = iv.translationX
+        val filter = iv.colorFilter
         val sx = iv.scaleX
         val sy = iv.scaleY
         val px = iv.pivotX
         val py = iv.pivotY
         val pivotSet = iv.isPivotSet
         fun reset() {
-            iv.rotation = rot; iv.rotationY = rotY; iv.translationY = ty; iv.scaleX = sx; iv.scaleY = sy
+            iv.rotation = rot; iv.rotationY = rotY; iv.translationY = ty; iv.translationX = tx; iv.scaleX = sx; iv.scaleY = sy
+            if (move == IconTheme.Move.FLASH) iv.colorFilter = filter
             if (pivotSet) { iv.pivotX = px; iv.pivotY = py } else iv.resetPivot()
         }
         val anim = ValueAnimator.ofFloat(0f, 1f).setDuration(duration(move))
@@ -159,6 +162,7 @@ object IconMotion {
             val h = iv.height.toFloat()
             iv.pivotX = w / 2
             iv.pivotY = h / 2
+            fun scale(k: Float) { iv.scaleX = sx * k; iv.scaleY = sy * k }
             when (move) {
                 IconTheme.Move.SPIN -> iv.rotation = rot + 360f * ease(t)
                 IconTheme.Move.SWING -> { iv.pivotY = 0f; iv.rotation = rot + 16f * sin(3 * PI * t).toFloat() * (1 - t) }
@@ -171,11 +175,49 @@ object IconMotion {
                 IconTheme.Move.RECORD -> iv.rotation = rot + 720f * ease(t)
                 // An alarm bell ringing: a fast shake from near the top, swelling and dying away.
                 IconTheme.Move.RING -> { iv.pivotY = h * 0.2f; iv.rotation = rot + 12f * sin(16 * PI * t).toFloat() * sin(PI * t).toFloat() }
-                // A shutter: two quick clicks in, each snapping back.
-                IconTheme.Move.SHUTTER -> {
-                    val click = if (t < 0.5f) abs(sin(4 * PI * t)).toFloat() else 0f
-                    iv.scaleX = sx * (1 - 0.13f * click); iv.scaleY = sy * (1 - 0.13f * click)
+                // A camera shutter: a quick squeeze down, then a pop back out past its size, and settle.
+                IconTheme.Move.SHUTTER -> scale(when {
+                    t < 0.3f -> 1 - 0.18f * sin(PI / 2 * t / 0.3f).toFloat()
+                    t < 0.65f -> 0.82f + 0.26f * sin(PI / 2 * (t - 0.3f) / 0.35f).toFloat()
+                    else -> 1.08f - 0.08f * ease((t - 0.65f) / 0.35f)
+                })
+                // A quick pop: up past its size and back.
+                IconTheme.Move.POP -> scale(1 + 0.18f * sin(PI * t).toFloat() * (1 - 0.35f * t))
+                // A loose side-to-side wobble about its middle, dying away.
+                IconTheme.Move.WOBBLE -> {
+                    iv.rotation = rot + 9f * sin(5 * PI * t).toFloat() * (1 - t)
+                    iv.translationX = tx + 0.05f * w * sin(5 * PI * t).toFloat() * (1 - t)
                 }
+                // Breathing: two slow, gentle swells.
+                IconTheme.Move.PULSE -> scale(1 + 0.08f * sin(2 * PI * t).toFloat().let { it * it })
+                // Off to one side and back.
+                IconTheme.Move.SLIDE -> iv.translationX = tx + 0.22f * w * sin(PI * ease(t)).toFloat()
+                // A speech bubble popping up from its corner, with a little second pop.
+                IconTheme.Move.CHAT -> {
+                    iv.pivotX = 0f; iv.pivotY = h
+                    val k = if (t < 0.6f) 0.2f * sin(PI * t / 0.6f).toFloat() else 0.07f * sin(PI * (t - 0.6f) / 0.4f).toFloat()
+                    scale(1 + k)
+                    iv.rotation = rot - 30f * k
+                }
+                // A clock's tick-tock: short snaps either side, then still.
+                IconTheme.Move.TICK -> {
+                    val step = (t * 6).toInt()
+                    iv.rotation = rot + if (step >= 5) 0f else if (step % 2 == 0) 7f else -7f
+                }
+                // A gentle tilt wave from its foot, swelling and dying away.
+                IconTheme.Move.WAVE -> {
+                    iv.pivotY = h
+                    iv.rotation = rot + 8f * sin(3 * PI * t).toFloat() * sin(PI * t).toFloat()
+                }
+                // A quick flash of light over the icon's own shape.
+                IconTheme.Move.FLASH -> {
+                    val a = (0.65f * sin(PI * t).toFloat() * 255).toInt().coerceIn(0, 255)
+                    iv.colorFilter = if (a == 0) filter else android.graphics.PorterDuffColorFilter(
+                        android.graphics.Color.argb(a, 255, 255, 255), android.graphics.PorterDuff.Mode.SRC_ATOP)
+                    scale(1 + 0.04f * sin(PI * t).toFloat())
+                }
+                // Toward the viewer and back.
+                IconTheme.Move.ZOOM -> scale(1 + 0.3f * sin(PI * ease(t)).toFloat())
                 // A cog turning a notch, with a little settle at the end.
                 IconTheme.Move.GEAR -> iv.rotation = rot + 45f * ease(t) + 4f * sin(PI * t).toFloat() * t
                 // A pin dropping in and landing with a small bounce.
@@ -219,6 +261,13 @@ object IconMotion {
         IconTheme.Move.RING -> 1000L
         IconTheme.Move.SHUTTER -> 600L
         IconTheme.Move.GEAR -> 1000L
+        IconTheme.Move.POP, IconTheme.Move.FLASH -> 550L
+        IconTheme.Move.WOBBLE -> 1000L
+        IconTheme.Move.PULSE -> 1600L
+        IconTheme.Move.SLIDE, IconTheme.Move.ZOOM -> 900L
+        IconTheme.Move.CHAT -> 750L
+        IconTheme.Move.TICK -> 1200L
+        IconTheme.Move.WAVE -> 1400L
     }
 
     private const val OPEN_DELAY_MS = 350L

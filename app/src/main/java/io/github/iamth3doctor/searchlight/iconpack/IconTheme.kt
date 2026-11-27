@@ -20,19 +20,29 @@ class IconTheme private constructor(
     val icons: Map<String, Icon>,
     /** Opens an icon file of the theme (the assets folder; tests may stand in). */
     private val open: (String) -> Bitmap?,
+    /** Every app's move, from searchlight-icon-actions.md. */
+    val actions: IconActions,
 ) {
 
-    /** How an icon comes alive on Home: the generic moves, and the signature ones. */
+    /**
+     * How an icon comes alive on Home: the 16 moves of searchlight-icon-actions.md (the first
+     * four are also the generic ones), and two older ones theme.txt may still name.
+     */
     enum class Move(val signature: Boolean) {
         SPIN(false), SWING(false), BOUNCE(false), FLIP(false),
-        RECORD(true), RING(true), SHUTTER(true), GEAR(true), DROP(true),
+        RING(true), SHUTTER(true), POP(true), WOBBLE(true), PULSE(true), SLIDE(true), DROP(true),
+        CHAT(true), TICK(true), WAVE(true), FLASH(true), ZOOM(true),
+        RECORD(true), GEAR(true),
     }
 
     /** A live icon: drawn by Searchlight, as time passes. */
     enum class Live { CLOCK, CALENDAR }
 
-    /** One app's line: its art ([file], null for a move only), its [move], and whether it's [live]. */
-    class Icon(val file: String?, val move: Move, val live: Live?)
+    /**
+     * One app's line: its art ([file], null for none), a [move] of its own (null: the app's move
+     * from searchlight-icon-actions.md), and whether it's [live].
+     */
+    class Icon(val file: String?, val move: Move?, val live: Live?)
 
     private val art = ConcurrentHashMap<String, Bitmap>()
 
@@ -44,10 +54,13 @@ class IconTheme private constructor(
     val files: Set<String> get() = icons.values.mapNotNull { it.file }.toSet()
 
     /**
-     * [component]'s move on Home: the one its line gives (keyed by the app, so it plays whatever
-     * art shows for it: the theme's, a pack's), else one of the generic moves, always the same one.
+     * The move on Home of the app at [component], labelled [label]: the one its theme.txt line
+     * gives, else its row in searchlight-icon-actions.md (by component, then label), else one of
+     * the generic moves, always the same one. Keyed by the app, so it plays whatever art shows for
+     * it: the theme's, a pack's, the system's.
      */
-    fun moveFor(component: ComponentName): Move = find(component)?.move ?: genericMove(component)
+    fun moveFor(component: ComponentName, label: String? = null): Move =
+        find(component)?.move ?: actions.moveFor(component.flattenToString(), label) ?: genericMove(component)
 
     /**
      * [icon] at [size]px at time [now]: a live clock shows that time (10:10 when [still]), a live
@@ -115,16 +128,28 @@ class IconTheme private constructor(
                 Log.w(TAG, "Icon theme mapping won't load", e)
                 emptyMap()
             }
+            val actions = try {
+                context.assets.open("$DIR/${IconActions.FILE}").bufferedReader().use { IconActions.parse(it.readText()) }
+                    .also { a -> a.skipped.forEach { Log.w(TAG, "Icon actions: not a move, a generic one instead: $it") } }
+            } catch (e: Exception) {
+                Log.w(TAG, "Icon actions won't load", e)
+                IconActions.EMPTY
+            }
             val assets = context.applicationContext.assets
-            return IconTheme(icons) { file -> assets.open("$DIR/$file").use { BitmapFactory.decodeStream(it) } }
+            return IconTheme(icons, { file -> assets.open("$DIR/$file").use { BitmapFactory.decodeStream(it) } }, actions)
         }
 
-        /** A theme from [text] (theme.txt's format) whose icon files come from [open] (tests). */
-        fun of(text: String, open: (String) -> Bitmap?): IconTheme = IconTheme(parse(text), open)
+        /**
+         * A theme from [text] (theme.txt's format) whose icon files come from [open], with the
+         * moves of [actions] (tests).
+         */
+        fun of(text: String, open: (String) -> Bitmap?, actions: IconActions = IconActions.EMPTY): IconTheme =
+            IconTheme(parse(text), open, actions)
 
         /**
-         * theme.txt's lines: "<app> <file> <move> [clock|calendar]", # for notes. A line that
-         * doesn't read is skipped (logged); an unknown move falls back to a gentle bounce.
+         * theme.txt's lines: "<app> <file> [<move>|-] [clock|calendar]", # for notes. A line that
+         * doesn't read is skipped (logged); "-" or no move leaves the app's own move (the actions
+         * table's); an unknown one falls back to a gentle bounce.
          */
         fun parse(text: String): Map<String, Icon> {
             val out = LinkedHashMap<String, Icon>()
@@ -139,8 +164,11 @@ class IconTheme private constructor(
                 val key = if ('/' in parts[0]) {
                     ComponentName.unflattenFromString(parts[0])?.flattenToString() ?: continue
                 } else parts[0]
-                val move = parts.getOrNull(2)?.let { m -> Move.entries.firstOrNull { it.name.equals(m, ignoreCase = true) } } ?: Move.BOUNCE
-                val live = parts.getOrNull(3)?.let { l -> Live.entries.firstOrNull { it.name.equals(l, ignoreCase = true) } }
+                // The move may be left out ("-", or straight to the live word).
+                val rest = parts.drop(2).toMutableList()
+                val live = rest.lastOrNull()?.let { l -> Live.entries.firstOrNull { it.name.equals(l, ignoreCase = true) } }
+                if (live != null) rest.removeAt(rest.lastIndex)
+                val move = rest.firstOrNull()?.takeIf { it != NO_ART }?.let { m -> Move.entries.firstOrNull { it.name.equals(m, ignoreCase = true) } ?: Move.BOUNCE }
                 out[key] = Icon(parts[1].takeIf { it != NO_ART }, move, live)
             }
             return out

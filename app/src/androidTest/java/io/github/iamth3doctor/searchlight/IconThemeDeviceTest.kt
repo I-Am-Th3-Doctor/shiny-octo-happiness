@@ -109,14 +109,30 @@ class IconThemeDeviceTest {
     }
 
     @Test fun theThemeShipsEmptyAndTheToggleAndCountWork() {
-        // No icons of its own: only the mapping in the folder.
-        assertEquals(listOf("theme.txt"), app.assets.list("icontheme")!!.toList())
+        // No icons of its own: only the mapping and the moves' table in the folder.
+        assertEquals(setOf("theme.txt", "searchlight-icon-actions.md"), app.assets.list("icontheme")!!.toSet())
         assertEquals(emptySet<String>(), theme.files)
-        // Signature moves for at least three apps (Phone, Camera, Clock), keyed by the app.
-        assertEquals(IconTheme.Move.RING, theme.icons["com.google.android.dialer"]!!.move)
-        assertEquals(IconTheme.Move.SHUTTER, theme.icons["com.android.camera2"]!!.move)
-        assertEquals(IconTheme.Move.RING, theme.icons["com.google.android.deskclock"]!!.move)
-        assertTrue(theme.icons.values.map { it.move }.filter { it.signature }.toSet().size >= 3)
+        // Every app of searchlight-icon-actions.md has its action, keyed by the app.
+        assertEquals(171, theme.actions.rows.size)
+        assertEquals(emptyList<String>(), theme.actions.skipped)
+        // The spot checks, on the apps on this phone: Phone rings, Messages chat-pops, Camera
+        // shutter-clicks, Maps pin-drops (and the clock ticks, settings spins).
+        val spot = mapOf(
+            "com.google.android.dialer" to IconTheme.Move.RING,
+            "com.google.android.apps.messaging" to IconTheme.Move.CHAT,
+            "com.android.camera2" to IconTheme.Move.SHUTTER,
+            "com.google.android.apps.maps" to IconTheme.Move.DROP,
+            "com.google.android.deskclock" to IconTheme.Move.TICK,
+            "com.android.settings" to IconTheme.Move.SPIN,
+        )
+        for ((pkg, move) in spot) {
+            val e = main { app.apps.apps.firstOrNull { it.packageName == pkg && !it.isSelf } }
+            assertEquals(pkg, move, theme.moveFor(e?.component ?: android.content.ComponentName(pkg, "$pkg.Main"), e?.label))
+            if (e != null) assertEquals(pkg, move, main { app.apps.moveFor(e) })
+        }
+        // An app in no row: a generic move.
+        assertTrue(theme.moveFor(android.content.ComponentName("com.example.newapp", "com.example.newapp.Main"), "New App") in generic)
+        assertNull("the clock's move is the table's", theme.icons["com.google.android.deskclock"]!!.move)
         assertEquals(IconTheme.Live.CLOCK, theme.icons["com.google.android.deskclock"]!!.live)
         assertEquals(IconTheme.Live.CALENDAR, theme.icons["com.google.android.calendar"]!!.live)
         // The format: package or exact component, a move with no art, notes, a line that won't read.
@@ -125,9 +141,16 @@ class IconThemeDeviceTest {
             com.example.a   a.png   spin
             com.example.b/.Main  -  ring  clock   # the exact component, live
             not a line
-            com.example.c   c.png   wobble
+            com.example.c   c.png   jiggle
+            com.example.d   -   -   calendar   # live, the table's move
+            com.example.e   e.png
         """.trimIndent())
-        assertEquals(setOf("com.example.a", "com.example.b/com.example.b.Main", "com.example.c"), parsed.keys)
+        assertEquals(setOf("com.example.a", "com.example.b/com.example.b.Main", "com.example.c", "com.example.d", "com.example.e"), parsed.keys)
+        assertEquals(IconTheme.Move.SPIN, parsed["com.example.a"]!!.move)
+        assertEquals(IconTheme.Move.RING, parsed["com.example.b/com.example.b.Main"]!!.move)
+        assertNull(parsed["com.example.d"]!!.move)
+        assertEquals(IconTheme.Live.CALENDAR, parsed["com.example.d"]!!.live)
+        assertNull("no move: the table's", parsed["com.example.e"]!!.move)
         assertNull(parsed["com.example.b/com.example.b.Main"]!!.file)
         assertEquals(IconTheme.Live.CLOCK, parsed["com.example.b/com.example.b.Main"]!!.live)
         assertEquals("an unknown move: a gentle bounce", IconTheme.Move.BOUNCE, parsed["com.example.c"]!!.move)
@@ -166,7 +189,7 @@ class IconThemeDeviceTest {
             waitFor("the drawer's icons") { shownEntries().any { e -> !e.isSelf && theme.find(e.component)?.live == null } }
             val target = main { shownEntries().first { e -> !e.isSelf && theme.find(e.component)?.live == null } }
             val system = icon(target)
-            val temp = IconTheme.of("$bundled\n${target.packageName}   test_icon.png   gear\n") { f -> if (f == "test_icon.png") art else null }
+            val temp = IconTheme.of("$bundled\n${target.packageName}   test_icon.png   gear\n", { f -> if (f == "test_icon.png") art else null }, theme.actions)
             main { app.iconThemes.useTheme(temp) }
             val themed = icon(target)
             assertTrue("the test icon", themed.sameAs(Bitmap.createScaledBitmap(art, themed.width, themed.height, true)))
@@ -267,25 +290,36 @@ class IconThemeDeviceTest {
         val settings = entry("com.android.settings")
         val clock = entry("com.google.android.deskclock")
         val youtube = entry("com.google.android.youtube")
-        favorites(settings, clock, youtube, entry("com.google.android.calendar"))
+        val chrome = entry("com.android.chrome")
+        favorites(settings, clock, youtube, chrome, entry("com.google.android.calendar"))
         IconMotion.forceMotion = true
         ActivityScenario.launch(MainActivity::class.java).use { home ->
             Thread.sleep(1500)
             home.onActivity { it.findViewById<View>(R.id.searchIcon).performLongClick() }
-            waitFor("the favorites on screen") { shownApps().containsAll(listOf(settings, clock, youtube).map { it.packageName }) }
+            waitFor("the favorites on screen") { shownApps().containsAll(listOf(settings, clock, youtube, chrome).map { it.packageName }) }
             // Home opening: each icon on screen makes its move, system icons included.
             val before = IconMotion.played.size
-            assertTrue(main { IconMotion.homeOpened() } >= 4)
+            assertTrue(main { IconMotion.homeOpened() } >= 5)
             waitFor("they move") { IconMotion.onScreen().any { IconMotion.moving(it.first) } }
             Thread.sleep(250)
             shot("153-icon-theme-alive")
-            waitFor("all moved", 6_000) { IconMotion.played.size >= before + 4 }
+            waitFor("all moved", 6_000) { IconMotion.played.size >= before + 5 }
             val moves = IconMotion.played.drop(before).toMap()
-            assertEquals("settings turns a notch", IconTheme.Move.GEAR, moves[settings.key])
-            assertEquals("the clock rings", IconTheme.Move.RING, moves[clock.key])
-            assertTrue("youtube's system icon: a generic move", moves[youtube.key] in generic)
+            assertEquals("settings spins", IconTheme.Move.SPIN, moves[settings.key])
+            assertEquals("the clock ticks", IconTheme.Move.TICK, moves[clock.key])
+            assertEquals("youtube's system icon: its assigned slide", IconTheme.Move.SLIDE, moves[youtube.key])
+            assertTrue("chrome, in no row: a generic move", moves[chrome.key] in generic)
             waitFor("settled", 5_000) { IconMotion.onScreen().none { IconMotion.moving(it.first) } }
-            assertTrue("in place again", main { IconMotion.onScreen().all { (iv, _) -> iv.rotation == 0f && iv.translationY == 0f && iv.scaleX == 1f && iv.rotationY == 0f } })
+            assertTrue("in place again", main { IconMotion.onScreen().all { (iv, _) -> iv.rotation == 0f && iv.translationY == 0f && iv.translationX == 0f && iv.scaleX == 1f && iv.rotationY == 0f } })
+
+            // Every one of the 16 moves plays, and leaves the icon as it was.
+            val one = main { shownView("com.android.chrome")!! }
+            val tint = main { one.colorFilter }
+            for (m in IconTheme.Move.entries) {
+                assertTrue("$m plays", main { IconMotion.play(one, m) })
+                waitFor("$m done", 4_000) { !IconMotion.moving(one) }
+                assertTrue("$m: back in place", main { one.rotation == 0f && one.translationY == 0f && one.translationX == 0f && one.scaleX == 1f && one.scaleY == 1f && one.rotationY == 0f && one.colorFilter === tint })
+            }
 
             // Now and then: one or two at a time, never all.
             val n = main { IconMotion.nudge() }
@@ -352,25 +386,28 @@ class IconThemeDeviceTest {
         assertTrue("youtube keeps its system icon", icon(youtube).sameAs(systemYoutube))
         assertTrue(main { app.iconThemes.themedCount() } >= 2)
         // The moves are the apps', whoever drew the icons.
-        assertEquals(IconTheme.Move.GEAR, main { app.apps.moveFor(settings) })
-        assertEquals(IconTheme.Move.RING, main { app.apps.moveFor(clock) })
-        assertTrue(main { app.apps.moveFor(youtube) } in generic)
+        val chrome = entry("com.android.chrome")
+        assertEquals(IconTheme.Move.SPIN, main { app.apps.moveFor(settings) })
+        assertEquals(IconTheme.Move.TICK, main { app.apps.moveFor(clock) })
+        assertEquals(IconTheme.Move.SLIDE, main { app.apps.moveFor(youtube) })
+        assertTrue(main { app.apps.moveFor(chrome) } in generic)
 
-        favorites(settings, clock, youtube, entry("com.google.android.calendar"))
+        favorites(settings, clock, youtube, chrome, entry("com.google.android.calendar"))
         IconMotion.forceMotion = true
         ActivityScenario.launch(MainActivity::class.java).use { home ->
             Thread.sleep(1500)
             home.onActivity { it.findViewById<View>(R.id.searchIcon).performLongClick() }
             waitFor("pack icons on screen") { shownView("com.android.settings")?.bitmap()?.sameAs(s) == true }
             val before = IconMotion.played.size
-            assertTrue(main { IconMotion.homeOpened() } >= 3)
-            waitFor("they move", 6_000) { IconMotion.played.size >= before + 3 }
+            assertTrue(main { IconMotion.homeOpened() } >= 4)
+            waitFor("they move", 6_000) { IconMotion.played.size >= before + 4 }
             Thread.sleep(150)
             shot("154-icon-pack-alive")
             val moves = IconMotion.played.drop(before).toMap()
-            assertEquals("a signature move on the pack's icon", IconTheme.Move.GEAR, moves[settings.key])
-            assertEquals(IconTheme.Move.RING, moves[clock.key])
-            assertTrue(moves[youtube.key] in generic)
+            assertEquals("the assigned move on the pack's icon", IconTheme.Move.SPIN, moves[settings.key])
+            assertEquals(IconTheme.Move.TICK, moves[clock.key])
+            assertEquals("assigned, on an icon the pack doesn't draw", IconTheme.Move.SLIDE, moves[youtube.key])
+            assertTrue("in no row: a generic move", moves[chrome.key] in generic)
             waitFor("settled", 5_000) { IconMotion.onScreen().none { IconMotion.moving(it.first) } }
         }
     }

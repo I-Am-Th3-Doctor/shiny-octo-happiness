@@ -230,7 +230,7 @@ class AppRepository(private val context: Context, private val prefs: Prefs) {
      * system's), else a generic one. Main thread.
      */
     fun moveFor(entry: AppEntry): io.github.iamth3doctor.searchlight.iconpack.IconTheme.Move? =
-        iconTheme?.moveFor(entry.component)
+        iconTheme?.moveFor(entry.component, entry.label)
 
     /**
      * Is [entry]'s icon themed (not its system icon)? The live clock and calendar; with a pack
