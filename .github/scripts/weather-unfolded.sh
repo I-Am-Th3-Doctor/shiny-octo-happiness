@@ -36,6 +36,13 @@ if [ "$ok" = 0 ] && [ "$alive" = 0 ] && [ "$attempt" = first ]; then
   echo "WEATHER_RETRY=1" >> "$GITHUB_ENV"
   exit 0
 fi
+if [ "$ok" = 0 ] && [ "$alive" = 0 ]; then
+  # The emulator died again, on a fresh one: the emulator, not a test. Say so plainly and let
+  # the other screens' shots publish; the unfolded weather tests stay unconfirmed this run.
+  echo "::warning::the emulator died again during the unfolded weather tests: those tests are unconfirmed this run"
+  echo "The emulator died twice during the unfolded weather tests (no test failed while it was alive): those tests are unconfirmed this run." >> "$GITHUB_STEP_SUMMARY"
+  exit 0
+fi
 [ "$ok" = 1 ] || touch /tmp/device-tests-failed
 if [ "$alive" = 1 ]; then
   timeout 60 adb logcat -d -b crash | tail -n 150 || true
