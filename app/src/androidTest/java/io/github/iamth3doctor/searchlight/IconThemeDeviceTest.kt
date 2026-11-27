@@ -163,15 +163,18 @@ class IconThemeDeviceTest {
             Thread.sleep(2000)
             // The drawer: the app at its top gets the test icon.
             home.onActivity { it.openAppTable() }
-            waitFor("the drawer's icons") { shownEntries().any { e -> theme.find(e.component)?.live == null } }
-            val target = main { shownEntries().first { e -> theme.find(e.component)?.live == null } }
+            waitFor("the drawer's icons") { shownEntries().any { e -> !e.isSelf && theme.find(e.component)?.live == null } }
+            val target = main { shownEntries().first { e -> !e.isSelf && theme.find(e.component)?.live == null } }
             val system = icon(target)
             val temp = IconTheme.of("$bundled\n${target.packageName}   test_icon.png   gear\n") { f -> if (f == "test_icon.png") art else null }
             main { app.iconThemes.useTheme(temp) }
             val themed = icon(target)
             assertTrue("the test icon", themed.sameAs(Bitmap.createScaledBitmap(art, themed.width, themed.height, true)))
             assertFalse(themed.sameAs(system))
-            assertTrue("counted", main { app.iconThemes.themedCount() } >= 1 + main { app.apps.apps.filter { !it.isSelf && theme.find(it.component)?.live != null }.map { it.packageName }.distinct().size })
+            // Counted: the test icon's app, and the live clock and calendar.
+            val live = main { app.apps.apps.filter { !it.isSelf && theme.find(it.component)?.live != null }.map { it.packageName }.distinct() }
+            val counted = main { app.iconThemes.themedCount() }
+            assertEquals("counted (${target.packageName} + $live; pack ${main { app.apps.iconPack != null }})", 1 + live.size, counted)
             assertEquals("the app's own move", IconTheme.Move.GEAR, main { app.apps.moveFor(target) })
             waitFor("the drawer shows the test icon") { shownView(target.packageName)?.bitmap()?.sameAs(themed) == true }
             // Apps with no icon in the theme: their system icon, right beside it.

@@ -91,7 +91,11 @@ class IconPacks(private val context: Context, private val prefs: Prefs, private 
      * Uses [pkg] (null: the system's icons). [done] gets false, on the main thread, when the pack
      * won't load; the previous choice is then kept.
      */
+    private var picks = 0
+
     fun select(pkg: String?, done: (Boolean) -> Unit) {
+        // The latest choice wins: a pack still loading from an earlier pick doesn't land after it.
+        val pick = ++picks
         if (pkg == null) {
             prefs.iconPack = null
             repo.iconPack = null
@@ -101,6 +105,7 @@ class IconPacks(private val context: Context, private val prefs: Prefs, private 
         worker.execute {
             val pack = tryLoad(pkg)
             main.post {
+                if (pick != picks) { done(false); return@post }
                 if (pack != null) {
                     prefs.iconPack = pkg
                     repo.iconPack = pack

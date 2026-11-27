@@ -2629,6 +2629,10 @@ class Watchdog(private val seconds: Long) : org.junit.rules.TestRule {
                         Thread.sleep(30_000)
                         android.util.Log.e("Watchdog", "${description.methodName} still stuck: ending the test process\n$summary")
                         System.out.println("Watchdog: ${description.methodName} stuck: $summary")
+                        // A full thread dump (the render thread's native stack too) into /data/anr,
+                        // which the workflow prints, before ending the process.
+                        android.os.Process.sendSignal(android.os.Process.myPid(), android.os.Process.SIGNAL_QUIT)
+                        Thread.sleep(5_000)
                         android.os.Process.killProcess(android.os.Process.myPid())
                     } catch (_: InterruptedException) {
                     }

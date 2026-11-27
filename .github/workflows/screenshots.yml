@@ -18,7 +18,7 @@ jobs:
   screenshots:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[screenshots]')
     runs-on: ubuntu-24.04
-    timeout-minutes: 130
+    timeout-minutes: 160
     steps:
       - uses: actions/checkout@v5
 
@@ -51,15 +51,18 @@ jobs:
       # Razr's outer display); "unfolded" resizes the same emulator's display to a foldable inner
       # screen (1840x2208 @ 420dpi, ~700dp wide). Each is captured at normal and 1.3x text.
       # (The runner's emulator has no Pixel Fold device definition, so the posture is simulated.)
-      - name: Capture on emulator (Android 15, folded + unfolded)
+      # Each posture boots its own emulator: one emulator through both runs (230-odd tests) wore
+      # out its graphics and memory and died part way through the second.
+      - name: Capture on emulator (Android 15, folded)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
           profile: pixel_7
+          ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          emulator-options: -no-snapshot -wipe-data -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
             adb shell wm size
             adb install -r testiconpack/build/outputs/apk/debug/testiconpack-debug.apk
@@ -69,7 +72,31 @@ jobs:
             adb logcat -b crash -c || true
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=folded || touch /tmp/device-tests-failed
             timeout 60 adb logcat -d -b crash | tail -n 150 || true
+            timeout 60 adb logcat -d -s Watchdog:E lowmemorykiller:* lmkd:* | tail -n 120 || true
+            # A stuck test's thread dump: where the render thread was waiting.
+            timeout 30 adb root || true; timeout 60 adb wait-for-device || true
+            timeout 60 adb shell 'for f in $(ls -t /data/anr/trace_* 2>/dev/null | head -2); do echo "== $f"; grep -A45 -E "^\"(main|RenderThread)\"" "$f" | head -120; done' || true
             timeout 60 adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-*.txt' || true
+            mkdir -p shots
+            for i in 1 2 3 4 5 6; do timeout 300 adb pull /sdcard/Download/searchlight-shots/. shots/ && break; echo "adb pull failed, retrying"; adb reconnect || true; timeout 60 adb wait-for-device; sleep 5; done
+            ls shots | wc -l
+
+      # "Unfolded": the same kind of emulator with its display resized to a foldable's inner screen.
+      - name: Capture on emulator (Android 15, unfolded)
+        if: always()
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-snapshot -wipe-data -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r testiconpack/build/outputs/apk/debug/testiconpack-debug.apk
+            adb push testiconpack/build/outputs/apk/debug/testiconpack-debug.apk /data/local/tmp/testiconpack.apk
+            if [ -f arcticons.apk ]; then adb install -r arcticons.apk || echo "Arcticons didn't install"; else echo "No Arcticons download"; fi
             adb shell wm size 1840x2208
             adb shell wm density 420
             # Wait until the new size has really reached the display (a slow emulator can take a
@@ -81,11 +108,13 @@ jobs:
             adb logcat -b crash -c || true
             ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded || touch /tmp/device-tests-failed
             timeout 60 adb logcat -d -b crash | tail -n 150 || true
-            timeout 60 adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-unfolded-*.txt' || true
-            adb shell wm size reset
-            adb shell wm density reset
+            timeout 60 adb logcat -d -s Watchdog:E lowmemorykiller:* lmkd:* | tail -n 120 || true
+            # A stuck test's thread dump: where the render thread was waiting.
+            timeout 30 adb root || true; timeout 60 adb wait-for-device || true
+            timeout 60 adb shell 'for f in $(ls -t /data/anr/trace_* 2>/dev/null | head -2); do echo "== $f"; grep -A45 -E "^\"(main|RenderThread)\"" "$f" | head -120; done' || true
+            timeout 60 adb shell 'cat /sdcard/Download/searchlight-shots/watchdog-*.txt' || true
             mkdir -p shots
-            for i in 1 2 3 4 5 6; do adb pull /sdcard/Download/searchlight-shots/. shots/ && break; echo "adb pull failed, retrying"; adb reconnect || true; adb wait-for-device; sleep 5; done
+            for i in 1 2 3 4 5 6; do timeout 300 adb pull /sdcard/Download/searchlight-shots/. shots/ && break; echo "adb pull failed, retrying"; adb reconnect || true; timeout 60 adb wait-for-device; sleep 5; done
             ls shots
             cat shots/widgets-*.txt || true
             cat shots/watchdog-*.txt || true
