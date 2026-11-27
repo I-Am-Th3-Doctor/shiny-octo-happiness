@@ -19,12 +19,16 @@ adb shell input keyevent KEYCODE_HOME
 sleep 5
 adb shell wm size
 adb logcat -b crash -c || true
+# The guest's own log as it runs (kernel too), to see its last moments if the emulator goes.
+( adb logcat -b main -b system -b crash -b kernel -v time > /tmp/guest-$attempt.log 2>&1 ) &
+glog=$!
 ok=1
 ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.shotPrefix=unfolded -Pandroid.testInstrumentationRunnerArguments.class=io.github.iamth3doctor.searchlight.WeatherSceneDeviceTest || ok=0
-kill $mon 2>/dev/null || true
+kill $mon $glog 2>/dev/null || true
 alive=1
 timeout 20 adb get-state >/dev/null 2>&1 || alive=0
 echo "host memory (last 20 samples):"; tail -n 20 /tmp/hostmem-$attempt.log || true
+if [ "$alive" = 0 ]; then echo "the guest's last log lines:"; grep -vE " [VD]/" /tmp/guest-$attempt.log | tail -n 80 || true; fi
 echo "host kernel log:"; sudo dmesg -T 2>/dev/null | grep -iE "oom|killed process|segfault|qemu|emulator|general protection" | tail -n 30 || true
 ls -la /tmp/android-runner/ 2>/dev/null || true; find /tmp/android-runner -type f -newer /tmp/hostmem-$attempt.log 2>/dev/null | head -20
 if [ "$ok" = 0 ] && [ "$alive" = 0 ] && [ "$attempt" = first ]; then

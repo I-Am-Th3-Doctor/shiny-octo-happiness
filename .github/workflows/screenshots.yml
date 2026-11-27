@@ -129,7 +129,8 @@ jobs:
           profile: pixel_7
           ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-snapshot -wipe-data -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          cores: 4
+          emulator-options: -no-snapshot -wipe-data -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -show-kernel
           # The unfolded screen as the emulator's own display (not a phone display resized with wm size,
           # which the emulator kept crashing on under the weather scenes).
           pre-emulator-launch-script: |
@@ -147,7 +148,8 @@ jobs:
           profile: pixel_7
           ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-snapshot -wipe-data -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          cores: 4
+          emulator-options: -no-snapshot -wipe-data -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -show-kernel
           # The unfolded screen as the emulator's own display (not a phone display resized with wm size,
           # which the emulator kept crashing on under the weather scenes).
           pre-emulator-launch-script: |
