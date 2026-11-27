@@ -311,7 +311,10 @@ class IconThemeDeviceTest {
             val target = main { generateSequence(iv as View) { it.parent as? View }.first { it.hasOnClickListeners() } }
             val t0 = System.currentTimeMillis()
             main { target.performClick() }
-            waitFor("the app opens", 3_000) { home.state != Lifecycle.State.RESUMED }
+            // The scenario's state is read off the main thread (it waits on it).
+            val deadline = t0 + 3_000
+            while (home.state == Lifecycle.State.RESUMED && System.currentTimeMillis() < deadline) Thread.sleep(50)
+            assertTrue("the app opens", home.state != Lifecycle.State.RESUMED)
             assertTrue("opened in ${System.currentTimeMillis() - t0} ms", System.currentTimeMillis() - t0 < 2_000)
         }
         shell("input keyevent KEYCODE_HOME")

@@ -115,6 +115,10 @@ class NightSkyView(context: Context) : View(context) {
             field = value.coerceIn(0f, 1f)
             alpha = field
             visibility = if (field > 0f) VISIBLE else GONE
+            // Drawn once into its own layer while it shows, then only composited over the moving
+            // scene (and faded) each frame; the layer goes by day.
+            val layer = if (field > 0f) LAYER_TYPE_HARDWARE else LAYER_TYPE_NONE
+            if (layerType != layer) setLayerType(layer, null)
         }
 
     /** Tonight's moon: lit fraction and side. */
